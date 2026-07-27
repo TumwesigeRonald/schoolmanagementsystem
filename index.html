@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luweero Community SS - Portal Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- =========================================================
+     LOGIN SECTION
+     ========================================================= -->
+<div id="login-section" class="login-shell">
+    <div class="login-visual">
+        <span class="login-eyebrow">SHAPING FUTURES, TRACKING PROGRESS- All in one place</span>
+        <h1>A smarter way to navigate the Ugandan Curriculum &mdash; in one secure Web app.</h1>
+        <p class="tagline">Built for the Ugandan O-Level and A-Level curriculum. Teachers and Students each get exactly the access their role needs.</p>
+        <div class="login-motto">&ldquo;Be Known By Deeds&rdquo;</div>
+    </div>
+    <div class="login-panel-wrap">
+        <div class="login-card">
+            <div class="login-badge-row">
+                <img src="school_badge.jpg" alt="School Badge">
+                <div>
+                    <h2>LUWEERO COMMUNITY SS</h2>
+                    <span>LOGIN WITH YOUR CREDENTIALS</span>
+                </div>
+            </div>
+            <div id="login-error" class="login-error hidden"></div>
+            <form id="login-form" method="post" action="javascript:void(0);" onsubmit="handleLogin(event)">
+                <div class="login-field">
+                    <label class="field-label">Username / Student ID / LIN</label>
+                    <input type="text" id="login-username" class="control-input" placeholder="e.g. admin, gnamuli, STD001" required>
+                </div>
+                <div class="login-field">
+                    <label class="field-label">Password</label>
+                    <input type="password" id="login-password" class="control-input" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="login-submit"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
+            </form>
+            <div class="login-footer-note">
+                Developed &amp; Engineered by <span>TUMWESIGE RONALD</span>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- =========================================================
+     DASHBOARD SECTION
+     ========================================================= -->
+<div id="dashboard-section" class="hidden" style="display:flex; flex-direction:column; min-height:100vh;">
+    <header class="app-header">
+        <div class="header-left">
+            <button onclick="toggleSidebar()" class="icon-btn" aria-label="Toggle menu">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+            </button>
+            <h1 id="page-title" class="page-title">Dashboard</h1>
+        </div>
+        <div class="header-right">
+            <span id="term-badge" class="role-tag"></span>
+            <span id="user-badge" class="user-badge"></span>
+            <span id="user-role-tag" class="role-tag"></span>
+            <button onclick="handleLogout()" class="logout-btn"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</button>
+        </div>
+    </header>
+    <div class="app-body">
+        <div id="sidebar-backdrop" onclick="toggleSidebar()" class="sidebar-backdrop hidden"></div>
+        <aside id="sidebar" class="sidebar -translate-x-full">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-inner">
+                    <img src="school_badge.jpg" alt="Badge">
+                    <div>
+                        <h3>LUWEERO COMMUNITY SS</h3>
+                        <p>Portal Dashboard</p>
+                    </div>
+                </div>
+                <button onclick="toggleSidebar()" class="sidebar-close">&#10005;</button>
+            </div>
+            <nav id="sidebar-nav" class="sidebar-nav"></nav>
+            <div class="sidebar-footer">
+                <span>System Active</span>
+            </div>
+        </aside>
+        <main class="main-content">
+            <div>
+                <div id="welcome-banner" class="welcome-banner"></div>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Classes</span>
+                        <div class="metric-row"><span id="stat-classes-count" class="metric-value">0</span><div class="metric-icon"><i class="fa-solid fa-school"></i></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Students</span>
+                        <div class="metric-row"><span id="stat-students-count" class="metric-value">0</span><div class="metric-icon"><i class="fa-solid fa-user-graduate"></i></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Subjects</span>
+                        <div class="metric-row"><span id="stat-subjects-count" class="metric-value">0</span><div class="metric-icon"><i class="fa-solid fa-book"></i></div></div>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Marks Recorded</span>
+                        <div class="metric-row"><span id="stat-marks-count" class="metric-value">0</span><div class="metric-icon"><i class="fa-solid fa-pen-to-square"></i></div></div>
+                    </div>
+                </div>
+                <div id="tab-content"></div>
+            </div>
+            <footer class="app-footer">
+                <p>&copy; 2026 Luweero Community Secondary School. All rights reserved. Built by <span>Tech Engineer TUMWESIGE RONALD</span>.</p>
+            </footer>
+        </main>
+    </div>
+</div>
+<!-- Hidden printable area used exclusively by the report card engine -->
+<div id="print-area"></div>
+<script src="api.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
