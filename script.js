@@ -70,6 +70,52 @@ function calculateAOAverage(ao1Raw, ao2Raw) {
     return 0;
 }
 /* ---------------------------------------------------------
+   1d. REMOTE DATA SYNC
+   studentsList/teachersList/resourcesList/termSettings start out
+   as hardcoded demo data (above) purely so the UI has something
+   to render before the first successful API call. Once the
+   backend is reachable, these helpers pull the real Neon-backed
+   state and keep the in-memory copies in sync with it — every
+   create/update/delete below re-syncs from the server afterwards
+   rather than only mutating the local array, so a page refresh
+   (or a second device) sees the same data the database has.
+   Each is best-effort: if the backend call fails (offline/local
+   demo mode) the existing in-memory list is left untouched.
+   --------------------------------------------------------- */
+async function refreshStudentsList() {
+    try {
+        const remote = await StudentsAPI.list();
+        if (Array.isArray(remote)) studentsList = remote;
+    } catch (e) { /* keep existing local list */ }
+}
+async function refreshTeachersList() {
+    try {
+        const remote = await TeachersAPI.list();
+        if (Array.isArray(remote)) teachersList = remote;
+    } catch (e) { /* keep existing local list */ }
+}
+async function refreshResourcesList() {
+    try {
+        const remote = await ResourcesAPI.list();
+        if (Array.isArray(remote)) resourcesList = remote;
+    } catch (e) { /* keep existing local list */ }
+}
+async function refreshTermSettings() {
+    try {
+        const remote = await TermAPI.get();
+        if (remote) termSettings = remote;
+    } catch (e) { /* keep existing local settings */ }
+}
+async function syncAllRemoteData() {
+    // Run in parallel — independent endpoints, no ordering dependency.
+    await Promise.all([
+        refreshStudentsList(),
+        refreshTeachersList(),
+        refreshResourcesList(),
+        refreshTermSettings()
+    ]);
+}
+/* ---------------------------------------------------------
    2. AUTHENTICATION & NAVIGATION
    --------------------------------------------------------- */
 async function handleLogin(event) {
@@ -106,9 +152,9 @@ async function handleLogin(event) {
         return;
     }
 
-    applySessionUser(result.user);
+    await applySessionUser(result.user);
 }
-function applySessionUser(user) {
+async function applySessionUser(user) {
     currentUser.username = user.username;
     currentUser.role = user.role;
     currentUser.name = user.name || user.username;
@@ -117,6 +163,11 @@ function applySessionUser(user) {
 
     document.getElementById('login-section').classList.add('hidden');
     document.getElementById('dashboard-section').classList.remove('hidden');
+
+    // Pull the current, authoritative state from the backend/Neon before
+    // rendering anything below, so the dashboard reflects real data
+    // instead of the hardcoded demo lists.
+    await syncAllRemoteData();
 
     const userBadge = document.getElementById('user-badge');
     if (userBadge) userBadge.innerText = `Logged in: ${currentUser.username}`;
@@ -400,6 +451,7 @@ async function handleAddStudent(event) {
         alert(err.message || 'Could not save this student. Please try again.');
         return;
     }
+    await refreshStudentsList();
     loadStudentData();
     toggleStudentForm();
     document.getElementById('stud-id').value = "";
@@ -415,6 +467,7 @@ async function deleteStudent(studentId) {
         alert(err.message || 'Could not delete this student. Please try again.');
         return;
     }
+    await refreshStudentsList();
     loadStudentData();
     updateDashboardStats();
 }
@@ -1563,12 +1616,12 @@ function handleAddResource(event) {
                 subject: subjectSelect.value,
                 level: levelSelect.value,
                 fileName: file.name,
-                fileTypeLabel: getFileTypeLabel(file.name),
-                fileSizeLabel: formatFileSize(file.size),
+                fileType: file.type,
+                fileSize: file.size,
                 uploadedBy: currentUser.username,
-                uploadedAtISO: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
                 uploadedAt: Date.now(),
-                dataUrl: reader.result
+                fileUrl: reader.result
             });
         };
         reader.onerror = function () {
@@ -1594,7 +1647,7 @@ async function deleteResource(id) {
         alert(err.message || 'Could not delete this resource. Please try again.');
         return;
     }
-    resourcesList = resourcesList.filter(r => r.id !== id);
+    await refreshResourcesList();
     loadResourcesData();
 }
 function loadResourcesData() {
@@ -1624,6 +1677,9 @@ function loadResourcesData() {
 function buildResourceCard(r) {
     const perms = getPermissions(currentUser.role);
     const canDelete = perms.canDeleteAnyResource || (perms.canManageResources && r.uploadedBy.toLowerCase() === currentUser.username.toLowerCase());
+    const fileTypeLabel = getFileTypeLabel(r.fileName);
+    const fileSizeLabel = (typeof r.fileSize === 'number') ? formatFileSize(r.fileSize) : '';
+    const uploadedDate = r.createdAt || r.uploadedAtISO; // uploadedAtISO kept for backward compatibility with any cached local-fallback entries
     return `
         <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col gap-3">
             <div class="flex items-start gap-3">
@@ -1636,14 +1692,14 @@ function buildResourceCard(r) {
                 </div>
             </div>
             <div class="flex flex-wrap gap-1.5">
-                <span class="badge-blue">${r.fileTypeLabel}</span>
-                <span class="text-[10px] font-bold text-slate-400 self-center">${r.fileSizeLabel}</span>
+                <span class="badge-blue">${fileTypeLabel}</span>
+                ${fileSizeLabel ? `<span class="text-[10px] font-bold text-slate-400 self-center">${fileSizeLabel}</span>` : ''}
             </div>
             <div class="text-[10.5px] font-semibold text-slate-400 border-t border-slate-100 pt-2">
-                Uploaded by ${r.uploadedBy} &middot; ${formatReportDate(r.uploadedAtISO)}
+                Uploaded by ${r.uploadedBy} &middot; ${formatReportDate(uploadedDate)}
             </div>
             <div class="flex gap-2 pt-1">
-                <a href="${r.dataUrl}" download="${r.fileName}" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
+                <a href="${r.fileUrl}" download="${r.fileName}" target="_blank" rel="noopener" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
                     <i class="fa-solid fa-download mr-1"></i>Download
                 </a>
                 ${canDelete ? `<button onclick="deleteResource(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg border border-rose-200 transition-colors">Delete</button>` : ''}
@@ -1762,7 +1818,7 @@ function loadTeacherData() {
                 <td class="p-4 font-bold text-slate-900">${teacher.name}</td>
                 <td class="p-4 text-slate-600 font-semibold">${teacher.username}</td>
                 <td class="p-4 text-slate-600 font-semibold">${teacher.subject || '-'}</td>
-                <td class="p-4 font-mono text-xs text-slate-500">${teacher.password}</td>
+                <td class="p-4 font-mono text-xs text-slate-500" title="Passwords are never shown in plain text once stored securely on the server.">${teacher.password ? teacher.password : '••••••••'}</td>
                 <td class="p-4 text-center space-x-2">
                     <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors">Reset Password</button>
                     <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors">Delete</button>
@@ -1803,6 +1859,7 @@ async function handleAddTeacher(event) {
         alert(err.message || 'Could not save this teacher. Please try again.');
         return;
     }
+    await refreshTeachersList();
     toggleTeacherForm();
     event.target.reset();
     loadTeacherData();
@@ -1818,6 +1875,7 @@ async function deleteTeacher(index) {
         alert(err.message || 'Could not delete this teacher. Please try again.');
         return;
     }
+    await refreshTeachersList();
     loadTeacherData();
 }
 async function resetTeacherPassword(index) {
@@ -1832,6 +1890,7 @@ async function resetTeacherPassword(index) {
         alert(err.message || 'Could not reset this password. Please try again.');
         return;
     }
+    await refreshTeachersList();
     loadTeacherData();
 }
 async function saveOwnTeacherProfile(event) {
@@ -1859,6 +1918,7 @@ async function saveOwnTeacherProfile(event) {
         alert(err.message || 'Could not update your profile. Please try again.');
         return;
     }
+    await refreshTeachersList();
 
     currentUser.username = newUsername;
     const userBadge = document.getElementById('user-badge');
@@ -1873,10 +1933,10 @@ async function saveOwnTeacherProfile(event) {
 /* ---------------------------------------------------------
    10. INITIAL PAGE LOAD
    --------------------------------------------------------- */
-(function restoreSessionOnLoad() {
+(async function restoreSessionOnLoad() {
     const savedUser = AuthAPI.getSession();
     if (savedUser && savedUser.username && savedUser.role) {
-        applySessionUser(savedUser);
+        await applySessionUser(savedUser);
     } else {
         renderSidebarNav();
     }
