@@ -44,8 +44,8 @@ let performanceChartInstance = null;
    --------------------------------------------------------- */
 function handleLogin(event) {
     event.preventDefault();
-    const role = document.getElementById('role-select').value;
-    const password = document.getElementById('password').value;
+    const role = document.getElementById('login-username').value;
+const password = document.getElementById('login-password').value;
     if (password.trim() === "") {
         alert("Please enter a valid password.");
         return;
