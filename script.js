@@ -42,39 +42,94 @@ let performanceChartInstance = null;
 /* ---------------------------------------------------------
    2. AUTHENTICATION & NAVIGATION
    --------------------------------------------------------- */
-function handleLogin(event) {
+async function handleLogin(event) {
     event.preventDefault();
-    const role = document.getElementById('login-username').value;
-const password = document.getElementById('login-password').value;
-    if (password.trim() === "") {
-        alert("Please enter a valid password.");
+    const usernameInput = document.getElementById('login-username').value.trim();
+    const passwordInput = document.getElementById('login-password').value;
+    const errorElem = document.getElementById('login-error');
+
+    if (!usernameInput || !passwordInput) {
+        if (errorElem) {
+            errorElem.innerText = "Please enter both username and password.";
+            errorElem.classList.remove('hidden');
+        }
         return;
     }
+
+    const result = await AuthAPI.login(usernameInput, passwordInput);
+    if (!result.ok) {
+        if (errorElem) {
+            errorElem.innerText = result.message || "Invalid credentials.";
+            errorElem.classList.remove('hidden');
+        }
+        return;
+    }
+
+    if (errorElem) errorElem.classList.add('hidden');
     document.getElementById('login-section').classList.add('hidden');
     document.getElementById('dashboard-section').classList.remove('hidden');
     
+    const sessionUser = AuthAPI.getSession();
     const userBadge = document.getElementById('user-badge');
-    if(userBadge) userBadge.innerText = `Role: ${role}`; 
+    const roleTag = document.getElementById('user-role-tag');
     
+    if (userBadge) userBadge.innerText = sessionUser.name || sessionUser.username;
+    if (roleTag) roleTag.innerText = sessionUser.role; 
+    
+    applyRolePermissions(sessionUser.role);
     switchTab('students');
     updateDashboardStats();
 }
+
 function handleLogout() {
+    AuthAPI.logout();
     document.getElementById('dashboard-section').classList.add('hidden');
     document.getElementById('login-section').classList.remove('hidden');
-    document.getElementById('password').value = "";
+    const passwordField = document.getElementById('login-password');
+    if (passwordField) passwordField.value = "";
+    const usernameField = document.getElementById('login-username');
+    if (usernameField) usernameField.value = "";
 }
+
+function applyRolePermissions(role) {
+    const permissions = getPermissions(role);
+    const navContainer = document.getElementById('sidebar-nav');
+    if (!navContainer) return;
+
+    const allNavItems = [
+        { id: 'students', label: 'Students', icon: 'fa-user-graduate' },
+        { id: 'scores', label: 'Score Sheets', icon: 'fa-pen-to-square' },
+        { id: 'analytics', label: 'Analytics', icon: 'fa-chart-pie' },
+        { id: 'attendance', label: 'Attendance', icon: 'fa-clipboard-user' }
+    ];
+
+    navContainer.innerHTML = allNavItems
+        .filter(item => permissions.tabs.includes(item.id))
+        .map(item => `
+            <a href="javascript:void(0)" id="nav-${item.id}" onclick="switchTab('${item.id}')" class="nav-link">
+                <i class="fa-solid ${item.icon}"></i> ${item.label}
+            </a>
+        `).join('');
+}
+
 function switchTab(tabName) {
-    const tabs = ['students', 'scores', 'analytics', 'attendance'];
-    tabs.forEach(tab => {
+    const sessionUser = AuthAPI.getSession();
+    const permissions = getPermissions(sessionUser ? sessionUser.role : ROLES.STUDENT);
+    
+    if (!permissions.tabs.includes(tabName)) {
+        tabName = permissions.defaultTab;
+    }
+
+    permissions.tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
         if (tab === tabName) {
-            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider bg-teal-600 text-white shadow-sm";
+            navItem.className = "nav-link nav-link-active";
         } else {
-            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors";
+            navItem.className = "nav-link";
         }
     });
+
     const titleElem = document.getElementById('page-title');
     let titleText = "";
     switch (tabName) {
@@ -135,9 +190,12 @@ function updateDashboardStats() {
 }
 
 /* ---------------------------------------------------------
-   4. STUDENT RECORDS MODULE (Light Theme)
+   4. STUDENT RECORDS MODULE
    --------------------------------------------------------- */
 function renderStudentsModule() {
+    const sessionUser = AuthAPI.getSession();
+    const permissions = getPermissions(sessionUser ? sessionUser.role : ROLES.STUDENT);
+
     return `
         <div class="space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
@@ -153,10 +211,12 @@ function renderStudentsModule() {
                         <option value="S.6">S.6</option>
                     </select>
                 </div>
+                ${permissions.canManageStudents ? `
                 <button onclick="toggleStudentForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
                     + Add New Student
-                </button>
+                </button>` : ''}
             </div>
+            ${permissions.canManageStudents ? `
             <div id="student-form-container" class="hidden bg-white border border-slate-200 p-5 rounded-2xl shadow-xs transition-all duration-300 ease-in-out">
                 <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-3">Register New Student</h4>
                 <form onsubmit="handleAddStudent(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -191,7 +251,7 @@ function renderStudentsModule() {
                         <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Save Student</button>
                     </div>
                 </form>
-            </div>
+            </div>` : ''}
             <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
                 <table class="w-full text-left border-collapse">
                     <thead>
@@ -200,7 +260,7 @@ function renderStudentsModule() {
                             <th class="p-4">Full Name</th>
                             <th class="p-4">Class</th>
                             <th class="p-4">Gender</th>
-                            <th class="p-4 text-center">Actions</th>
+                            ${permissions.canManageStudents ? '<th class="p-4 text-center">Actions</th>' : ''}
                         </tr>
                     </thead>
                     <tbody id="student-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
@@ -209,19 +269,32 @@ function renderStudentsModule() {
         </div>
     `;
 }
-function loadStudentData() {
+
+async function loadStudentData() {
     const tbody = document.getElementById('student-table-body');
     const filterSelect = document.getElementById('class-filter');
     if (!tbody) return;
+    
+    try {
+        studentsList = await StudentsAPI.list();
+    } catch (e) {
+        // fallback to local array if network/API fails
+    }
+
     const selectedClass = filterSelect ? filterSelect.value : 'ALL';
     tbody.innerHTML = "";
     const filteredStudents = (selectedClass === 'ALL') ? studentsList : studentsList.filter(s => s.class === selectedClass);
     
     updateDashboardStats();
     if (filteredStudents.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium">No student records found for ${selectedClass}.</td></tr>`;
+        const colSpan = getPermissions(AuthAPI.getSession()?.role).canManageStudents ? 5 : 4;
+        tbody.innerHTML = `<tr><td colspan="${colSpan}" class="p-6 text-center text-slate-400 text-xs font-medium">No student records found for ${selectedClass}.</td></tr>`;
         return;
     }
+    
+    const sessionUser = AuthAPI.getSession();
+    const permissions = getPermissions(sessionUser ? sessionUser.role : ROLES.STUDENT);
+
     filteredStudents.forEach((student) => {
         const originalIndex = studentsList.findIndex(s => s.id === student.id);
         tbody.innerHTML += `
@@ -230,18 +303,21 @@ function loadStudentData() {
                 <td class="p-4 font-bold text-slate-900">${student.name}</td>
                 <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${student.class}</span></td>
                 <td class="p-4 text-slate-600 font-semibold">${student.gender}</td>
+                ${permissions.canManageStudents ? `
                 <td class="p-4 text-center">
                     <button onclick="deleteStudent(${originalIndex})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors">Delete</button>
-                </td>
+                </td>` : ''}
             </tr>
         `;
     });
 }
+
 function toggleStudentForm() {
     const formContainer = document.getElementById('student-form-container');
     if (formContainer) formContainer.classList.toggle('hidden');
 }
-function handleAddStudent(event) {
+
+async function handleAddStudent(event) {
     event.preventDefault();
     const newStudent = {
         id: document.getElementById('stud-id').value.toUpperCase(),
@@ -249,33 +325,37 @@ function handleAddStudent(event) {
         class: document.getElementById('stud-class').value,
         gender: document.getElementById('stud-gender').value
     };
-    studentsList.push(newStudent);
-    loadStudentData();
-    toggleStudentForm();
-    document.getElementById('stud-id').value = "";
-    document.getElementById('stud-name').value = "";
-    updateDashboardStats();
+    try {
+        await StudentsAPI.create(newStudent);
+        studentsList.push(newStudent);
+        loadStudentData();
+        toggleStudentForm();
+        document.getElementById('stud-id').value = "";
+        document.getElementById('stud-name').value = "";
+        updateDashboardStats();
+    } catch (error) {
+        console.error("Failed to add student:", error);
+        alert("Could not save student to the server.");
+    }
 }
+
 async function deleteStudent(index) {
   if (!confirm("Are you sure you want to remove this student record?")) return;
-  
   const student = studentsList[index];
   
   try {
-    // Send a DELETE request to your backend with the correct path prefix
-    await apiRequest(`/api/students/${student.id}`, { method: 'DELETE' });
-    
+    await StudentsAPI.remove(student.id);
     studentsList.splice(index, 1);
     loadStudentData();
     updateDashboardStats();
   } catch (error) {
-    console.err("Failed to delete student:", error);
+    console.error("Failed to delete student:", error); // Fixed console.err typo
     alert("Could not delete student from the server.");
   }
 }
 
 /* ---------------------------------------------------------
-   5. SCORE SHEETS MODULE (Light Theme)
+   5. SCORE SHEETS MODULE
    --------------------------------------------------------- */
 function renderScoresModule() {
     return `
@@ -305,7 +385,7 @@ function renderScoresModule() {
                         <button onclick="loadNextSubject()" class="bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl border border-slate-300 transition">Next Subject</button>
                     </div>
                 </div>
-                <button onclick="alert('Marks successfully saved to system register!'); updateDashboardStats();" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">Save Marks Entry</button>
+                <button onclick="saveAllMarks()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">Save Marks Entry</button>
             </div>
             <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
                 <table class="w-full text-left border-collapse">
@@ -316,10 +396,12 @@ function renderScoresModule() {
         </div>
     `;
 }
+
 function onClassLevelChange() {
     updateSubjectDropdown();
     loadScoreSheetData();
 }
+
 function updateSubjectDropdown() {
     const classSelect = document.getElementById('score-class-select');
     const subjectSelect = document.getElementById('score-subject-select');
@@ -329,12 +411,14 @@ function updateSubjectDropdown() {
     const activeSubjects = isALevel ? aLevelSubjects : oLevelSubjects;
     subjectSelect.innerHTML = activeSubjects.map(sub => `<option value="${sub}">${sub}</option>`).join('');
 }
+
 function loadNextSubject() {
     const subjectSelect = document.getElementById('score-subject-select');
     if (!subjectSelect || subjectSelect.options.length === 0) return;
     subjectSelect.selectedIndex = (subjectSelect.selectedIndex + 1) % subjectSelect.options.length;
     loadScoreSheetData();
 }
+
 function loadScoreSheetData() {
     const thead = document.getElementById('score-table-head');
     const tbody = document.getElementById('score-table-body');
@@ -369,6 +453,7 @@ function loadScoreSheetData() {
         tbody.innerHTML += isALevel ? buildALevelRow(student, recordKey, isSubsidiary) : buildOLevelRow(student, recordKey);
     });
 }
+
 function buildALevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
@@ -383,6 +468,7 @@ function buildALevelHeader() {
         </tr>
     `;
 }
+
 function buildOLevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
@@ -399,6 +485,7 @@ function buildOLevelHeader() {
         </tr>
     `;
 }
+
 function buildALevelRow(student, recordKey, isSubsidiary) {
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: 0, p2: 0 };
     const marks = marksStorage[recordKey];
@@ -419,6 +506,7 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
         </tr>
     `;
 }
+
 function buildOLevelRow(student, recordKey) {
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: 0, ao2: 0, eot: 0 };
     const marks = marksStorage[recordKey];
@@ -442,6 +530,7 @@ function buildOLevelRow(student, recordKey) {
         </tr>
     `;
 }
+
 function updateMarks(studId, type, value) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
@@ -462,6 +551,7 @@ function updateMarks(studId, type, value) {
     document.getElementById(`descriptor-${studId}`).innerText = gradeData.descriptor;
     updateDashboardStats();
 }
+
 function updateALevelMarks(studId, type, value) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
@@ -482,6 +572,19 @@ function updateALevelMarks(studId, type, value) {
     updateDashboardStats();
 }
 
+async function saveAllMarks() {
+    try {
+        for (const [recordKey, marksRecord] of Object.entries(marksStorage)) {
+            await ScoresAPI.save(recordKey, marksRecord);
+        }
+        alert("Marks successfully saved to system register and backend!");
+        updateDashboardStats();
+    } catch (error) {
+        console.error("Failed to save marks:", error);
+        alert("Failed to save marks to the server.");
+    }
+}
+
 /* ---------------------------------------------------------
    6. GRADING LOGIC
    --------------------------------------------------------- */
@@ -492,6 +595,7 @@ function computeOfficialGrade(score) {
     if (score >= 45) return { grade: 'D', descriptor: 'BASIC' };
     return { grade: 'E', descriptor: 'ELEMENTARY' };
 }
+
 function computeALevelGrade(score, isSubsidiary) {
     let grade, descriptor, points;
     if (score >= 80) { grade = "A"; descriptor = "EXCEPTIONAL"; points = isSubsidiary ? 1 : 5; }
@@ -526,6 +630,7 @@ function renderAnalyticsModule() {
         </div>
     `;
 }
+
 function initPerformanceChart() {
     const ctx = document.getElementById('performanceChart');
     if (!ctx) return;
@@ -598,7 +703,7 @@ function initPerformanceChart() {
 }
 
 /* ---------------------------------------------------------
-   8. ATTENDANCE REGISTRY MODULE (Light Theme)
+   8. ATTENDANCE REGISTRY MODULE
    --------------------------------------------------------- */
 function renderAttendanceModule() {
     const today = new Date().toISOString().split('T')[0];
@@ -642,6 +747,7 @@ function renderAttendanceModule() {
         </div>
     `;
 }
+
 function loadAttendanceData() {
     const tbody = document.getElementById('attendance-table-body');
     const classFilter = document.getElementById('attendance-class-filter');
@@ -679,6 +785,7 @@ function loadAttendanceData() {
         `;
     });
 }
+
 function setAttendanceStatus(studId, status) {
     const dateField = document.getElementById('attendance-date');
     const recordKey = `${dateField.value}_${studId}`;
@@ -686,8 +793,16 @@ function setAttendanceStatus(studId, status) {
     loadAttendanceData();
     updateDashboardStats();
 }
-function saveAttendanceRegistry() {
+
+async function saveAttendanceRegistry() {
     const dateField = document.getElementById('attendance-date');
-    alert(`Attendance successfully recorded and saved for ${dateField.value}!`);
-    updateDashboardStats();
+    const classFilter = document.getElementById('attendance-class-filter');
+    try {
+        await AttendanceAPI.saveRegistry(dateField.value, classFilter.value);
+        alert(`Attendance successfully recorded and saved for ${dateField.value}!`);
+        updateDashboardStats();
+    } catch (error) {
+        console.error("Failed to save attendance:", error);
+        alert("Could not save attendance to the server.");
+    }
 }
