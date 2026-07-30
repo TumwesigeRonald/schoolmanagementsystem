@@ -75,6 +75,8 @@ const ENDPOINTS = {
     // --- Attendance ---
     ATTENDANCE: "/attendance",
     ATTENDANCE_BY_CLASS_DATE: (cls, date) => `/attendance?class=${encodeURIComponent(cls)}&date=${encodeURIComponent(date)}`,
+    ATTENDANCE_SINCE: (sinceDate) => `/attendance?since=${encodeURIComponent(sinceDate)}`,
+    ATTENDANCE_BY_STUDENT: (studentId) => `/attendance?studentId=${encodeURIComponent(studentId)}`,
 
     // --- Resources ---
     RESOURCES: "/resources",
@@ -399,6 +401,16 @@ const TeachersAPI = {
    9. SCORES / MARKS DATA-ACCESS LAYER
    --------------------------------------------------------- */
 const ScoresAPI = {
+    async list() {
+        // No local-storage fallback here on purpose: marksStorage already *is*
+        // the local store, so there's nothing useful to fall back to — if the
+        // backend can't be reached, refreshScoresList() in script.js just
+        // leaves the existing in-memory marksStorage untouched.
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.SCORES),
+            () => null
+        );
+    },
     async save(recordKey, marksRecord) {
         const [subject, studentId] = [recordKey.split("_").slice(0, -1).join("_"), recordKey.split("_").pop()];
         return remoteFirst(
@@ -412,6 +424,35 @@ const ScoresAPI = {
    10. ATTENDANCE DATA-ACCESS LAYER
    --------------------------------------------------------- */
 const AttendanceAPI = {
+    async list() {
+        // No local-storage fallback here on purpose, same reasoning as
+        // ScoresAPI.list(): attendanceStorage already *is* the local store,
+        // so refreshAttendanceList() in script.js just leaves it untouched
+        // if the backend can't be reached.
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.ATTENDANCE),
+            () => null
+        );
+    },
+    // Bounded to a recent rolling window (default ~6 months) instead of the
+    // entire attendance history — every day is a new row, so at 300+
+    // students this table only grows; the day-to-day register never needs
+    // to look further back than this. Used for the login-time hydration.
+    async listRecent(sinceDate) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.ATTENDANCE_SINCE(sinceDate)),
+            () => null
+        );
+    },
+    // One student's full history — used only when actually computing that
+    // student's report-card attendance summary, so we pull just their rows
+    // instead of everyone's.
+    async listForStudent(studentId) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.ATTENDANCE_BY_STUDENT(studentId)),
+            () => null
+        );
+    },
     async setStatus(date, studentId, status) {
         return remoteFirst(
             () => apiRequest(ENDPOINTS.ATTENDANCE, { method: "POST", body: { date, studentId, status } }),

@@ -178,7 +178,7 @@ img {
     padding: 12px 14px;
     border: 1.5px solid var(--slate-300);
     border-radius: 10px;
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--slate-900);
     background: #fafbfb;
@@ -466,7 +466,7 @@ img {
    design, since that's what actually goes to print. On a phone that's wider
    than the viewport, so this keeps the overflow scrollable inside the
    preview box instead of pushing the whole page sideways. */
-#report-cards-preview {
+#report-cards-preview, #own-report-preview {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 6px;
@@ -564,6 +564,17 @@ img {
 .rc-print-meta { color: #888; font-style: italic; font-size: 7.5px; text-align: center; flex: 1; min-width: 180px; }
 .rc-stamp-note { border: 1px solid #333; padding: 2px 9px; font-weight: 800; border-radius: 4px; }
 /* ---------------------------------------------------------
+   MOBILE INPUT ZOOM FIX
+   iOS Safari zooms the whole page in when a focused form field
+   renders below 16px, regardless of what the viewport meta tag
+   says. Every input/select/textarea in this app is forced to at
+   least 16px here so that never happens — only font-size is
+   touched, so padding/colors/widths set elsewhere are unaffected.
+   --------------------------------------------------------- */
+input, select, textarea {
+    font-size: 16px !important;
+}
+/* ---------------------------------------------------------
    RESPONSIVE / MOBILE ADAPTATIONS
    Desktop keeps the multi-column layout defined above unchanged.
    Below ~900px the login screen stacks; below ~640px the app
@@ -629,7 +640,37 @@ img {
     .report-page {
         margin: 0 auto;
         box-shadow: none;
+        /* Slightly tighter page padding than the on-screen preview, buying
+           back vertical room so a full report reliably fits one A4 page. */
+        padding: 6mm 11mm;
     }
+    /* Trim the spacing/font-size budget across every section by a small,
+       uniform amount — enough headroom for a full subject list plus wrapped
+       remarks to stay on one page, without visibly cramping the layout.
+       Numbers/grades/points themselves are untouched — this only affects
+       how much white space and text size surrounds them. */
+    .rc-header-top { padding-bottom: 5px; }
+    .rc-logo { width: 54px; height: 54px; }
+    .rc-school-info h1 { font-size: 17px; margin-bottom: 1px; }
+    .rc-school-info p { font-size: 8.8px; margin: 0.5px 0; }
+    .rc-report-title { margin: 5px 0; padding: 4px 0; font-size: 11.5px; }
+    .rc-learner-row { margin-bottom: 5px; padding: 5px 10px; gap: 5px 16px; }
+    .rc-table { margin-top: 3px; font-size: 9px; }
+    .rc-table th, .rc-table td { padding: 3px 5px; }
+    .rc-overall-row { margin-top: 5px; gap: 6px; }
+    .rc-overall-box { padding: 3px 10px; min-width: 90px; }
+    .rc-two-col { margin-top: 5px; gap: 6px; }
+    .rc-summary-section { margin-top: 5px; }
+    .rc-summary-card { padding: 5px 9px; }
+    .rc-summary-card h4 { margin-bottom: 3px; padding-bottom: 3px; }
+    .rc-summary-row { padding: 1.5px 0; }
+    .rc-bars-grid { gap: 1px 8px; }
+    .rc-bar-row { margin: 1px 0; }
+    .rc-remark-box { padding: 5px 9px; margin-top: 4px; }
+    .rc-remark-box p { font-size: 9px; line-height: 1.35; }
+    .rc-footer { padding-top: 5px; }
+    .rc-comment-row { padding: 4px 0 3px; }
+    .rc-legal-row { margin-top: 6px; }
     * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;

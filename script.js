@@ -106,13 +106,70 @@ async function refreshTermSettings() {
         if (remote) termSettings = remote;
     } catch (e) { /* keep existing local settings */ }
 }
+async function refreshScoresList() {
+    // marksStorage is keyed by recordKey ("SUBJECT_studentId"), same
+    // convention the backend uses for scores.record_key — just re-key the
+    // rows the API returns into that shape. Grading/report-card logic
+    // (section 6 below) reads marksStorage the same way either way, so
+    // nothing about how marks are calculated or displayed changes.
+    try {
+        const remote = await ScoresAPI.list();
+        if (Array.isArray(remote)) {
+            const rehydrated = {};
+            remote.forEach(row => {
+                rehydrated[row.recordKey] = {
+                    ao1: row.ao1, ao2: row.ao2, eot: row.eot,
+                    p1: row.p1, p2: row.p2,
+                    remarks: row.remarks, touched: row.touched
+                };
+            });
+            marksStorage = rehydrated;
+        }
+    } catch (e) { /* keep existing local marksStorage */ }
+}
+async function refreshAttendanceList() {
+    // attendanceStorage is keyed by recordKey ("date_studentId"), same
+    // convention the backend uses for attendance.record_key — the rows the
+    // API returns map onto it directly (just recordKey -> status).
+    // Scoped to the last ~6 months: the register only ever looks at one
+    // date at a time, and this table gains a new row per student per day,
+    // so at 300+ students an unbounded fetch here grows every term. A
+    // student's full history (needed for their report-card attendance %)
+    // is fetched separately and on demand — see refreshAttendanceForStudent.
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    const sinceDate = sixMonthsAgo.toISOString().slice(0, 10);
+    try {
+        const remote = await AttendanceAPI.listRecent(sinceDate);
+        if (Array.isArray(remote)) {
+            const rehydrated = {};
+            remote.forEach(row => { rehydrated[row.recordKey] = row.status; });
+            attendanceStorage = rehydrated;
+        }
+    } catch (e) { /* keep existing local attendanceStorage */ }
+}
+// Pulls one student's full attendance history on demand (report cards need
+// an accurate lifetime %, but there's no need to fetch it for every student
+// until their report is actually being generated). Merges into the existing
+// attendanceStorage rather than replacing it, so the recent-window data
+// loaded at login isn't lost for other students.
+async function refreshAttendanceForStudent(studentId) {
+    try {
+        const remote = await AttendanceAPI.listForStudent(studentId);
+        if (Array.isArray(remote)) {
+            remote.forEach(row => { attendanceStorage[row.recordKey] = row.status; });
+        }
+    } catch (e) { /* keep existing local attendanceStorage for this student */ }
+}
 async function syncAllRemoteData() {
     // Run in parallel — independent endpoints, no ordering dependency.
     await Promise.all([
         refreshStudentsList(),
         refreshTeachersList(),
         refreshResourcesList(),
-        refreshTermSettings()
+        refreshTermSettings(),
+        refreshScoresList(),
+        refreshAttendanceList()
     ]);
 }
 /* ---------------------------------------------------------
@@ -842,7 +899,7 @@ function printOwnReportCard() {
     printArea.innerHTML = previewArea.innerHTML;
     window.print();
 }
-function generateReportCards() {
+async function generateReportCards() {
     if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
     const classSelect = document.getElementById('report-class-select');
     const termSelect = document.getElementById('report-term-select');
@@ -869,6 +926,15 @@ function generateReportCards() {
         previewArea.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">No students registered in ${selectedClass} yet. Add them in the Students tab first.</div>`;
         return;
     }
+
+    // The attendance % on each report card needs each student's full
+    // history, but the login-time hydration only covers a recent rolling
+    // window (see refreshAttendanceList) so the app isn't pulling the
+    // entire school's attendance history on every login. Fetch full
+    // history for just this class's roster, on demand, right before
+    // rendering their reports.
+    previewArea.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">Loading attendance history for ${selectedClass}&hellip;</div>`;
+    await Promise.all(classStudents.map(s => refreshAttendanceForStudent(s.id)));
 
     previewArea.innerHTML = classStudents.map(student =>
         isALevel
@@ -1461,6 +1527,7 @@ async function saveAttendanceRegistry() {
         alert(err.message || 'Could not save attendance. Please try again.');
         return;
     }
+    await refreshAttendanceList();
     alert(`Attendance successfully recorded and saved for ${dateField.value}!`);
     updateDashboardStats();
 }
