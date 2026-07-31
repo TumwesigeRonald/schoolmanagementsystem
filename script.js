@@ -704,6 +704,13 @@ function buildOLevelRow(student, recordKey) {
         </tr>
     `;
 }
+// TEMPORARY DEBUG HELPER — shows a popup with the real reason a score
+// failed to save, instead of failing silently. Remove once the scores
+// bug is confirmed fixed.
+function reportScoreSaveError(err) {
+    console.error('Score save failed:', err);
+    alert('SCORE SAVE FAILED:\n\n' + (err && err.message ? err.message : String(err)));
+}
 const O_LEVEL_FIELD_LIMITS = { ao1: [0, 3], ao2: [0, 3], eot: [0, 80] };
 function clampValue(rawValue, min, max) {
     let val = Number(rawValue);
@@ -733,7 +740,7 @@ function updateMarks(studId, type, value, inputEl) {
     document.getElementById(`total-${studId}`).innerText = finalTotal;
     document.getElementById(`grade-${studId}`).innerText = gradeData.grade;
     document.getElementById(`descriptor-${studId}`).innerText = gradeData.descriptor;
-    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value).catch(() => {}); // sync to backend once deployed; UI already updated optimistically
+    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
     updateDashboardStats();
 }
 function updateALevelMarks(studId, type, value, inputEl) {
@@ -757,7 +764,7 @@ function updateALevelMarks(studId, type, value, inputEl) {
     document.getElementById(`grade-${studId}`).innerText = gradeInfo.grade;
     document.getElementById(`descriptor-${studId}`).innerText = gradeInfo.descriptor;
     document.getElementById(`points-${studId}`).innerText = gradeInfo.points;
-    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value).catch(() => {}); // sync to backend once deployed; UI already updated optimistically
+    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
     updateDashboardStats();
 }
 function updateOLevelRemarks(studId, value) {
@@ -768,7 +775,7 @@ function updateOLevelRemarks(studId, value) {
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: 0, ao2: 0, eot: 0 };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
-    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value).catch(() => {});
+    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
 }
 function updateALevelRemarks(studId, value) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
@@ -778,7 +785,7 @@ function updateALevelRemarks(studId, value) {
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: 0, p2: 0 };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
-    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value).catch(() => {});
+    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
 }
 /* ---------------------------------------------------------
    6. GRADING LOGIC
