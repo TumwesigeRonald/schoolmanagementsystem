@@ -29,6 +29,25 @@ let teachersList = [
     { id: "T002", name: "Okello Peter", username: "pokello", password: "teach123", subject: "ENGLISH" }
 ];
 let currentUser = { username: "", role: "", name: "", studentId: null, teacherId: null };
+
+// Remembers which class/subject the Scores tab was last showing, so
+// switching away and back (or a page refresh) doesn't silently reset the
+// view to S.1 + the first subject in the list — which made saved marks
+// look like they'd vanished when really you were just looking at a
+// different class/subject than the one you entered them under.
+// Persisted in localStorage (not just an in-memory variable) so it also
+// survives a full browser refresh, not just in-app tab switching.
+const SCORE_VIEW_STORAGE_KEY = 'lcs_score_view_selection';
+function getScoreViewSelection() {
+    try {
+        return JSON.parse(localStorage.getItem(SCORE_VIEW_STORAGE_KEY)) || {};
+    } catch (e) { return {}; }
+}
+function setScoreViewSelection(classLevel, subject) {
+    try {
+        localStorage.setItem(SCORE_VIEW_STORAGE_KEY, JSON.stringify({ classLevel, subject }));
+    } catch (e) { /* storage unavailable, ignore — just won't persist across refresh */ }
+}
 const oLevelSubjects = [
     "ENGLISH", "MATHEMATICS", "PHYSICS", "CHEMISTRY", "BIOLOGY", 
     "GEOGRAPHY", "HIST & POL EDU", "AGRICULTURE", "CRE", 
@@ -532,6 +551,8 @@ async function deleteStudent(studentId) {
    5. SCORE SHEETS MODULE (Light Theme)
    --------------------------------------------------------- */
 function renderScoresModule() {
+    const savedSelection = getScoreViewSelection();
+    const savedClass = savedSelection.classLevel || 'S.1';
     return `
         <div class="space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
@@ -540,21 +561,21 @@ function renderScoresModule() {
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Select Class Level</label>
                         <select id="score-class-select" onchange="onClassLevelChange()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-extrabold text-slate-700 focus:ring-1 focus:ring-teal-500">
                             <optgroup label="O-Level (S.1 - S.4)">
-                                <option value="S.1">S.1</option>
-                                <option value="S.2">S.2</option>
-                                <option value="S.3">S.3</option>
-                                <option value="S.4">S.4</option>
+                                <option value="S.1" ${savedClass === 'S.1' ? 'selected' : ''}>S.1</option>
+                                <option value="S.2" ${savedClass === 'S.2' ? 'selected' : ''}>S.2</option>
+                                <option value="S.3" ${savedClass === 'S.3' ? 'selected' : ''}>S.3</option>
+                                <option value="S.4" ${savedClass === 'S.4' ? 'selected' : ''}>S.4</option>
                             </optgroup>
                             <optgroup label="A-Level (S.5 - S.6)">
-                                <option value="S.5">S.5</option>
-                                <option value="S.6">S.6</option>
+                                <option value="S.5" ${savedClass === 'S.5' ? 'selected' : ''}>S.5</option>
+                                <option value="S.6" ${savedClass === 'S.6' ? 'selected' : ''}>S.6</option>
                             </optgroup>
                         </select>
                     </div>
                     <div class="flex items-end gap-2">
                         <div>
                             <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Subject</label>
-                            <select id="score-subject-select" onchange="loadScoreSheetData()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
+                            <select id="score-subject-select" onchange="onSubjectChange()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
                         </div>
                         <button onclick="loadNextSubject()" class="bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl border border-slate-300 transition">Next Subject</button>
                     </div>
@@ -571,7 +592,10 @@ function renderScoresModule() {
     `;
 }
 function onClassLevelChange() {
+    const classSelect = document.getElementById('score-class-select');
     updateSubjectDropdown();
+    const subjectSelect = document.getElementById('score-subject-select');
+    setScoreViewSelection(classSelect?.value, subjectSelect?.value);
     loadScoreSheetData();
 }
 function updateSubjectDropdown() {
@@ -581,12 +605,22 @@ function updateSubjectDropdown() {
     const selectedClass = classSelect.value;
     const isALevel = (selectedClass === 'S.5' || selectedClass === 'S.6');
     const activeSubjects = isALevel ? aLevelSubjects : oLevelSubjects;
-    subjectSelect.innerHTML = activeSubjects.map(sub => `<option value="${sub}">${sub}</option>`).join('');
+    const savedSubject = getScoreViewSelection().subject;
+    const subjectToSelect = activeSubjects.includes(savedSubject) ? savedSubject : activeSubjects[0];
+    subjectSelect.innerHTML = activeSubjects.map(sub => `<option value="${sub}"${sub === subjectToSelect ? ' selected' : ''}>${sub}</option>`).join('');
+}
+function onSubjectChange() {
+    const classSelect = document.getElementById('score-class-select');
+    const subjectSelect = document.getElementById('score-subject-select');
+    setScoreViewSelection(classSelect?.value, subjectSelect?.value);
+    loadScoreSheetData();
 }
 function loadNextSubject() {
     const subjectSelect = document.getElementById('score-subject-select');
     if (!subjectSelect || subjectSelect.options.length === 0) return;
     subjectSelect.selectedIndex = (subjectSelect.selectedIndex + 1) % subjectSelect.options.length;
+    const classSelect = document.getElementById('score-class-select');
+    setScoreViewSelection(classSelect?.value, subjectSelect.value);
     loadScoreSheetData();
 }
 function loadScoreSheetData() {
