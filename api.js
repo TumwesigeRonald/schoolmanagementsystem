@@ -413,10 +413,25 @@ const ScoresAPI = {
     },
     async save(recordKey, marksRecord) {
         const [subject, studentId] = [recordKey.split("_").slice(0, -1).join("_"), recordKey.split("_").pop()];
-        return remoteFirst(
-            () => apiRequest(ENDPOINTS.SCORES, { method: "POST", body: { subject, studentId, ...marksRecord } }),
-            () => { marksStorage[recordKey] = marksRecord; return marksRecord; }
-        );
+        // TEMP DEBUG: call apiRequest directly (bypassing remoteFirst's silent
+        // fallback) so we can see and report ANY failure — including the
+        // "network failure" ones (404/405/501, non-JSON response, real
+        // network/CORS error) that remoteFirst normally swallows quietly.
+        // Remove this block and restore the remoteFirst call once the bug
+        // is found.
+        try {
+            return await apiRequest(ENDPOINTS.SCORES, { method: "POST", body: { subject, studentId, ...marksRecord } });
+        } catch (err) {
+            console.error('Score save raw error:', err, 'status:', err.status, 'isNetworkFailure:', err.isNetworkFailure);
+            alert(
+                'SCORE SAVE FAILED (debug)\n\n' +
+                'Message: ' + (err && err.message) + '\n' +
+                'HTTP status: ' + (err && err.status !== undefined ? err.status : 'none (no response received)') + '\n' +
+                'Treated as network failure: ' + (err && err.isNetworkFailure)
+            );
+            marksStorage[recordKey] = marksRecord; // keep old fallback behavior so UI still works
+            return marksRecord;
+        }
     }
 };
 
