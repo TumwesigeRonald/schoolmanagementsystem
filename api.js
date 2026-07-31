@@ -413,10 +413,18 @@ const ScoresAPI = {
     },
     async save(recordKey, marksRecord, classLevel) {
         const [subject, studentId] = [recordKey.split("_").slice(0, -1).join("_"), recordKey.split("_").pop()];
-        return remoteFirst(
-            () => apiRequest(ENDPOINTS.SCORES, { method: "POST", body: { subject, studentId, classLevel, ...marksRecord } }),
-            () => { marksStorage[recordKey] = marksRecord; return marksRecord; }
-        );
+        // NOTE: deliberately NOT using remoteFirst's silent local-fallback here.
+        // marksStorage lives only in this tab's memory (nothing backs it with
+        // localStorage), so a network failure "succeeding" via local fallback
+        // would mean the mark quietly vanishes on refresh with zero indication
+        // anything was wrong — which is exactly the bug this used to cause.
+        // Every failure, network or server-side, must reach the caller.
+        try {
+            return await apiRequest(ENDPOINTS.SCORES, { method: "POST", body: { subject, studentId, classLevel, ...marksRecord } });
+        } catch (err) {
+            marksStorage[recordKey] = marksRecord; // keep it visible in this tab, but the caller must be told it isn't actually persisted
+            throw err;
+        }
     }
 };
 

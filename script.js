@@ -756,9 +756,21 @@ function markRowSaveState(recordKey, ok) {
         if (row) { row.classList.add('score-save-error'); row.title = 'This row failed to save to the server. It will be lost if you refresh or close the tab before it saves successfully.'; }
     }
 }
+let backendUnreachableNoticeShown = false;
 function handleScoreSaveError(err, recordKey) {
     const studId = studentIdFromRecordKey(recordKey);
     markRowSaveState(recordKey, false);
+    if (err && err.isNetworkFailure) {
+        // The backend itself couldn't be reached at all (not deployed, wrong
+        // API_CONFIG.BASE_URL, CORS not enabled for this origin, no internet).
+        // Every save will fail the same way until that's fixed, so warn once
+        // instead of once per keystroke.
+        if (!backendUnreachableNoticeShown) {
+            backendUnreachableNoticeShown = true;
+            showToast("Can't reach the school server at all. Marks are only staying in this browser tab and WILL be lost on refresh — check your internet connection, or ask whoever manages the system to confirm the backend is deployed and reachable.", 'error', 12000);
+        }
+        return;
+    }
     if (err && err.status === 401) {
         // Session is dead — every subsequent save will fail the same way,
         // so warn once (not per keystroke) and offer to log back in rather
@@ -782,7 +794,8 @@ function handleScoreSaveError(err, recordKey) {
         showToast(`Could not save marks for ${studId}: you don't have permission to edit scores.`, 'error');
         return;
     }
-    showToast(`Could not save marks for ${studId} to the server. It's highlighted in red and will be lost if you refresh before it saves — check your connection.`, 'error');
+    const detail = err && err.message ? ` (${err.message})` : '';
+    showToast(`Could not save marks for ${studId} to the server${detail}. It's highlighted in red and will be lost if you refresh before it saves.`, 'error');
 }
 // Re-attempts every currently-failed/pending save, across every subject —
 // not just whichever subject happens to be on screen right now. Used by
