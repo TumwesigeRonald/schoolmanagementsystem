@@ -666,7 +666,7 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
     
     return `
-        <tr class="hover:bg-slate-50 transition">
+        <tr class="hover:bg-slate-50 transition" data-student-id="${student.id}">
             <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
             <td class="p-4 font-bold text-slate-900">${student.name}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
@@ -689,7 +689,7 @@ function buildOLevelRow(student, recordKey) {
     const gradeData = computeOfficialGrade(finalTotal);
     
     return `
-        <tr class="hover:bg-slate-50 transition">
+        <tr class="hover:bg-slate-50 transition" data-student-id="${student.id}">
             <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
             <td class="p-4 font-bold text-slate-900">${student.name}</td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${marks.ao1 || ''}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
@@ -704,19 +704,88 @@ function buildOLevelRow(student, recordKey) {
         </tr>
     `;
 }
-// TEMPORARY DEBUG HELPER — shows a popup with the real reason a score
-// failed to save, instead of failing silently. Remove once the scores
-// bug is confirmed fixed.
-function reportScoreSaveError(err) {
-    console.error('Score save failed:', err);
-    alert('SCORE SAVE FAILED:\n\n' + (err && err.message ? err.message : String(err)));
-}
 const O_LEVEL_FIELD_LIMITS = { ao1: [0, 3], ao2: [0, 3], eot: [0, 80] };
 function clampValue(rawValue, min, max) {
     let val = Number(rawValue);
     if (isNaN(val)) val = min;
     return Math.min(max, Math.max(min, val));
 }
+/* ---------------------------------------------------------
+   5b. SCORE SAVE-STATUS TRACKING
+   ScoresAPI.save() used to be fired with `.catch(() => {})`, so a
+   rejected save (expired session, 403, 404 student-not-found,
+   network blip) was invisible: the UI already showed the typed
+   value optimistically, and the failed record just wasn't in the
+   database — so it vanished the moment the page reloaded and
+   marksStorage was rebuilt purely from GET /api/scores.
+   These helpers make that failure visible and stop a refresh from
+   silently discarding a mark that hasn't actually saved yet.
+   --------------------------------------------------------- */
+const unsavedScoreRows = new Set(); // studIds with a pending or failed save
+let sessionExpiredNoticeShown = false;
+function showToast(message, type = 'error', duration = 7000) {
+    let container = document.getElementById('app-toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'app-toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = `app-toast app-toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('visible'));
+    setTimeout(() => {
+        toast.classList.remove('visible');
+        setTimeout(() => toast.remove(), 300);
+    }, duration);
+}
+function markRowSaveState(studId, ok) {
+    const row = document.querySelector(`tr[data-student-id="${CSS.escape(studId)}"]`);
+    if (ok) {
+        unsavedScoreRows.delete(studId);
+        if (row) { row.classList.remove('score-save-error'); row.removeAttribute('title'); }
+    } else {
+        unsavedScoreRows.add(studId);
+        if (row) { row.classList.add('score-save-error'); row.title = 'This row failed to save to the server. It will be lost if you refresh or close the tab before it saves successfully.'; }
+    }
+}
+function handleScoreSaveError(err, studId) {
+    markRowSaveState(studId, false);
+    if (err && err.status === 401) {
+        // Session is dead — every subsequent save will fail the same way,
+        // so warn once (not per keystroke) and offer to log back in rather
+        // than let the teacher keep typing marks that can never be saved.
+        if (!sessionExpiredNoticeShown) {
+            sessionExpiredNoticeShown = true;
+            showToast('Your session has expired. Marks entered from now on will NOT be saved until you log in again.', 'error', 10000);
+            setTimeout(() => {
+                if (confirm('Your session has expired, so new marks cannot be saved to the server. Log in again now? (Any unsaved rows are highlighted in red.)')) {
+                    handleLogout();
+                }
+            }, 200);
+        }
+        return;
+    }
+    if (err && err.status === 404) {
+        showToast(`Could not save marks for ${studId}: this student wasn't found on the server (they may only exist locally). Re-check them in the Students tab.`, 'error');
+        return;
+    }
+    if (err && err.status === 403) {
+        showToast(`Could not save marks for ${studId}: you don't have permission to edit scores.`, 'error');
+        return;
+    }
+    showToast(`Could not save marks for ${studId} to the server. It's highlighted in red and will be lost if you refresh before it saves — check your connection.`, 'error');
+}
+// Belt-and-braces: even if a toast was missed, never let the browser close
+// or refresh while a save is still pending or has failed outright.
+window.addEventListener('beforeunload', (e) => {
+    if (unsavedScoreRows.size > 0) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+    }
+});
 function updateMarks(studId, type, value, inputEl) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
     const subjectSelect = document.getElementById('score-subject-select');
@@ -740,7 +809,10 @@ function updateMarks(studId, type, value, inputEl) {
     document.getElementById(`total-${studId}`).innerText = finalTotal;
     document.getElementById(`grade-${studId}`).innerText = gradeData.grade;
     document.getElementById(`descriptor-${studId}`).innerText = gradeData.descriptor;
-    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
+    unsavedScoreRows.add(studId); // pending until the save below resolves — guards against a refresh mid-flight
+    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
+        .then(() => markRowSaveState(studId, true))
+        .catch(err => handleScoreSaveError(err, studId)); // UI already updated optimistically above; this surfaces real save failures instead of hiding them
     updateDashboardStats();
 }
 function updateALevelMarks(studId, type, value, inputEl) {
@@ -764,7 +836,10 @@ function updateALevelMarks(studId, type, value, inputEl) {
     document.getElementById(`grade-${studId}`).innerText = gradeInfo.grade;
     document.getElementById(`descriptor-${studId}`).innerText = gradeInfo.descriptor;
     document.getElementById(`points-${studId}`).innerText = gradeInfo.points;
-    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
+    unsavedScoreRows.add(studId); // pending until the save below resolves — guards against a refresh mid-flight
+    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
+        .then(() => markRowSaveState(studId, true))
+        .catch(err => handleScoreSaveError(err, studId)); // UI already updated optimistically above; this surfaces real save failures instead of hiding them
     updateDashboardStats();
 }
 function updateOLevelRemarks(studId, value) {
@@ -775,7 +850,10 @@ function updateOLevelRemarks(studId, value) {
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: 0, ao2: 0, eot: 0 };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
-    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
+    unsavedScoreRows.add(studId);
+    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value)
+        .then(() => markRowSaveState(studId, true))
+        .catch(err => handleScoreSaveError(err, studId));
 }
 function updateALevelRemarks(studId, value) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
@@ -785,7 +863,10 @@ function updateALevelRemarks(studId, value) {
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: 0, p2: 0 };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
-    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value).catch(reportScoreSaveError); // TEMP: was .catch(() => {}) — now surfaces real errors
+    unsavedScoreRows.add(studId);
+    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value)
+        .then(() => markRowSaveState(studId, true))
+        .catch(err => handleScoreSaveError(err, studId));
 }
 /* ---------------------------------------------------------
    6. GRADING LOGIC
