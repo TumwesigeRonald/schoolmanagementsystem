@@ -95,6 +95,21 @@ function formatAOScoreDisplay(raw, emptyValue) {
     return n.toFixed(1);
 }
 /* ---------------------------------------------------------
+   1b-ii. WHOLE-NUMBER SCORE DISPLAY FORMATTER
+   Same reasoning as formatAOScoreDisplay above, but for EOT-style
+   marks that are meant to be plain whole numbers (e.g. "80", "0")
+   rather than decimals — the backend's NUMERIC(5,2) column still
+   returns strings like "80.00", so this strips the decimal part
+   for display only. No calculation uses this value.
+   --------------------------------------------------------- */
+function formatWholeScoreDisplay(raw, emptyValue) {
+    if (raw === null || raw === undefined || raw === '') return emptyValue;
+    const n = Number(raw);
+    if (isNaN(n)) return emptyValue;
+    if (n === 0) return emptyValue;
+    return String(Math.round(n));
+}
+/* ---------------------------------------------------------
    1d. REMOTE DATA SYNC
    studentsList/teachersList/resourcesList/termSettings start out
    as hardcoded demo data (above) purely so the UI has something
@@ -651,8 +666,8 @@ function loadScoreSheetData() {
 function buildALevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4">Student ID</th>
-            <th class="p-4">Student Name</th>
+            <th class="p-4 score-sticky-col-1">Student ID</th>
+            <th class="p-4 score-sticky-col-2">Student Name</th>
             <th class="p-4 text-center">Paper 1 (100)</th>
             <th class="p-4 text-center">Paper 2 (100)</th>
             <th class="p-4 text-center">Average</th>
@@ -666,8 +681,8 @@ function buildALevelHeader() {
 function buildOLevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4">Student ID</th>
-            <th class="p-4">Full Name</th>
+            <th class="p-4 score-sticky-col-1">Student ID</th>
+            <th class="p-4 score-sticky-col-2">Full Name</th>
             <th class="p-4 text-center">AO1 (3.0)</th>
             <th class="p-4 text-center">AO2 (3.0)</th>
             <th class="p-4 text-center">Av. Score</th>
@@ -692,8 +707,8 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900">${student.name}</td>
+            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${avgMark}</td>
@@ -715,13 +730,13 @@ function buildOLevelRow(student, recordKey) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900">${student.name}</td>
+            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
             <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="80" value="${marks.eot || ''}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${finalTotal}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeData.grade}</td>
             <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeData.descriptor}</td>
@@ -1372,7 +1387,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds) {
             <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '-')}</td>
             <td class="rc-num">${r.avScore.toFixed(1)}</td>
             <td class="rc-num">${r.faScore.toFixed(1)}</td>
-            <td class="rc-num">${r.marks.eot || '-'}</td>
+            <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
             <td class="rc-final">${r.finalTotal}</td>
             <td class="rc-grade">${r.gradeData.grade}</td>
             <td class="rc-descriptor">${getCompetencyDescriptor(r.gradeData.grade)}</td>

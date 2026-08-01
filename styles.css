@@ -722,6 +722,49 @@ input, select, textarea {
 }
 
 /* ---------------------------------------------------------
+   MARKS ENTRY TABLE — FROZEN STUDENT ID / NAME COLUMNS
+   Keeps the "Student ID" and "Full Name" columns pinned to the
+   left (Excel-style freeze panes) while horizontally scrolling
+   across to the AO/EOT/Final columns on mobile or narrow screens.
+   A solid background on each sticky cell is required so the
+   scrolling columns don't show through underneath; the hover and
+   error-row rules below keep that background in sync with the
+   row's own state instead of looking visually "stuck".
+   --------------------------------------------------------- */
+.score-sticky-col-1,
+.score-sticky-col-2 {
+    position: sticky;
+    z-index: 2;
+    background-color: #fff;
+}
+.score-sticky-col-1 {
+    left: 0;
+    width: 108px;
+    min-width: 108px;
+    max-width: 108px;
+}
+.score-sticky-col-2 {
+    left: 108px;
+    width: 168px;
+    min-width: 168px;
+    max-width: 168px;
+    box-shadow: 4px 0 6px -4px rgba(15, 42, 61, 0.2);
+}
+thead .score-sticky-col-1,
+thead .score-sticky-col-2 {
+    background-color: #f8fafc;
+    z-index: 3;
+}
+tbody tr:hover .score-sticky-col-1,
+tbody tr:hover .score-sticky-col-2 {
+    background-color: #f8fafc;
+}
+tr.score-save-error .score-sticky-col-1,
+tr.score-save-error .score-sticky-col-2 {
+    background-color: #fef2f2 !important;
+}
+
+/* ---------------------------------------------------------
    SCORE SAVE STATUS (row highlight + toast notifications)
    Surfaces backend save failures that used to fail silently —
    see updateMarks/handleScoreSaveError in script.js.
