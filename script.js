@@ -53,6 +53,7 @@ const aLevelSubjects = [
 ];
 const subsidiarySubjects = ["GENERAL PAPER", "SUBSIDIARY MATHEMATICS", "ICT (SUBSIDIARY)"];
 let performanceChartInstance = null;
+let gradeDistributionChartInstance = null;
 /* ---------------------------------------------------------
    1c. TERM / CALENDAR SETTINGS (persisted in memory)
    Holds the currently selected term, year, and the upcoming
@@ -356,6 +357,10 @@ function switchTab(tabName) {
     if (performanceChartInstance) {
         performanceChartInstance.destroy();
         performanceChartInstance = null;
+    }
+    if (gradeDistributionChartInstance) {
+        gradeDistributionChartInstance.destroy();
+        gradeDistributionChartInstance = null;
     }
     switch (tabName) {
         case 'students':
@@ -1500,10 +1505,14 @@ function formatReportDate(dateStr) {
     if (isNaN(d)) return dateStr;
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
-function printReportCards() {
+async function printReportCards() {
     // Always regenerate right before printing so the printed output reflects
-    // any marks entered since the preview was last generated.
-    generateReportCards();
+    // any marks entered since the preview was last generated. generateReportCards
+    // is async (it fetches attendance history before populating the preview), so
+    // this MUST be awaited — printing before it resolves was grabbing whatever
+    // was already in report-cards-preview (stale content, or the "Loading
+    // attendance history..." placeholder), producing a blank/loading print.
+    await generateReportCards();
     const previewArea = document.getElementById('report-cards-preview');
     const printArea = document.getElementById('print-area');
     if (!previewArea || !printArea || previewArea.innerHTML.trim() === '') {
@@ -1514,9 +1523,70 @@ function printReportCards() {
     window.print();
 }
 /* ---------------------------------------------------------
+   6d. ANALYTICS DATA AGGREGATION
+   Pulls real performance metrics per class level (S.1 - S.6) by
+   reusing the SAME per-student subject records + grading functions
+   already used for report cards (getOLevelSubjectRecords /
+   getALevelSubjectRecords, which call computeOfficialGrade /
+   computeALevelGrade internally) — no grading formula is
+   reimplemented here, only aggregated.
+   --------------------------------------------------------- */
+const ANALYTICS_CLASS_LEVELS = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
+function computeAnalyticsData() {
+    const classAverages = {};
+    const gradeCountsByClass = {};
+    const overallGradeCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+    const subjectTotals = {}; // { subjectName: { sum, count } }
+
+    ANALYTICS_CLASS_LEVELS.forEach(level => {
+        const isALevel = (level === 'S.5' || level === 'S.6');
+        const classStudents = studentsList.filter(s => s.class === level);
+        const gradeCounts = { A: 0, B: 0, C: 0, D: 0, E: 0 };
+        let scoreSum = 0;
+        let scoreCount = 0;
+
+        classStudents.forEach(student => {
+            const records = isALevel ? getALevelSubjectRecords(student) : getOLevelSubjectRecords(student);
+            records.forEach(r => {
+                const grade = isALevel ? r.gradeInfo.grade : r.gradeData.grade;
+                const score = isALevel ? r.avgMark : r.finalTotal;
+                if (gradeCounts[grade] !== undefined) gradeCounts[grade]++;
+                if (overallGradeCounts[grade] !== undefined) overallGradeCounts[grade]++;
+                scoreSum += score;
+                scoreCount++;
+                if (!subjectTotals[r.subj]) subjectTotals[r.subj] = { sum: 0, count: 0 };
+                subjectTotals[r.subj].sum += score;
+                subjectTotals[r.subj].count++;
+            });
+        });
+
+        classAverages[level] = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : 0;
+        gradeCountsByClass[level] = gradeCounts;
+    });
+
+    let bestSubject = null;
+    let bestSubjectAvg = -1;
+    Object.keys(subjectTotals).forEach(subj => {
+        const avg = subjectTotals[subj].sum / subjectTotals[subj].count;
+        if (avg > bestSubjectAvg) {
+            bestSubjectAvg = avg;
+            bestSubject = subj;
+        }
+    });
+
+    return {
+        classAverages,
+        gradeCountsByClass,
+        overallGradeCounts,
+        bestSubject,
+        bestSubjectAvg: bestSubject ? Math.round(bestSubjectAvg) : 0
+    };
+}
+/* ---------------------------------------------------------
    7. PERFORMANCE ANALYTICS GRAPH MODULE (Chart.js)
    --------------------------------------------------------- */
 function renderAnalyticsModule() {
+    const analytics = computeAnalyticsData();
     return `
         <div class="space-y-6">
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1531,13 +1601,52 @@ function renderAnalyticsModule() {
                     </select>
                 </div>
             </div>
-            <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-xs relative h-96 flex items-center justify-center">
-                <canvas id="performanceChart"></canvas>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex items-center gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-lg flex-shrink-0">
+                        <i class="fa-solid fa-trophy"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Best Performed Subject (School-Wide)</p>
+                        <p class="text-lg font-black text-slate-900 truncate">${analytics.bestSubject || 'No scores recorded yet'}</p>
+                        ${analytics.bestSubject ? `<p class="text-xs font-bold text-teal-600">Average score: ${analytics.bestSubjectAvg}%</p>` : ''}
+                    </div>
+                </div>
+                <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex items-center gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg flex-shrink-0">
+                        <i class="fa-solid fa-star"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total "A" Grades (All Classes)</p>
+                        <p class="text-lg font-black text-slate-900">${analytics.overallGradeCounts.A}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3">"A" Grades Achieved, By Class</h4>
+                <div class="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                    ${ANALYTICS_CLASS_LEVELS.map(level => `
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                            <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">${level}</p>
+                            <p class="text-xl font-black text-teal-700">${analytics.gradeCountsByClass[level].A}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-xs relative h-96 flex items-center justify-center">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+                <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-xs relative h-96 flex flex-col items-center justify-center">
+                    <p class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2 self-start">Grade Distribution Proportions (All Classes)</p>
+                    <canvas id="gradeDistributionPieChart"></canvas>
+                </div>
             </div>
         </div>
     `;
 }
 function initPerformanceChart() {
+    const analytics = computeAnalyticsData();
     const ctx = document.getElementById('performanceChart');
     if (!ctx) return;
     
@@ -1551,10 +1660,10 @@ function initPerformanceChart() {
         chartConfig = {
             type: 'bar',
             data: {
-                labels: ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'],
+                labels: ANALYTICS_CLASS_LEVELS,
                 datasets: [{
                     label: 'Class Mean Score (%)',
-                    data: [68, 74, 62, 79, 71, 83],
+                    data: ANALYTICS_CLASS_LEVELS.map(level => analytics.classAverages[level]),
                     backgroundColor: 'rgba(13, 148, 136, 0.8)',
                     borderColor: 'rgba(15, 118, 110, 1)',
                     borderWidth: 1,
@@ -1580,7 +1689,7 @@ function initPerformanceChart() {
                 labels: ['Grade A', 'Grade B', 'Grade C', 'Grade D', 'Grade E'],
                 datasets: [{
                     label: 'Number of Students',
-                    data: [12, 19, 15, 8, 3],
+                    data: ['A', 'B', 'C', 'D', 'E'].map(g => analytics.overallGradeCounts[g]),
                     backgroundColor: [
                         'rgba(13, 148, 136, 0.9)',
                         'rgba(59, 130, 246, 0.9)',
@@ -1602,6 +1711,42 @@ function initPerformanceChart() {
         };
     }
     performanceChartInstance = new Chart(ctx, chartConfig);
+
+    // Pie chart lives alongside the bar chart at all times (not tied to the
+    // dropdown above) — it always shows grade-distribution proportions across
+    // every class, using the same real, aggregated grade counts.
+    const pieCtx = document.getElementById('gradeDistributionPieChart');
+    if (pieCtx) {
+        if (gradeDistributionChartInstance) {
+            gradeDistributionChartInstance.destroy();
+        }
+        gradeDistributionChartInstance = new Chart(pieCtx, {
+            type: 'pie',
+            data: {
+                labels: ['Grade A', 'Grade B', 'Grade C', 'Grade D', 'Grade E'],
+                datasets: [{
+                    label: 'Share of Grades',
+                    data: ['A', 'B', 'C', 'D', 'E'].map(g => analytics.overallGradeCounts[g]),
+                    backgroundColor: [
+                        'rgba(13, 148, 136, 0.9)',
+                        'rgba(59, 130, 246, 0.9)',
+                        'rgba(234, 179, 8, 0.9)',
+                        'rgba(249, 115, 22, 0.9)',
+                        'rgba(225, 29, 72, 0.9)'
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { weight: 'bold', size: 11 } } }
+                }
+            }
+        });
+    }
 }
 /* ---------------------------------------------------------
    8. ATTENDANCE REGISTRY MODULE (Light Theme)
