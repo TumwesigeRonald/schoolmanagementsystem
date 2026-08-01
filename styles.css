@@ -313,6 +313,20 @@ img {
 .sidebar.-translate-x-full {
     transform: translateX(-100%);
 }
+@media (max-width: 767px) {
+    /* On mobile the drawer must cover the FULL viewport height (including
+       the area behind the header), not just the height of .app-body — so
+       it's pinned to the viewport via `fixed` + top:0 instead of being
+       positioned relative to .app-body's (0,0), which starts below the
+       header and left the top of the drawer looking cut off. */
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        height: 100dvh;
+    }
+}
 @media (min-width: 768px) {
     /* Sidebar is always docked open on desktop, regardless of the toggle class. */
     .sidebar { position: relative; transform: translateX(0) !important; }

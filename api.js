@@ -93,29 +93,34 @@ const ENDPOINTS = {
 /* ---------------------------------------------------------
    2. TOKEN / SESSION STORAGE
    --------------------------------------------------------- */
+// NOTE: sessionStorage (not localStorage) is used deliberately here so that
+// the auth token/user are wiped automatically when the browser tab/window
+// is closed, requiring a fresh login next time — sessionStorage is scoped
+// per-tab and cleared by the browser on a clean exit, unlike localStorage
+// which persists indefinitely.
 const TokenStore = {
     get() {
-        try { return localStorage.getItem(API_CONFIG.TOKEN_STORAGE_KEY); }
+        try { return sessionStorage.getItem(API_CONFIG.TOKEN_STORAGE_KEY); }
         catch (e) { return null; }
     },
     set(token) {
-        try { localStorage.setItem(API_CONFIG.TOKEN_STORAGE_KEY, token); }
+        try { sessionStorage.setItem(API_CONFIG.TOKEN_STORAGE_KEY, token); }
         catch (e) { /* storage unavailable, ignore */ }
     },
     clear() {
         try {
-            localStorage.removeItem(API_CONFIG.TOKEN_STORAGE_KEY);
-            localStorage.removeItem(API_CONFIG.USER_STORAGE_KEY);
+            sessionStorage.removeItem(API_CONFIG.TOKEN_STORAGE_KEY);
+            sessionStorage.removeItem(API_CONFIG.USER_STORAGE_KEY);
         } catch (e) { /* ignore */ }
     },
     getUser() {
         try {
-            const raw = localStorage.getItem(API_CONFIG.USER_STORAGE_KEY);
+            const raw = sessionStorage.getItem(API_CONFIG.USER_STORAGE_KEY);
             return raw ? JSON.parse(raw) : null;
         } catch (e) { return null; }
     },
     setUser(user) {
-        try { localStorage.setItem(API_CONFIG.USER_STORAGE_KEY, JSON.stringify(user)); }
+        try { sessionStorage.setItem(API_CONFIG.USER_STORAGE_KEY, JSON.stringify(user)); }
         catch (e) { /* ignore */ }
     }
 };

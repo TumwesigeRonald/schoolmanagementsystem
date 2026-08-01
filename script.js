@@ -11,6 +11,16 @@ function toggleSidebar() {
     if (sidebar) sidebar.classList.toggle('-translate-x-full');
     if (backdrop) backdrop.classList.toggle('hidden');
 }
+// Auto-close the drawer after a menu/nav-link click (mobile only — the
+// docked desktop sidebar ignores this class via CSS, so this is a no-op
+// visually on desktop while still being harmless to call there).
+function closeMobileSidebar() {
+    if (window.innerWidth >= 768) return;
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.add('-translate-x-full');
+    if (backdrop) backdrop.classList.add('hidden');
+}
 /* ---------------------------------------------------------
    1. GLOBAL STATE & DATA
    --------------------------------------------------------- */
@@ -29,25 +39,6 @@ let teachersList = [
     { id: "T002", name: "Okello Peter", username: "pokello", password: "teach123", subject: "ENGLISH" }
 ];
 let currentUser = { username: "", role: "", name: "", studentId: null, teacherId: null };
-
-// Remembers which class/subject the Scores tab was last showing, so
-// switching away and back (or a page refresh) doesn't silently reset the
-// view to S.1 + the first subject in the list — which made saved marks
-// look like they'd vanished when really you were just looking at a
-// different class/subject than the one you entered them under.
-// Persisted in localStorage (not just an in-memory variable) so it also
-// survives a full browser refresh, not just in-app tab switching.
-const SCORE_VIEW_STORAGE_KEY = 'lcs_score_view_selection';
-function getScoreViewSelection() {
-    try {
-        return JSON.parse(localStorage.getItem(SCORE_VIEW_STORAGE_KEY)) || {};
-    } catch (e) { return {}; }
-}
-function setScoreViewSelection(classLevel, subject) {
-    try {
-        localStorage.setItem(SCORE_VIEW_STORAGE_KEY, JSON.stringify({ classLevel, subject }));
-    } catch (e) { /* storage unavailable, ignore — just won't persist across refresh */ }
-}
 const oLevelSubjects = [
     "ENGLISH", "MATHEMATICS", "PHYSICS", "CHEMISTRY", "BIOLOGY", 
     "GEOGRAPHY", "HIST & POL EDU", "AGRICULTURE", "CRE", 
@@ -87,6 +78,21 @@ function calculateAOAverage(ao1Raw, ao2Raw) {
     if (ao1 > 0) return ao1;
     if (ao2 > 0) return ao2;
     return 0;
+}
+/* ---------------------------------------------------------
+   1b-i. SCORE DISPLAY FORMATTER
+   Purely cosmetic helper: the backend's NUMERIC(5,2) columns
+   come back as strings like "0.00" / "2.50". This normalizes
+   any AO-style float score to exactly one decimal place for
+   display only — it never touches the underlying stored value
+   or any calculation, which continue to use the raw number.
+   --------------------------------------------------------- */
+function formatAOScoreDisplay(raw, emptyValue) {
+    if (raw === null || raw === undefined || raw === '') return emptyValue;
+    const n = Number(raw);
+    if (isNaN(n)) return emptyValue;
+    if (n === 0) return emptyValue;
+    return n.toFixed(1);
 }
 /* ---------------------------------------------------------
    1d. REMOTE DATA SYNC
@@ -295,7 +301,7 @@ function renderSidebarNav() {
         { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' }
     ].filter(item => allowedTabs.includes(item.id));
     nav.innerHTML = items.map(item => `
-        <button id="nav-${item.id}" onclick="switchTab('${item.id}')" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors mb-1">
+        <button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors mb-1">
             <i class="fa-solid ${item.icon} mr-2"></i>${item.label}
         </button>
     `).join('');
@@ -415,13 +421,13 @@ function renderStudentsModule() {
                 </div>
                 ${canManage ? `
                 <button onclick="toggleStudentForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
-                    + Add New Student
+                    <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
                 </button>` : `
                 <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-100 px-3 py-2 rounded-lg">View Only</span>`}
             </div>
             ${canManage ? `
             <div id="student-form-container" class="hidden bg-white border border-slate-200 p-5 rounded-2xl shadow-xs transition-all duration-300 ease-in-out">
-                <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-3">Register New Student</h4>
+                <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-3"><i class="fa-solid fa-user-plus mr-2"></i>Register New Student</h4>
                 <form onsubmit="handleAddStudent(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Student ID</label>
@@ -450,8 +456,8 @@ function renderStudentsModule() {
                         </select>
                     </div>
                     <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
-                        <button type="button" onclick="toggleStudentForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl">Cancel</button>
-                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Save Student</button>
+                        <button type="button" onclick="toggleStudentForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
+                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Student</button>
                     </div>
                 </form>
             </div>` : ''}
@@ -494,7 +500,7 @@ function loadStudentData() {
                 <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${student.class}</span></td>
                 <td class="p-4 text-slate-600 font-semibold">${student.gender}</td>
                 ${canManage ? `<td class="p-4 text-center">
-                    <button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors">Delete</button>
+                    <button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
                 </td>` : ''}
             </tr>
         `;
@@ -551,8 +557,6 @@ async function deleteStudent(studentId) {
    5. SCORE SHEETS MODULE (Light Theme)
    --------------------------------------------------------- */
 function renderScoresModule() {
-    const savedSelection = getScoreViewSelection();
-    const savedClass = savedSelection.classLevel || 'S.1';
     return `
         <div class="space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
@@ -561,26 +565,26 @@ function renderScoresModule() {
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Select Class Level</label>
                         <select id="score-class-select" onchange="onClassLevelChange()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-extrabold text-slate-700 focus:ring-1 focus:ring-teal-500">
                             <optgroup label="O-Level (S.1 - S.4)">
-                                <option value="S.1" ${savedClass === 'S.1' ? 'selected' : ''}>S.1</option>
-                                <option value="S.2" ${savedClass === 'S.2' ? 'selected' : ''}>S.2</option>
-                                <option value="S.3" ${savedClass === 'S.3' ? 'selected' : ''}>S.3</option>
-                                <option value="S.4" ${savedClass === 'S.4' ? 'selected' : ''}>S.4</option>
+                                <option value="S.1">S.1</option>
+                                <option value="S.2">S.2</option>
+                                <option value="S.3">S.3</option>
+                                <option value="S.4">S.4</option>
                             </optgroup>
                             <optgroup label="A-Level (S.5 - S.6)">
-                                <option value="S.5" ${savedClass === 'S.5' ? 'selected' : ''}>S.5</option>
-                                <option value="S.6" ${savedClass === 'S.6' ? 'selected' : ''}>S.6</option>
+                                <option value="S.5">S.5</option>
+                                <option value="S.6">S.6</option>
                             </optgroup>
                         </select>
                     </div>
                     <div class="flex items-end gap-2">
                         <div>
                             <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Subject</label>
-                            <select id="score-subject-select" onchange="onSubjectChange()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
+                            <select id="score-subject-select" onchange="loadScoreSheetData()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
                         </div>
-                        <button onclick="loadNextSubject()" class="bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl border border-slate-300 transition">Next Subject</button>
+                        <button onclick="loadNextSubject()" class="bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-forward mr-1.5"></i>Next Subject</button>
                     </div>
                 </div>
-                <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">Save Marks Entry</button>
+                <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
             <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
                 <table class="w-full text-left border-collapse">
@@ -592,10 +596,7 @@ function renderScoresModule() {
     `;
 }
 function onClassLevelChange() {
-    const classSelect = document.getElementById('score-class-select');
     updateSubjectDropdown();
-    const subjectSelect = document.getElementById('score-subject-select');
-    setScoreViewSelection(classSelect?.value, subjectSelect?.value);
     loadScoreSheetData();
 }
 function updateSubjectDropdown() {
@@ -605,22 +606,12 @@ function updateSubjectDropdown() {
     const selectedClass = classSelect.value;
     const isALevel = (selectedClass === 'S.5' || selectedClass === 'S.6');
     const activeSubjects = isALevel ? aLevelSubjects : oLevelSubjects;
-    const savedSubject = getScoreViewSelection().subject;
-    const subjectToSelect = activeSubjects.includes(savedSubject) ? savedSubject : activeSubjects[0];
-    subjectSelect.innerHTML = activeSubjects.map(sub => `<option value="${sub}"${sub === subjectToSelect ? ' selected' : ''}>${sub}</option>`).join('');
-}
-function onSubjectChange() {
-    const classSelect = document.getElementById('score-class-select');
-    const subjectSelect = document.getElementById('score-subject-select');
-    setScoreViewSelection(classSelect?.value, subjectSelect?.value);
-    loadScoreSheetData();
+    subjectSelect.innerHTML = activeSubjects.map(sub => `<option value="${sub}">${sub}</option>`).join('');
 }
 function loadNextSubject() {
     const subjectSelect = document.getElementById('score-subject-select');
     if (!subjectSelect || subjectSelect.options.length === 0) return;
     subjectSelect.selectedIndex = (subjectSelect.selectedIndex + 1) % subjectSelect.options.length;
-    const classSelect = document.getElementById('score-class-select');
-    setScoreViewSelection(classSelect?.value, subjectSelect.value);
     loadScoreSheetData();
 }
 function loadScoreSheetData() {
@@ -726,8 +717,8 @@ function buildOLevelRow(student, recordKey) {
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
             <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
             <td class="p-4 font-bold text-slate-900">${student.name}</td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${marks.ao1 || ''}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${marks.ao2 || ''}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
             <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="80" value="${marks.eot || ''}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
@@ -852,9 +843,9 @@ async function retryUnsavedScores() {
 // report the truth about whether everything actually made it to the
 // server, and to give failed rows one more chance before you leave.
 async function saveMarksEntry(buttonEl) {
-    if (buttonEl) { buttonEl.disabled = true; buttonEl.innerText = 'Checking...'; }
+    if (buttonEl) { buttonEl.disabled = true; buttonEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Checking...'; }
     const remaining = await retryUnsavedScores();
-    if (buttonEl) { buttonEl.disabled = false; buttonEl.innerText = 'Save Marks Entry'; }
+    if (buttonEl) { buttonEl.disabled = false; buttonEl.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry'; }
     if (remaining === 0) {
         alert('Marks successfully saved to system register!');
     } else {
@@ -1023,8 +1014,8 @@ function renderReportsModule() {
                         <input type="date" id="report-next-ends" ${termLock} value="${t.nextEnds}" onchange="updateTermSetting('nextEnds', this.value)" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
                     </div>
                     <div class="flex gap-2 ml-auto">
-                        <button onclick="generateReportCards()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">Generate Report Cards</button>
-                        <button onclick="printReportCards()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">Print / Save PDF</button>
+                        <button onclick="generateReportCards()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-circle-plus mr-1.5"></i>Generate Report Cards</button>
+                        <button onclick="printReportCards()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF</button>
                     </div>
                 </div>
             </div>
@@ -1058,7 +1049,7 @@ function renderOwnReportModule() {
         <div class="space-y-6">
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <p class="text-xs font-semibold text-slate-500">Showing <span class="font-extrabold text-slate-700">${t.term}, ${t.year}</span> for ${student.name} (${student.id}). Only you can view this report.</p>
-                <button onclick="printOwnReportCard()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">Print / Save PDF</button>
+                <button onclick="printOwnReportCard()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF</button>
             </div>
             <div id="own-report-preview">${page}</div>
         </div>
@@ -1377,8 +1368,8 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds) {
     const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
         <tr>
             <td class="rc-subj">${r.subj}</td>
-            <td class="rc-num">${r.marks.ao1 || '-'}</td>
-            <td class="rc-num">${r.marks.ao2 || '-'}</td>
+            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao1, '-')}</td>
+            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '-')}</td>
             <td class="rc-num">${r.avScore.toFixed(1)}</td>
             <td class="rc-num">${r.faScore.toFixed(1)}</td>
             <td class="rc-num">${r.marks.eot || '-'}</td>
@@ -1515,7 +1506,7 @@ function renderAnalyticsModule() {
         <div class="space-y-6">
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h3 class="text-sm font-black text-slate-900 uppercase">Learner Performance Analytics & Trends</h3>
+                    <h3 class="text-sm font-black text-slate-900 uppercase"><i class="fa-solid fa-chart-column mr-2 text-teal-600"></i>Learner Performance Analytics & Trends</h3>
                     <p class="text-xs font-semibold text-slate-500 mt-0.5">Visualizing grade distribution across school class tiers.</p>
                 </div>
                 <div>
@@ -1622,7 +1613,7 @@ function renderAttendanceModule() {
                         <input type="date" id="attendance-date" value="${today}" onchange="loadAttendanceData()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:ring-1 focus:ring-teal-500">
                     </div>
                 </div>
-                <button onclick="saveAttendanceRegistry()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-3 px-5 rounded-xl shadow-xs transition">Save Attendance</button>
+                <button onclick="saveAttendanceRegistry()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-3 px-5 rounded-xl shadow-xs transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Attendance</button>
             </div>
             <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
                 <div class="overflow-x-auto">
@@ -1671,9 +1662,9 @@ function loadAttendanceData() {
                 <td class="p-4 font-bold text-slate-900">${student.name}</td>
                 <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${student.class}</span></td>
                 <td class="p-4 text-center space-x-2">
-                    <button type="button" onclick="setAttendanceStatus('${student.id}', 'Present')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Present' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}">Present</button>
-                    <button type="button" onclick="setAttendanceStatus('${student.id}', 'Absent')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Absent' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}">Absent</button>
-                    <button type="button" onclick="setAttendanceStatus('${student.id}', 'Excused')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Excused' ? 'bg-amber-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}">Excused</button>
+                    <button type="button" onclick="setAttendanceStatus('${student.id}', 'Present')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Present' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}"><i class="fa-solid fa-check mr-1"></i>Present</button>
+                    <button type="button" onclick="setAttendanceStatus('${student.id}', 'Absent')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Absent' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}"><i class="fa-solid fa-xmark mr-1"></i>Absent</button>
+                    <button type="button" onclick="setAttendanceStatus('${student.id}', 'Excused')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Excused' ? 'bg-amber-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}"><i class="fa-solid fa-user-clock mr-1"></i>Excused</button>
                 </td>
             </tr>
         `;
@@ -1733,12 +1724,12 @@ function renderResourcesModule() {
                 </div>
                 ${canUpload ? `
                 <button onclick="toggleResourceForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
-                    + Upload Resource
+                    <i class="fa-solid fa-upload mr-2"></i>Upload Resource
                 </button>` : ''}
             </div>
             ${canUpload ? `
             <div id="resource-form-container" class="hidden bg-white border border-slate-200 p-5 rounded-2xl shadow-xs transition-all duration-300 ease-in-out">
-                <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-3">Upload New Resource</h4>
+                <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-3"><i class="fa-solid fa-folder-plus mr-2"></i>Upload New Resource</h4>
                 <form onsubmit="handleAddResource(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="sm:col-span-2 md:col-span-2">
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Title</label>
@@ -1765,8 +1756,8 @@ function renderResourcesModule() {
                     </div>
                     <div id="resource-form-error" class="hidden sm:col-span-2 md:col-span-4 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></div>
                     <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
-                        <button type="button" onclick="toggleResourceForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl">Cancel</button>
-                        <button type="submit" id="resource-submit-btn" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Upload</button>
+                        <button type="button" onclick="toggleResourceForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
+                        <button type="submit" id="resource-submit-btn" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-upload mr-1.5"></i>Upload</button>
                     </div>
                 </form>
             </div>` : ''}
@@ -1821,7 +1812,7 @@ function handleAddResource(event) {
         return;
     }
 
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerText = 'Uploading...'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Uploading...'; }
 
     // Build a real FormData payload — ready to POST straight to a
     // Node.js multer (or similar) endpoint at ENDPOINTS.RESOURCE_UPLOAD.
@@ -1835,7 +1826,7 @@ function handleAddResource(event) {
         resourcesList.push(resource);
         toggleResourceForm();
         event.target.reset();
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = 'Upload'; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fa-solid fa-upload mr-1.5"></i>Upload'; }
         loadResourcesData();
     };
 
@@ -1865,12 +1856,12 @@ function handleAddResource(event) {
         };
         reader.onerror = function () {
             if (errorBox) { errorBox.innerText = 'Something went wrong reading that file. Please try again.'; errorBox.classList.remove('hidden'); }
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = 'Upload'; }
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fa-solid fa-upload mr-1.5"></i>Upload'; }
         };
         reader.readAsDataURL(file);
     }).catch((err) => {
         if (errorBox) { errorBox.innerText = err.message || 'Upload failed. Please try again.'; errorBox.classList.remove('hidden'); }
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerText = 'Upload'; }
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<i class="fa-solid fa-upload mr-1.5"></i>Upload'; }
     });
 }
 async function deleteResource(id) {
@@ -1941,7 +1932,7 @@ function buildResourceCard(r) {
                 <a href="${r.fileUrl}" download="${r.fileName}" target="_blank" rel="noopener" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
                     <i class="fa-solid fa-download mr-1"></i>Download
                 </a>
-                ${canDelete ? `<button onclick="deleteResource(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg border border-rose-200 transition-colors">Delete</button>` : ''}
+                ${canDelete ? `<button onclick="deleteResource(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
             </div>
         </div>
     `;
@@ -1956,11 +1947,11 @@ function renderTeachersModule() {
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <p class="text-xs font-semibold text-slate-500">Add, remove, or reset login credentials for teacher accounts.</p>
                     <button onclick="toggleTeacherForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
-                        + Add New Teacher
+                        <i class="fa-solid fa-chalkboard-user mr-2"></i>Add New Teacher
                     </button>
                 </div>
                 <div id="teacher-form-container" class="hidden bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
-                    <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-3">Register New Teacher</h4>
+                    <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-3"><i class="fa-solid fa-user-plus mr-2"></i>Register New Teacher</h4>
                     <form onsubmit="handleAddTeacher(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         <div>
                             <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Teacher ID</label>
@@ -1983,8 +1974,8 @@ function renderTeachersModule() {
                             <input type="text" id="teach-subject" placeholder="e.g. MATHEMATICS" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                         </div>
                         <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
-                            <button type="button" onclick="toggleTeacherForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl">Cancel</button>
-                            <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Save Teacher</button>
+                            <button type="button" onclick="toggleTeacherForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
+                            <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Teacher</button>
                         </div>
                     </form>
                 </div>
@@ -2016,7 +2007,7 @@ function renderTeachersModule() {
     }
     return `
         <div class="max-w-xl bg-white border border-slate-200 p-6 rounded-2xl shadow-xs space-y-4">
-            <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider">Edit My Profile</h4>
+            <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider"><i class="fa-solid fa-id-badge mr-2"></i>Edit My Profile</h4>
             <form onsubmit="saveOwnTeacherProfile(event)" class="space-y-4">
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Full Name</label>
@@ -2036,7 +2027,7 @@ function renderTeachersModule() {
                 </div>
                 <div id="teacher-profile-msg" class="hidden text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"></div>
                 <div class="flex justify-end pt-2">
-                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Save Changes</button>
+                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
                 </div>
             </form>
         </div>
@@ -2059,8 +2050,8 @@ function loadTeacherData() {
                 <td class="p-4 text-slate-600 font-semibold">${teacher.subject || '-'}</td>
                 <td class="p-4 font-mono text-xs text-slate-500" title="Passwords are never shown in plain text once stored securely on the server.">${teacher.password ? teacher.password : '••••••••'}</td>
                 <td class="p-4 text-center space-x-2">
-                    <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors">Reset Password</button>
-                    <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors">Delete</button>
+                    <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>
+                    <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
                 </td>
             </tr>
         `;
