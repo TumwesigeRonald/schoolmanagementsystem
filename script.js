@@ -67,6 +67,20 @@ let termSettings = {
     nextEnds: ''
 };
 /* ---------------------------------------------------------
+   1c2. REPORT CARD REMARKS (Class Teacher's / Headteacher's
+   comments) — client-side only, keyed by student+term+year.
+   Kept separate from marksStorage/backend on purpose: this is a
+   pure productivity add-on and must never touch the existing
+   scores schema, calculations, or API routes. Persisted to
+   localStorage only, so it survives a refresh but is NOT synced
+   across devices — best-effort, never blocks report generation.
+   --------------------------------------------------------- */
+let reportRemarksStorage = {};
+try {
+    const storedReportRemarks = localStorage.getItem('lcs_report_remarks');
+    if (storedReportRemarks) reportRemarksStorage = JSON.parse(storedReportRemarks);
+} catch (e) { /* localStorage unavailable — remarks simply won't persist across reloads */ }
+/* ---------------------------------------------------------
    1b. AO (ACTIVITY OF INTEGRATION) AVERAGE HELPER
    Rule: only average AO1 + AO2 together when BOTH have a valid,
    non-zero score entered. If only one AO score is present, the
@@ -109,6 +123,65 @@ function formatWholeScoreDisplay(raw, emptyValue) {
     if (isNaN(n)) return emptyValue;
     if (n === 0) return emptyValue;
     return String(Math.round(n));
+}
+/* ---------------------------------------------------------
+   1b-iii. HTML ESCAPE HELPER (for any free-text user input we
+   render back into the DOM, e.g. report card remarks)
+   --------------------------------------------------------- */
+function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+/* ---------------------------------------------------------
+   1b-iv. REPORT CARD REMARKS HELPERS
+   Class Teacher's / Headteacher's comment fields on the report
+   card footer. Purely additive productivity feature — does not
+   touch marksStorage, grading, or any backend route.
+   --------------------------------------------------------- */
+function getReportRemarkKey(studentId, term, year) {
+    return `${studentId}_${term}_${year}`;
+}
+function getReportRemark(studentId, term, year, field) {
+    const key = getReportRemarkKey(studentId, term, year);
+    return (reportRemarksStorage[key] && reportRemarksStorage[key][field]) || '';
+}
+function persistReportRemarks() {
+    try { localStorage.setItem('lcs_report_remarks', JSON.stringify(reportRemarksStorage)); }
+    catch (e) { /* best-effort only */ }
+}
+function saveReportRemark(el) {
+    if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
+    const key = el.dataset.remarkKey;
+    const field = el.dataset.remarkField;
+    if (!key || !field) return;
+    if (!reportRemarksStorage[key]) reportRemarksStorage[key] = {};
+    reportRemarksStorage[key][field] = el.innerText.trim();
+    persistReportRemarks();
+}
+// Builds one "LABEL: ______" footer row. When editable, the line is a
+// contenteditable div the admin/teacher can type straight into before
+// printing; when read-only (the Student's own report view) it's a plain
+// span, exactly as before.
+function buildCommentRow(label, studentId, term, year, field, editable) {
+    const key = getReportRemarkKey(studentId, term, year);
+    const value = getReportRemark(studentId, term, year, field);
+    if (editable) {
+        return `
+                <div class="rc-comment-row">
+                    <span class="rc-comment-label">${label}:</span>
+                    <div class="rc-comment-line rc-comment-editable" contenteditable="true" data-remark-key="${key}" data-remark-field="${field}" oninput="saveReportRemark(this)" data-placeholder="Click to type a comment&hellip;">${value ? escapeHTML(value) : ''}</div>
+                </div>`;
+    }
+    return `
+                <div class="rc-comment-row">
+                    <span class="rc-comment-label">${label}:</span>
+                    <span class="rc-comment-line">${value ? escapeHTML(value) : '&nbsp;'}</span>
+                </div>`;
 }
 /* ---------------------------------------------------------
    1d. REMOTE DATA SYNC
@@ -440,9 +513,14 @@ function renderStudentsModule() {
                     </select>
                 </div>
                 ${canManage ? `
-                <button onclick="toggleStudentForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
-                    <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
-                </button>` : `
+                <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <button onclick="openBulkImportModal()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
+                        <i class="fa-solid fa-file-csv mr-2"></i>Bulk Import (CSV)
+                    </button>
+                    <button onclick="toggleStudentForm()" class="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                        <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
+                    </button>
+                </div>` : `
                 <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-100 px-3 py-2 rounded-lg">View Only</span>`}
             </div>
             ${canManage ? `
@@ -489,7 +567,7 @@ function renderStudentsModule() {
                             <th class="p-4">Full Name</th>
                             <th class="p-4">Class</th>
                             <th class="p-4">Gender</th>
-                            ${canManage ? '<th class="p-4 text-center">Actions</th>' : ''}
+                            <th class="p-4 text-center">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="student-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
@@ -519,16 +597,274 @@ function loadStudentData() {
                 <td class="p-4 font-bold text-slate-900">${student.name}</td>
                 <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${student.class}</span></td>
                 <td class="p-4 text-slate-600 font-semibold">${student.gender}</td>
-                ${canManage ? `<td class="p-4 text-center">
-                    <button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
-                </td>` : ''}
+                <td class="p-4 text-center space-x-2 whitespace-nowrap">
+                    <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
+                    ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
+                </td>
             </tr>
         `;
     });
 }
+/* ---------------------------------------------------------
+   4b. STUDENT PROFILE MODAL
+   Read-only view of one learner's historical attendance and
+   performance summary. Reuses getAttendanceSummary(),
+   getOLevelSubjectRecords()/getALevelSubjectRecords() and
+   buildPerformanceRemark() exactly as report cards already do —
+   no grading or attendance calculation is duplicated or altered.
+   --------------------------------------------------------- */
+function closeModal() {
+    const root = document.getElementById('modal-root');
+    if (root) root.innerHTML = '';
+}
+async function openStudentProfileModal(studentId) {
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    const student = studentsList.find(s => s.id === studentId);
+    if (!student) return;
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+                <div class="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+                    <div>
+                        <h3 class="text-sm font-extrabold text-slate-900">${student.name}</h3>
+                        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${student.id} &middot; ${student.class} &middot; ${student.gender}</p>
+                    </div>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
+                </div>
+                <div id="student-profile-body" class="p-5 space-y-5 text-center text-slate-400 text-xs font-semibold py-10">
+                    <i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Loading attendance &amp; performance history&hellip;
+                </div>
+            </div>
+        </div>
+    `;
+    // Attendance history needs this student's full record, not just the
+    // recent rolling window already loaded — same on-demand fetch the
+    // report card engine already uses (refreshAttendanceForStudent).
+    await refreshAttendanceForStudent(student.id);
+    const body = document.getElementById('student-profile-body');
+    if (!body) return; // modal was closed while loading
+    const isALevel = (student.class === 'S.5' || student.class === 'S.6');
+    const subjectRecords = isALevel ? getALevelSubjectRecords(student) : getOLevelSubjectRecords(student);
+    const attendance = getAttendanceSummary(student);
+    const performanceRemark = buildPerformanceRemark(subjectRecords, isALevel);
+
+    const subjectRowsHtml = subjectRecords.length > 0 ? subjectRecords.map(r => {
+        const score = isALevel ? r.avgMark : r.finalTotal;
+        const grade = isALevel ? r.gradeInfo.grade : r.gradeData.grade;
+        return `<tr class="border-b border-slate-100"><td class="p-2 font-semibold">${r.subj}</td><td class="p-2 text-center">${score}</td><td class="p-2 text-center font-extrabold" style="color:${getPerformanceColor(score, isALevel)};">${grade}</td></tr>`;
+    }).join('') : `<tr><td colspan="3" class="p-4 text-center text-slate-400">No subject scores recorded yet.</td></tr>`;
+
+    body.innerHTML = `
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                <p class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Attendance</p>
+                <p class="text-lg font-extrabold text-slate-900">${attendance.total > 0 ? `${attendance.pct}%` : 'N/A'}</p>
+                <p class="text-[10px] text-slate-500">${attendance.total > 0 ? `${attendance.present} present / ${attendance.total} recorded` : 'No records yet'}</p>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                <p class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Absences</p>
+                <p class="text-lg font-extrabold text-rose-600">${attendance.absent}</p>
+                <p class="text-[10px] text-slate-500">${attendance.excused} excused</p>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-center">
+                <p class="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Subjects Recorded</p>
+                <p class="text-lg font-extrabold text-slate-900">${subjectRecords.length}</p>
+                <p class="text-[10px] text-slate-500">${isALevel ? 'A-Level' : 'O-Level'} scale</p>
+            </div>
+        </div>
+        <div>
+            <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Performance Summary</h4>
+            <table class="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                <thead><tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold"><th class="p-2 text-left">Subject</th><th class="p-2 text-center">Score</th><th class="p-2 text-center">Grade</th></tr></thead>
+                <tbody>${subjectRowsHtml}</tbody>
+            </table>
+        </div>
+        <div class="bg-teal-50 border border-teal-200 rounded-xl p-3">
+            <h4 class="text-[11px] font-extrabold text-teal-700 uppercase tracking-wider mb-1">System Summary</h4>
+            <p class="text-xs text-teal-900">${performanceRemark}</p>
+        </div>
+    `;
+}
 function toggleStudentForm() {
     const formContainer = document.getElementById('student-form-container');
     if (formContainer) formContainer.classList.toggle('hidden');
+}
+/* ---------------------------------------------------------
+   4c. BULK STUDENT IMPORT (CSV)
+   Parses a CSV of an entire class and registers every valid row
+   by calling StudentsAPI.create() once per student — the exact
+   same create path (and duplicate-ID / required-field rules) as
+   adding one student by hand via the form above. No new backend
+   route, no bypass of existing validation.
+   Expected header row: id,name,class,gender
+   --------------------------------------------------------- */
+const BULK_IMPORT_VALID_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
+let bulkImportParsedRows = [];
+function openBulkImportModal() {
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    bulkImportParsedRows = [];
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
+                <div class="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-file-csv mr-2 text-teal-600"></i>Bulk Import Students</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
+                </div>
+                <div class="p-5 space-y-4">
+                    <p class="text-xs text-slate-600">Upload a CSV to register an entire class at once. First row must be a header: <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">id,name,class,gender</code></p>
+                    <button type="button" onclick="downloadBulkImportTemplate()" class="text-[11px] font-extrabold uppercase tracking-wider text-teal-700 hover:text-teal-800"><i class="fa-solid fa-download mr-1"></i>Download Sample CSV Template</button>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">CSV File</label>
+                        <input type="file" id="bulk-import-file" accept=".csv,text/csv" onchange="handleBulkImportFile(event)" class="w-full text-xs font-semibold text-slate-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-teal-600 file:text-white file:text-xs file:font-extrabold file:uppercase file:cursor-pointer">
+                    </div>
+                    <div id="bulk-import-preview"></div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+function downloadBulkImportTemplate() {
+    const csv = "id,name,class,gender\nLCS/101,Nakato Sarah,S.1,Female\nLCS/102,Mugisha Brian,S.1,Male\n";
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'student_import_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+function handleBulkImportFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => parseAndPreviewCSV(String(e.target.result || ''));
+    reader.onerror = () => {
+        const preview = document.getElementById('bulk-import-preview');
+        if (preview) preview.innerHTML = `<p class="text-xs font-bold text-rose-600">Could not read that file. Please try again.</p>`;
+    };
+    reader.readAsText(file);
+}
+// Minimal CSV line splitter — handles simple quoted fields (",") which
+// covers names/values that might contain a comma; not a full RFC4180
+// parser, but sufficient for the plain id/name/class/gender template.
+function splitCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"') { inQuotes = !inQuotes; continue; }
+        if (char === ',' && !inQuotes) { result.push(current.trim()); current = ''; continue; }
+        current += char;
+    }
+    result.push(current.trim());
+    return result;
+}
+function parseAndPreviewCSV(text) {
+    const preview = document.getElementById('bulk-import-preview');
+    if (!preview) return;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length < 2) {
+        preview.innerHTML = `<p class="text-xs font-bold text-rose-600">No data rows found. Make sure the file has a header row followed by student rows.</p>`;
+        return;
+    }
+    const header = splitCSVLine(lines[0]).map(h => h.toLowerCase());
+    const idIdx = header.indexOf('id');
+    const nameIdx = header.indexOf('name');
+    const classIdx = header.indexOf('class');
+    const genderIdx = header.indexOf('gender');
+    if (idIdx === -1 || nameIdx === -1 || classIdx === -1 || genderIdx === -1) {
+        preview.innerHTML = `<p class="text-xs font-bold text-rose-600">Header row must contain: id, name, class, gender</p>`;
+        return;
+    }
+
+    const seenIds = new Set(studentsList.map(s => s.id.toUpperCase()));
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+        const cols = splitCSVLine(lines[i]);
+        const id = (cols[idIdx] || '').toUpperCase();
+        const name = cols[nameIdx] || '';
+        const cls = (cols[classIdx] || '').toUpperCase();
+        const genderRaw = (cols[genderIdx] || '').toLowerCase();
+        const gender = genderRaw.startsWith('f') ? 'Female' : (genderRaw.startsWith('m') ? 'Male' : '');
+
+        let error = '';
+        if (!id) error = 'Missing Student ID';
+        else if (!name) error = 'Missing Name';
+        else if (!BULK_IMPORT_VALID_CLASSES.includes(cls)) error = `Invalid class "${cols[classIdx] || ''}"`;
+        else if (!gender) error = `Invalid gender "${cols[genderIdx] || ''}"`;
+        else if (seenIds.has(id)) error = 'Duplicate / already registered ID';
+
+        if (!error) seenIds.add(id); // guards against duplicates within the file itself too
+        rows.push({ id, name, class: cls, gender, error });
+    }
+
+    bulkImportParsedRows = rows;
+    const validCount = rows.filter(r => !r.error).length;
+    const invalidCount = rows.length - validCount;
+
+    preview.innerHTML = `
+        <div class="flex items-center justify-between">
+            <p class="text-xs font-bold text-slate-700">${validCount} ready to import${invalidCount > 0 ? `, ${invalidCount} with errors (skipped)` : ''}.</p>
+            <button ${validCount === 0 ? 'disabled' : ''} onclick="confirmBulkImport()" class="bg-teal-600 hover:bg-teal-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-extrabold uppercase tracking-wider py-2 px-4 rounded-xl transition"><i class="fa-solid fa-upload mr-1.5"></i>Import ${validCount} Student(s)</button>
+        </div>
+        <div class="mt-3 max-h-64 overflow-y-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-xs">
+                <thead class="sticky top-0"><tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold"><th class="p-2 text-left">ID</th><th class="p-2 text-left">Name</th><th class="p-2 text-left">Class</th><th class="p-2 text-left">Gender</th><th class="p-2 text-left">Status</th></tr></thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${rows.map(r => `
+                        <tr class="${r.error ? 'bg-rose-50' : ''}">
+                            <td class="p-2 font-mono">${escapeHTML(r.id) || '&mdash;'}</td>
+                            <td class="p-2">${escapeHTML(r.name) || '&mdash;'}</td>
+                            <td class="p-2">${escapeHTML(r.class) || '&mdash;'}</td>
+                            <td class="p-2">${escapeHTML(r.gender) || '&mdash;'}</td>
+                            <td class="p-2 font-bold ${r.error ? 'text-rose-600' : 'text-emerald-600'}">${r.error ? r.error : 'Ready'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+async function confirmBulkImport() {
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
+    const preview = document.getElementById('bulk-import-preview');
+    const validRows = bulkImportParsedRows.filter(r => !r.error);
+    if (validRows.length === 0) return;
+    if (preview) preview.innerHTML = `<p class="text-xs font-bold text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Importing ${validRows.length} student(s)&hellip;</p>`;
+
+    let successCount = 0;
+    const failures = [];
+    // Sequential (not parallel) on purpose: each create() must see the
+    // previous one already registered so duplicate-ID checks against a
+    // real backend stay accurate, exactly like adding students one by one.
+    for (const row of validRows) {
+        try {
+            await StudentsAPI.create({ id: row.id, name: row.name, class: row.class, gender: row.gender });
+            successCount++;
+        } catch (err) {
+            failures.push(`${row.id}: ${err.message || 'failed to save'}`);
+        }
+    }
+
+    await refreshStudentsList();
+    loadStudentData();
+    updateDashboardStats();
+
+    if (preview) {
+        preview.innerHTML = `
+            <div class="text-xs font-bold ${failures.length === 0 ? 'text-emerald-700' : 'text-amber-700'}">
+                Imported ${successCount} of ${validRows.length} student(s) successfully.
+            </div>
+            ${failures.length > 0 ? `<ul class="mt-2 text-[11px] text-rose-600 list-disc list-inside space-y-0.5">${failures.map(f => `<li>${escapeHTML(f)}</li>`).join('')}</ul>` : ''}
+            <button onclick="closeModal()" class="mt-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Close</button>
+        `;
+    }
 }
 async function handleAddStudent(event) {
     event.preventDefault();
@@ -1034,14 +1370,58 @@ function renderReportsModule() {
                         <input type="date" id="report-next-ends" ${termLock} value="${t.nextEnds}" onchange="updateTermSetting('nextEnds', this.value)" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
                     </div>
                     <div class="flex gap-2 ml-auto">
+                        <button onclick="toggleGradingLegendPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-table-list mr-1.5"></i>Grading Scale</button>
                         <button onclick="generateReportCards()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-circle-plus mr-1.5"></i>Generate Report Cards</button>
-                        <button onclick="printReportCards()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF</button>
+                        <button onclick="printReportCards()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF (Whole Class)</button>
                     </div>
                 </div>
+                <div id="grading-legend-preview" class="hidden mt-4 pt-4 border-t border-slate-200"></div>
             </div>
             <div id="report-cards-preview" class="space-y-4"></div>
         </div>
     `;
+}
+// Read-only preview of the grading scale used on every report card — lets
+// an admin/teacher check the scale up front without generating a full
+// class of report cards first. Mirrors (does not recompute) the thresholds
+// already used by computeOfficialGrade() and computeALevelGrade().
+function toggleGradingLegendPreview() {
+    const panel = document.getElementById('grading-legend-preview');
+    if (!panel) return;
+    const isHidden = panel.classList.contains('hidden');
+    if (isHidden) {
+        panel.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">O-Level Grading Scale (S.1&ndash;S.4)</h4>
+                    <table class="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                        <thead><tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold"><th class="p-2 text-left">Score</th><th class="p-2 text-left">Grade</th><th class="p-2 text-left">Descriptor</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr><td class="p-2">75&ndash;100</td><td class="p-2 font-bold">A</td><td class="p-2">Exceptional</td></tr>
+                            <tr><td class="p-2">65&ndash;74</td><td class="p-2 font-bold">B</td><td class="p-2">Outstanding</td></tr>
+                            <tr><td class="p-2">55&ndash;64</td><td class="p-2 font-bold">C</td><td class="p-2">Satisfactory</td></tr>
+                            <tr><td class="p-2">45&ndash;54</td><td class="p-2 font-bold">D</td><td class="p-2">Basic</td></tr>
+                            <tr><td class="p-2">0&ndash;44</td><td class="p-2 font-bold">E</td><td class="p-2">Elementary</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div>
+                    <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">A-Level Grading Scale (S.5&ndash;S.6)</h4>
+                    <table class="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
+                        <thead><tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold"><th class="p-2 text-left">Score</th><th class="p-2 text-left">Grade</th><th class="p-2 text-left">Principal Pts</th><th class="p-2 text-left">Subsidiary Pts</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <tr><td class="p-2">80+</td><td class="p-2 font-bold">A</td><td class="p-2">5</td><td class="p-2">1</td></tr>
+                            <tr><td class="p-2">70&ndash;79</td><td class="p-2 font-bold">B</td><td class="p-2">4</td><td class="p-2">1</td></tr>
+                            <tr><td class="p-2">60&ndash;69</td><td class="p-2 font-bold">C</td><td class="p-2">3</td><td class="p-2">1</td></tr>
+                            <tr><td class="p-2">50&ndash;59</td><td class="p-2 font-bold">D</td><td class="p-2">2</td><td class="p-2">1</td></tr>
+                            <tr><td class="p-2">0&ndash;49</td><td class="p-2 font-bold">E</td><td class="p-2">1</td><td class="p-2">0</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    panel.classList.toggle('hidden');
 }
 function updateTermSetting(key, value) {
     if (!getPermissions(currentUser.role).canManageTerm) return; // RBAC guard: Administrator only
@@ -1063,8 +1443,8 @@ function renderOwnReportModule() {
     const isALevel = (student.class === 'S.5' || student.class === 'S.6');
     const t = termSettings;
     const page = isALevel
-        ? buildALevelReportPage(student, t.term, t.year, t.nextBegins, t.nextEnds)
-        : buildOLevelReportPage(student, t.term, t.year, t.nextBegins, t.nextEnds);
+        ? buildALevelReportPage(student, t.term, t.year, t.nextBegins, t.nextEnds, false)
+        : buildOLevelReportPage(student, t.term, t.year, t.nextBegins, t.nextEnds, false);
     return `
         <div class="space-y-6">
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1248,7 +1628,7 @@ function buildSummarySection(student, subjectRecords, isALevel) {
         </div>
     `;
 }
-function buildALevelReportPage(student, term, year, nextBegins, nextEnds) {
+function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
     const subjectRecords = getALevelSubjectRecords(student);
     const totalPoints = subjectRecords.reduce((sum, r) => sum + r.gradeInfo.points, 0);
     const principalCount = subjectRecords.filter(r => !r.isSubsidiary).length;
@@ -1318,17 +1698,11 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds) {
             </div>
             ${buildSummarySection(student, subjectRecords, true)}
             <div class="rc-footer">
-                <div class="rc-comment-row">
-                    <span class="rc-comment-label">CLASS TEACHER'S COMMENT:</span>
-                    <span class="rc-comment-line">&nbsp;</span>
-                </div>
+                ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
-                <div class="rc-comment-row">
-                    <span class="rc-comment-label">HEADTEACHER'S COMMENT:</span>
-                    <span class="rc-comment-line">&nbsp;</span>
-                </div>
+                ${buildCommentRow("HEADTEACHER'S COMMENT", student.id, term, year, 'headteacherComment', editableComments)}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
@@ -1379,7 +1753,7 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     const totalScore = subjectRecords.reduce((sum, r) => sum + r.finalTotal, 0);
     return (totalScore / denominator) * 3;
 }
-function buildOLevelReportPage(student, term, year, nextBegins, nextEnds) {
+function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
     const subjectRecords = getOLevelSubjectRecords(student);
 
     const overallAvg = calculateOLevelOverallAchievement(student.class, subjectRecords);
@@ -1465,17 +1839,11 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds) {
             </div>
             ${buildSummarySection(student, subjectRecords, false)}
             <div class="rc-footer">
-                <div class="rc-comment-row">
-                    <span class="rc-comment-label">CLASS TEACHER'S COMMENT:</span>
-                    <span class="rc-comment-line">&nbsp;</span>
-                </div>
+                ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
-                <div class="rc-comment-row">
-                    <span class="rc-comment-label">HEADTEACHER'S COMMENT:</span>
-                    <span class="rc-comment-line">&nbsp;</span>
-                </div>
+                ${buildCommentRow("HEADTEACHER'S COMMENT", student.id, term, year, 'headteacherComment', editableComments)}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
@@ -1520,7 +1888,18 @@ async function printReportCards() {
         return;
     }
     printArea.innerHTML = previewArea.innerHTML;
+    // Batch export: this preview already compiles every student in the
+    // selected class into one continuous print job (one PDF when the
+    // browser's print dialog is used to "Save as PDF"). Temporarily swap
+    // the page title so that saved filename is meaningful instead of the
+    // generic app title — restored right after the print dialog closes.
+    const classSelect = document.getElementById('report-class-select');
+    const selectedClass = classSelect ? classSelect.value : 'Class';
+    const suggestedName = `${selectedClass}_ReportCards_${termSettings.term.replace(/\s+/g, '')}_${termSettings.year}`.replace(/[^\w-]/g, '');
+    const originalTitle = document.title;
+    document.title = suggestedName;
     window.print();
+    document.title = originalTitle;
 }
 /* ---------------------------------------------------------
    6d. ANALYTICS DATA AGGREGATION
@@ -1773,7 +2152,10 @@ function renderAttendanceModule() {
                         <input type="date" id="attendance-date" value="${today}" onchange="loadAttendanceData()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:ring-1 focus:ring-teal-500">
                     </div>
                 </div>
-                <button onclick="saveAttendanceRegistry()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-3 px-5 rounded-xl shadow-xs transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Attendance</button>
+                <div class="flex gap-2">
+                    <button onclick="markAllPresent()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-extrabold uppercase py-3 px-5 rounded-xl transition"><i class="fa-solid fa-check-double mr-1.5"></i>Mark All Present</button>
+                    <button onclick="saveAttendanceRegistry()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-3 px-5 rounded-xl shadow-xs transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Attendance</button>
+                </div>
             </div>
             <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
                 <div class="overflow-x-auto">
@@ -1829,6 +2211,29 @@ function loadAttendanceData() {
             </tr>
         `;
     });
+}
+// Daily register shortcut: sets every currently-listed student in the
+// selected class/date to "Present" in one click, instead of clicking
+// Present individually for each row. Reuses the exact same per-student
+// AttendanceAPI.setStatus() write that a manual click uses — no new
+// attendance logic, just a loop over the existing single-student path.
+function markAllPresent() {
+    if (!getPermissions(currentUser.role).canManageAttendance) return; // RBAC guard
+    const classFilter = document.getElementById('attendance-class-filter');
+    const dateField = document.getElementById('attendance-date');
+    if (!classFilter || !dateField) return;
+    const selectedClass = classFilter.value;
+    const selectedDate = dateField.value;
+    const classStudents = studentsList.filter(s => s.class === selectedClass);
+    if (classStudents.length === 0) return;
+    if (!confirm(`Mark all ${classStudents.length} student(s) in ${selectedClass} as Present for ${selectedDate}?`)) return;
+    classStudents.forEach(student => {
+        const recordKey = `${selectedDate}_${student.id}`;
+        attendanceStorage[recordKey] = 'Present';
+        AttendanceAPI.setStatus(selectedDate, student.id, 'Present', selectedClass).catch(() => {});
+    });
+    loadAttendanceData();
+    updateDashboardStats();
 }
 function setAttendanceStatus(studId, status) {
     if (!getPermissions(currentUser.role).canManageAttendance) return; // RBAC guard

@@ -572,6 +572,10 @@ img {
 .rc-comment-row { display: flex; align-items: baseline; gap: 8px; font-size: 9.5px; font-weight: 700; border-bottom: 1px solid #333; padding: 5px 0 4px; flex-wrap: wrap; }
 .rc-comment-label { color: #111; white-space: nowrap; }
 .rc-comment-line { flex: 1; min-width: 110px; font-weight: 500; border-bottom: 1px dotted #999; padding-bottom: 2px; }
+.rc-comment-editable { cursor: text; outline: none; border-radius: 3px; transition: background-color 0.15s ease; }
+.rc-comment-editable:hover { background-color: #f0fdfa; }
+.rc-comment-editable:focus { background-color: #ecfdf5; box-shadow: 0 0 0 1px #0d9488; }
+.rc-comment-editable:empty:before { content: attr(data-placeholder); color: #9ca3af; font-weight: 400; font-style: italic; }
 .rc-sign { white-space: nowrap; }
 .rc-sign-line { display: inline-block; min-width: 90px; border-bottom: 1px solid #333; margin-left: 4px; }
 .rc-legal-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; margin-top: 8px; font-size: 8px; color: #333; }
@@ -663,6 +667,8 @@ input, select, textarea {
        remarks to stay on one page, without visibly cramping the layout.
        Numbers/grades/points themselves are untouched — this only affects
        how much white space and text size surrounds them. */
+    .rc-comment-editable:empty:before { content: ""; }
+    .rc-comment-editable { background-color: transparent !important; box-shadow: none !important; }
     .rc-header-top { padding-bottom: 5px; }
     .rc-logo { width: 54px; height: 54px; }
     .rc-school-info h1 { font-size: 17px; margin-bottom: 1px; }
