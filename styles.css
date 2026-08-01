@@ -707,14 +707,23 @@ input, select, textarea {
     .report-page {
         margin: 0 auto;
         box-shadow: none;
-        /* The @page rule below now carves a real 10mm margin out of the
-           physical sheet, so the box is sized to exactly what's left
-           (A4 210x297mm minus 10mm on every side) instead of the full
-           210x297mm used on screen. This padding is just inner breathing
-           room within that printable area, not a stand-in for margin. */
-        width: 190mm;
-        height: 277mm;
-        padding: 4mm 7mm;
+        /* FIX (layout desync): previously this box was shrunk to 190x277mm
+           on the assumption that the @page rule below was also carving a
+           10mm margin out of the physical sheet. Those were two independent
+           sources of truth for the same spacing -- and most browsers'
+           "Print / Save as PDF" dialogs override @page's margin with their
+           own Default/None/Custom setting, so the two numbers fell out of
+           sync and the content shifted, shrank, or misaligned relative to
+           what was shown on screen.
+           Fix: give the page the exact same physical footprint here as on
+           screen (210x297mm, same as the un-printed .report-page above),
+           set @page's margin to 0 below, and fold the old 10mm page-margin
+           into this box's own padding instead. Now there is exactly one
+           place that defines spacing, and it can't be overridden out from
+           under us by the browser's print-margin setting. */
+        width: 210mm;
+        height: 297mm;
+        padding: 14mm 17mm;
     }
     .rc-comment-editable:empty:before { content: ""; }
     .rc-comment-editable { background-color: transparent !important; box-shadow: none !important; }
@@ -724,10 +733,10 @@ input, select, textarea {
     .rc-school-info h1 { font-size: 22px; margin-bottom: 2px; }
     .rc-school-info p { font-size: 9.8px; margin: 1px 0; }
     /* ---- Section gaps and table row padding opened up evenly so the
-       report stretches to naturally fill the printable area, now that it's
-       sized to the true 190x277mm left after the @page margin. Data,
-       grades, and structure are unchanged -- only the whitespace and row
-       padding around them grew. ---- */
+       report stretches to naturally fill the printable area within the
+       210x297mm page (minus the padding above). Data, grades, and
+       structure are unchanged -- only the whitespace and row padding
+       around them grew. ---- */
     .rc-report-title { margin: 6px 0; padding: 4px 0; font-size: 11.5px; }
     .rc-learner-row { margin-bottom: 6px; padding: 5px 10px; gap: 5px 16px; }
     .rc-table { margin-top: 4px; font-size: 9px; }
@@ -747,8 +756,11 @@ input, select, textarea {
     .rc-comment-row { padding: 4px 0 3px; }
     .rc-legal-row { margin-top: 6px; }
     /* ---- O-Level: denser table/legend needs a snugger fit so nothing
-       overflows past the sheet or gets clipped at the bottom ---- */
-    .report-page.report-page-olevel { padding: 3mm 6mm; }
+       overflows past the sheet or gets clipped at the bottom. (Padding
+       here = old 3mm/6mm print padding + the old 10mm @page margin,
+       folded together now that @page margin is 0 -- same visual inset
+       as before, just computed in one place instead of two.) ---- */
+    .report-page.report-page-olevel { padding: 13mm 16mm; }
     .report-page-olevel .rc-table { font-size: 8.3px; }
     .report-page-olevel .rc-table th, .report-page-olevel .rc-table td { padding: 3px 4px; }
     .report-page-olevel .rc-report-title { margin: 4px 0; padding: 3px 0; }
@@ -759,8 +771,11 @@ input, select, textarea {
     .report-page-olevel .rc-footer { padding-top: 4px; }
     .report-page-olevel .rc-legal-row { margin-top: 4px; }
     /* ---- A-Level: fewer columns/rows, so open the spacing up to fill
-       the page evenly instead of leaving blank space below ---- */
-    .report-page.report-page-alevel { padding: 6mm 9mm; }
+       the page evenly instead of leaving blank space below. (Padding
+       here = old 6mm/9mm print padding + the old 10mm @page margin,
+       folded together now that @page margin is 0 -- same visual inset
+       as before, just computed in one place instead of two.) ---- */
+    .report-page.report-page-alevel { padding: 16mm 19mm; }
     .report-page-alevel .rc-table { font-size: 10.5px; }
     .report-page-alevel .rc-table th, .report-page-alevel .rc-table td { padding: 7px 9px; }
     .report-page-alevel .rc-overall-row { margin-top: 12px; gap: 12px; }
@@ -782,7 +797,15 @@ input, select, textarea {
     }
     @page {
         size: A4;
-        margin: 10mm;
+        /* Margin lives entirely in .report-page's own padding now (see
+           above) -- this is deliberately 0 so the browser can't apply a
+           second, independent margin on top of it. Some print dialogs
+           substitute their own "Default margins" for whatever @page sets
+           here regardless of the value, which was the original source of
+           the screen-vs-print layout desync; keeping this at 0 means even
+           when that substitution happens, there's no second inset being
+           added on top of the page's padding. */
+        margin: 0;
     }
 }
 
