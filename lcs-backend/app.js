@@ -40,12 +40,18 @@ app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));
 // --- Centralized error handler ---
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error('[error]', err);
+  console.error(`[error] ${req.method} ${req.originalUrl} ->`, err);
   if (err.code === '23505') { // Postgres unique_violation
     return res.status(409).json({ message: 'A record with that identifier already exists.' });
   }
   if (err.type === 'entity.too.large') {
     return res.status(413).json({ message: 'Payload too large.' });
+  }
+  // Safety net: a MulterError (e.g. an oversized file upload) should normally
+  // be caught locally by the upload route itself, but if one ever reaches
+  // here instead, surface a clear message rather than the generic fallback.
+  if (err.name === 'MulterError') {
+    return res.status(413).json({ message: `Upload failed: ${err.message}` });
   }
   const isConnectionOrTimeout =
     err.code === 'ETIMEDOUT' ||

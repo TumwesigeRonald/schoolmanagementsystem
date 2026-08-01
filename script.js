@@ -1701,7 +1701,7 @@ async function saveAttendanceRegistry() {
    URLs for now (no backend yet) — download works via a plain
    anchor tag, no server round-trip needed.
    --------------------------------------------------------- */
-const RESOURCE_MAX_BYTES = 8 * 1024 * 1024; // 8MB cap while everything lives in browser memory
+const RESOURCE_MAX_BYTES = 4 * 1024 * 1024; // 4MB cap — kept under Vercel's ~4.5MB serverless request body limit
 function renderResourcesModule() {
     const canUpload = getPermissions(currentUser.role).canManageResources;
     const allSubjects = ['GENERAL', ...new Set([...oLevelSubjects, ...aLevelSubjects])];
@@ -1752,7 +1752,7 @@ function renderResourcesModule() {
                     <div class="sm:col-span-2 md:col-span-4">
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">File</label>
                         <input type="file" id="res-file" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
-                        <p class="text-[10px] text-slate-400 font-semibold mt-1">Accepted: PDF, Word, PowerPoint, Excel, images, ZIP. Max size 8MB.</p>
+                        <p class="text-[10px] text-slate-400 font-semibold mt-1">Accepted: PDF, Word, PowerPoint, Excel, images, ZIP. Max size 4MB.</p>
                     </div>
                     <div id="resource-form-error" class="hidden sm:col-span-2 md:col-span-4 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></div>
                     <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
@@ -1808,7 +1808,7 @@ function handleAddResource(event) {
         return;
     }
     if (file.size > RESOURCE_MAX_BYTES) {
-        if (errorBox) { errorBox.innerText = `That file is too large (${formatFileSize(file.size)}). Maximum allowed is 8MB.`; errorBox.classList.remove('hidden'); }
+        if (errorBox) { errorBox.innerText = `That file is too large (${formatFileSize(file.size)}). Maximum allowed is 4MB.`; errorBox.classList.remove('hidden'); }
         return;
     }
 
