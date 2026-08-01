@@ -486,19 +486,19 @@ img {
     padding-bottom: 6px;
 }
 /* ---- Header: bigger, clearer visual hierarchy, still compact ---- */
-.rc-header-top { display: flex; align-items: center; gap: 16px; border-bottom: 3px solid var(--navy-900); padding-bottom: 8px; flex-shrink: 0; }
-.rc-logo { width: 68px; height: 68px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold-600); flex-shrink: 0; }
+.rc-header-top { display: flex; align-items: center; gap: 13px; border-bottom: 3px solid var(--navy-900); padding-bottom: 7px; flex-shrink: 0; }
+.rc-logo { width: 62px; height: 62px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold-600); flex-shrink: 0; }
 .rc-school-info { flex: 1; text-align: center; }
 .rc-school-info h1 {
     font-family: var(--font-display);
-    font-size: 27px;
+    font-size: 23px;
     font-weight: 700;
-    margin: 0 0 3px;
-    letter-spacing: 0.03em;
+    margin: 0 0 2px;
+    letter-spacing: 0.02em;
     color: var(--navy-900);
     line-height: 1.15;
 }
-.rc-school-info p { font-size: 11px; margin: 1.5px 0; color: #333; font-weight: 500; }
+.rc-school-info p { font-size: 10.3px; margin: 1px 0; color: #333; font-weight: 500; }
 .rc-motto { font-style: italic; font-weight: 700; color: var(--teal-700); }
 .rc-qr-box { width: 52px; height: 52px; border: 1.5px solid #999; display: flex; align-items: center; justify-content: center; font-size: 8px; text-align: center; flex-shrink: 0; color: #888; font-weight: 700; }
 .rc-report-title {
@@ -557,14 +557,12 @@ img {
 .rc-summary-card h4 { margin: 0 0 5px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--teal-700); border-bottom: 1px solid #ccc; padding-bottom: 4px; }
 .rc-summary-row { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; padding: 2.5px 0; color: #222; }
 .rc-summary-row span:first-child { color: #666; font-weight: 600; }
-.rc-chart-card { display: flex; flex-direction: column; }
-.rc-chart-sub { font-size: 7px; font-weight: 600; text-transform: none; letter-spacing: normal; color: #888; margin-left: 4px; }
-.rc-chart-svg { width: 100%; height: 92px; display: block; overflow: visible; }
-.rc-chart-svg .rc-chart-axis { stroke: #333; stroke-width: 1.1; }
-.rc-chart-svg .rc-chart-grid { stroke: #ddd; stroke-width: 0.6; }
-.rc-chart-svg .rc-chart-axis-label { font-size: 7px; fill: #666; font-family: Arial, Helvetica, sans-serif; }
-.rc-chart-svg .rc-chart-value { font-size: 6.6px; font-weight: 800; fill: #222; font-family: Arial, Helvetica, sans-serif; }
-.rc-chart-svg .rc-chart-bar { transition: none; }
+.rc-bars-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
+.rc-bar-row { display: flex; align-items: center; gap: 4px; font-size: 8px; margin: 2px 0; }
+.rc-bar-label { width: 68px; flex-shrink: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #333; }
+.rc-bar-track { flex: 1; background: #eef1f3; border-radius: 5px; height: 7px; overflow: hidden; border: 1px solid #ccc; }
+.rc-bar-fill { height: 100%; border-radius: 5px; }
+.rc-bar-score { width: 22px; text-align: right; font-weight: 800; font-size: 8px; }
 .rc-empty-note { font-size: 8.5px; color: #888; font-style: italic; margin: 3px 0; }
 .rc-remark-box { border: 1px solid #333; border-radius: 8px; padding: 7px 11px; margin-top: 6px; background: var(--gold-100); }
 .rc-remark-box h4 { margin: 0 0 4px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #8a6414; }
@@ -583,6 +581,55 @@ img {
 .rc-legal-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; margin-top: 8px; font-size: 8px; color: #333; }
 .rc-print-meta { color: #888; font-style: italic; font-size: 7.5px; text-align: center; flex: 1; min-width: 180px; }
 .rc-stamp-note { border: 1px solid #333; padding: 2px 9px; font-weight: 800; border-radius: 4px; }
+/* ---------------------------------------------------------
+   O-LEVEL REPORT — layout-only tightening.
+   The O-Level table has more columns (10 vs A-Level's 7) plus an
+   extra two-column legend block, so it runs tighter on vertical
+   space than the A-Level page. These overrides only touch
+   spacing/typography sizing (never the data/grades themselves)
+   so everything reliably fits on one page without overflowing
+   past the sheet or being clipped at the bottom.
+   --------------------------------------------------------- */
+.report-page-olevel { padding: 7mm 10mm; }
+.report-page-olevel .rc-table { font-size: 8.6px; }
+.report-page-olevel .rc-table th, .report-page-olevel .rc-table td { padding: 3px 4px; }
+.report-page-olevel .rc-descriptor { text-align: left; font-size: 7.8px; }
+.report-page-olevel .rc-report-title { margin: 5px 0; padding: 4px 0; }
+.report-page-olevel .rc-learner-row { margin-bottom: 5px; padding: 5px 10px; }
+.report-page-olevel .rc-overall-row { margin-top: 5px; }
+.report-page-olevel .rc-two-col { margin-top: 5px; gap: 6px; }
+.report-page-olevel .rc-summary-section { margin-top: 5px; }
+.report-page-olevel .rc-summary-card { padding: 5px 8px; }
+.report-page-olevel .rc-remark-box { padding: 5px 8px; margin-top: 4px; }
+.report-page-olevel .rc-footer { padding-top: 5px; }
+.report-page-olevel .rc-comment-row { padding: 4px 0 3px; }
+.report-page-olevel .rc-legal-row { margin-top: 5px; }
+/* ---------------------------------------------------------
+   A-LEVEL REPORT — layout-only spacing increase.
+   With fewer columns and no page-numbering/timestamp footer
+   line, the A-Level page ran with a lot of unused white space
+   below the content. These overrides only open up spacing
+   (padding/margins/gaps) so the same content fills the page
+   more evenly — no data, scores, or grading logic changes.
+   --------------------------------------------------------- */
+.report-page-alevel .rc-table { font-size: 11px; }
+.report-page-alevel .rc-table th, .report-page-alevel .rc-table td { padding: 8px 10px; }
+.report-page-alevel .rc-learner-row { padding: 9px 14px; margin-bottom: 10px; }
+.report-page-alevel .rc-overall-row { margin-top: 14px; gap: 14px; }
+.report-page-alevel .rc-overall-box { padding: 8px 20px; min-width: 140px; }
+.report-page-alevel .rc-legend-table { font-size: 9px; }
+.report-page-alevel .rc-legend-table td { padding: 4px 7px; }
+.report-page-alevel .rc-summary-section { margin-top: 16px; }
+.report-page-alevel .rc-summary-card { padding: 12px 16px; }
+.report-page-alevel .rc-summary-card h4 { margin-bottom: 8px; padding-bottom: 6px; }
+.report-page-alevel .rc-summary-row { padding: 4px 0; font-size: 10.5px; }
+.report-page-alevel .rc-bars-grid { gap: 5px 16px; }
+.report-page-alevel .rc-bar-row { margin: 4px 0; font-size: 9px; }
+.report-page-alevel .rc-remark-box { padding: 12px 16px; margin-top: 10px; }
+.report-page-alevel .rc-remark-box p { font-size: 10px; line-height: 1.6; }
+.report-page-alevel .rc-footer { padding-top: 14px; }
+.report-page-alevel .rc-comment-row { padding: 8px 0 7px; font-size: 10.5px; }
+.report-page-alevel .rc-legal-row { margin-top: 12px; }
 /* ---------------------------------------------------------
    MOBILE INPUT ZOOM FIX
    iOS Safari zooms the whole page in when a focused form field
@@ -672,33 +719,62 @@ input, select, textarea {
     .rc-comment-editable:empty:before { content: ""; }
     .rc-comment-editable { background-color: transparent !important; box-shadow: none !important; }
     /* ---- Masthead: significantly larger and more prominent in print ---- */
-    .rc-header-top { padding-bottom: 8px; gap: 16px; }
-    .rc-logo { width: 68px; height: 68px; }
-    .rc-school-info h1 { font-size: 27px; margin-bottom: 3px; letter-spacing: 0.03em; }
-    .rc-school-info p { font-size: 11px; margin: 1.5px 0; }
-    .rc-motto { font-size: 11.5px; }
+    .rc-header-top { padding-bottom: 6px; }
+    .rc-logo { width: 58px; height: 58px; }
+    .rc-school-info h1 { font-size: 22px; margin-bottom: 2px; }
+    .rc-school-info p { font-size: 9.8px; margin: 1px 0; }
     /* ---- Section gaps and table row padding opened up evenly so the
        report stretches to naturally fill the printable area, now that it's
        sized to the true 190x277mm left after the @page margin. Data,
        grades, and structure are unchanged -- only the whitespace and row
        padding around them grew. ---- */
-    .rc-report-title { margin: 8px 0; padding: 5px 0; font-size: 12px; }
-    .rc-learner-row { margin-bottom: 8px; padding: 6px 12px; gap: 6px 16px; }
-    .rc-table { margin-top: 5px; font-size: 9px; }
-    .rc-table th, .rc-table td { padding: 5px 6px; }
-    .rc-overall-row { margin-top: 8px; gap: 7px; }
-    .rc-overall-box { padding: 4px 12px; min-width: 90px; }
-    .rc-two-col { margin-top: 8px; gap: 7px; }
-    .rc-summary-section { margin-top: 8px; }
-    .rc-summary-card { padding: 6px 10px; }
-    .rc-summary-card h4 { margin-bottom: 4px; padding-bottom: 4px; }
-    .rc-summary-row { padding: 2px 0; }
-    .rc-chart-svg { height: 90px; }
-    .rc-remark-box { padding: 6px 10px; margin-top: 5px; }
-    .rc-remark-box p { font-size: 9px; line-height: 1.4; }
-    .rc-footer { padding-top: 8px; }
-    .rc-comment-row { padding: 5px 0 4px; }
-    .rc-legal-row { margin-top: 8px; }
+    .rc-report-title { margin: 6px 0; padding: 4px 0; font-size: 11.5px; }
+    .rc-learner-row { margin-bottom: 6px; padding: 5px 10px; gap: 5px 16px; }
+    .rc-table { margin-top: 4px; font-size: 9px; }
+    .rc-table th, .rc-table td { padding: 4.5px 6px; }
+    .rc-overall-row { margin-top: 6px; gap: 6px; }
+    .rc-overall-box { padding: 3px 10px; min-width: 90px; }
+    .rc-two-col { margin-top: 6px; gap: 6px; }
+    .rc-summary-section { margin-top: 6px; }
+    .rc-summary-card { padding: 5px 9px; }
+    .rc-summary-card h4 { margin-bottom: 3px; padding-bottom: 3px; }
+    .rc-summary-row { padding: 1.5px 0; }
+    .rc-bars-grid { gap: 1px 8px; }
+    .rc-bar-row { margin: 1px 0; }
+    .rc-remark-box { padding: 5px 9px; margin-top: 4px; }
+    .rc-remark-box p { font-size: 9px; line-height: 1.35; }
+    .rc-footer { padding-top: 6px; }
+    .rc-comment-row { padding: 4px 0 3px; }
+    .rc-legal-row { margin-top: 6px; }
+    /* ---- O-Level: denser table/legend needs a snugger fit so nothing
+       overflows past the sheet or gets clipped at the bottom ---- */
+    .report-page.report-page-olevel { padding: 3mm 6mm; }
+    .report-page-olevel .rc-table { font-size: 8.3px; }
+    .report-page-olevel .rc-table th, .report-page-olevel .rc-table td { padding: 3px 4px; }
+    .report-page-olevel .rc-report-title { margin: 4px 0; padding: 3px 0; }
+    .report-page-olevel .rc-two-col { margin-top: 4px; gap: 4px; }
+    .report-page-olevel .rc-summary-section { margin-top: 4px; }
+    .report-page-olevel .rc-summary-card { padding: 4px 7px; }
+    .report-page-olevel .rc-remark-box { padding: 4px 7px; margin-top: 3px; }
+    .report-page-olevel .rc-footer { padding-top: 4px; }
+    .report-page-olevel .rc-legal-row { margin-top: 4px; }
+    /* ---- A-Level: fewer columns/rows, so open the spacing up to fill
+       the page evenly instead of leaving blank space below ---- */
+    .report-page.report-page-alevel { padding: 6mm 9mm; }
+    .report-page-alevel .rc-table { font-size: 10.5px; }
+    .report-page-alevel .rc-table th, .report-page-alevel .rc-table td { padding: 7px 9px; }
+    .report-page-alevel .rc-overall-row { margin-top: 12px; gap: 12px; }
+    .report-page-alevel .rc-overall-box { padding: 7px 18px; min-width: 130px; }
+    .report-page-alevel .rc-summary-section { margin-top: 14px; }
+    .report-page-alevel .rc-summary-card { padding: 10px 14px; }
+    .report-page-alevel .rc-summary-row { padding: 3.5px 0; }
+    .report-page-alevel .rc-bars-grid { gap: 4px 14px; }
+    .report-page-alevel .rc-bar-row { margin: 3px 0; }
+    .report-page-alevel .rc-remark-box { padding: 10px 14px; margin-top: 9px; }
+    .report-page-alevel .rc-remark-box p { font-size: 9.8px; line-height: 1.55; }
+    .report-page-alevel .rc-footer { padding-top: 12px; }
+    .report-page-alevel .rc-comment-row { padding: 7px 0 6px; }
+    .report-page-alevel .rc-legal-row { margin-top: 10px; }
     * {
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;

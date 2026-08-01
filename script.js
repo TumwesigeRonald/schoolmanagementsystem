@@ -1578,63 +1578,19 @@ function getPerformanceColor(score, isALevel) {
     if (score >= bands[3]) return '#e07a2c'; // D - orange
     return '#c23b3b';                        // E - red
 }
-// Shortens a subject name to a compact axis label so up to 12+ O-Level
-// subjects can still sit legibly along the chart's x-axis. Purely a display
-// label — the full subject name is still used everywhere else (table rows,
-// tooltips via <title>), so nothing about the underlying data changes.
-function abbreviateSubjectLabel(name) {
-    const cleaned = name.replace(/\s*\([^)]*\)/g, '').trim();
-    const firstWord = cleaned.split(' ')[0];
-    return firstWord.length > 9 ? firstWord.slice(0, 8) + '\u2026' : firstWord;
-}
-// Renders the "Subject Performance Overview" as a real vector bar chart
-// (inline SVG) plotting each subject's FINAL mark on a 0-100 axis. SVG is
-// used instead of a canvas-based library (e.g. Chart.js) so the chart is
-// resolution-independent and reflows cleanly with the print/@page CSS —
-// canvas charts can render blank or mis-scaled across the report-page ->
-// print-page size change these report cards already go through.
-function buildPerformanceChartSVG(records, isALevel) {
+function buildSubjectBars(records, isALevel) {
     if (records.length === 0) return '<p class="rc-empty-note">No scores recorded yet.</p>';
-    const W = 520, H = 168;
-    const padLeft = 24, padRight = 8, padTop = 14, padBottom = 46;
-    const plotW = W - padLeft - padRight;
-    const plotH = H - padTop - padBottom;
-    const baseY = padTop + plotH;
-    const n = records.length;
-    const slot = plotW / n;
-    const barW = Math.max(6, Math.min(30, slot * 0.55));
-
-    const gridLines = [0, 25, 50, 75, 100].map(v => {
-        const y = baseY - (v / 100) * plotH;
-        return `
-            <line x1="${padLeft}" y1="${y.toFixed(1)}" x2="${W - padRight}" y2="${y.toFixed(1)}" class="rc-chart-grid" />
-            <text x="${padLeft - 4}" y="${(y + 2.5).toFixed(1)}" class="rc-chart-axis-label" text-anchor="end">${v}</text>`;
-    }).join('');
-
-    const bars = records.map((r, i) => {
+    return `<div class="rc-bars-grid">${records.map(r => {
         const score = isALevel ? r.avgMark : r.finalTotal;
-        const clamped = Math.max(0, Math.min(100, score));
-        const barH = (clamped / 100) * plotH;
-        const cx = padLeft + i * slot + slot / 2;
-        const x = cx - barW / 2;
-        const y = baseY - barH;
+        const width = Math.max(2, Math.min(100, score));
         const color = getPerformanceColor(score, isALevel);
-        const label = escapeHTML(abbreviateSubjectLabel(r.subj));
         return `
-            <g>
-                <title>${escapeHTML(r.subj)}: ${score}</title>
-                <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(barH, 1).toFixed(1)}" rx="1.5" fill="${color}" class="rc-chart-bar" />
-                <text x="${cx.toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" class="rc-chart-value">${score}</text>
-                <text x="${cx.toFixed(1)}" y="${(baseY + 10).toFixed(1)}" text-anchor="end" class="rc-chart-axis-label" transform="rotate(-40 ${cx.toFixed(1)} ${(baseY + 10).toFixed(1)})">${label}</text>
-            </g>`;
-    }).join('');
-
-    return `
-        <svg class="rc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Subject performance chart">
-            <line x1="${padLeft}" y1="${baseY}" x2="${W - padRight}" y2="${baseY}" class="rc-chart-axis" />
-            ${gridLines}
-            ${bars}
-        </svg>`;
+        <div class="rc-bar-row">
+            <span class="rc-bar-label">${r.subj}</span>
+            <span class="rc-bar-track"><span class="rc-bar-fill" style="width:${width}%;background:${color};"></span></span>
+            <span class="rc-bar-score" style="color:${color};">${score}</span>
+        </div>`;
+    }).join('')}</div>`;
 }
 function buildSummarySection(student, subjectRecords, isALevel) {
     const attendance = getAttendanceSummary(student);
@@ -1660,9 +1616,9 @@ function buildSummarySection(student, subjectRecords, isALevel) {
                     <div class="rc-summary-row"><span>Attendance</span><span>${attendance.total > 0 ? `${attendance.present}/${attendance.total} days (${attendance.pct}%)` : 'Not yet recorded'}</span></div>
                     <div class="rc-summary-row"><span>Best Subject</span><span>${bestSubject ? bestSubject.subj : 'N/A'}</span></div>
                 </div>
-                <div class="rc-summary-card rc-chart-card">
-                    <h4>Subject Performance Overview <span class="rc-chart-sub">(Final Marks by Subject)</span></h4>
-                    ${buildPerformanceChartSVG(subjectRecords, isALevel)}
+                <div class="rc-summary-card">
+                    <h4>Subject Performance Overview</h4>
+                    ${buildSubjectBars(subjectRecords, isALevel)}
                 </div>
             </div>
             <div class="rc-remark-box">
@@ -1689,7 +1645,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
     `).join('') : `<tr><td colspan="7" class="rc-empty">No scores recorded for this learner yet. Enter marks in the Scores tab and they will appear here automatically.</td></tr>`;
 
     return `
-        <div class="report-page">
+        <div class="report-page report-page-alevel">
             <div class="rc-header-top">
                 <img src="school_badge.jpg" class="rc-logo" alt="School Badge">
                 <div class="rc-school-info">
@@ -1814,7 +1770,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
     `).join('') : `<tr><td colspan="10" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
 
     return `
-        <div class="report-page">
+        <div class="report-page report-page-olevel">
             <div class="rc-header-top">
                 <img src="school_badge.jpg" class="rc-logo" alt="School Badge">
                 <div class="rc-school-info">
@@ -1894,7 +1850,6 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 </div>
                 <div class="rc-legal-row">
                     <span>AOI &ndash; Activity of Integration &nbsp;|&nbsp; AS &ndash; Average Score &nbsp;|&nbsp; FA &ndash; Formative Assessment</span>
-                    <span class="rc-print-meta">Printed on ${formatGeneratedTimestamp()} &middot; via Luweero Community SS Management System</span>
                     <span class="rc-stamp-note">ONLY VALID WITH A STAMP</span>
                 </div>
             </div>
