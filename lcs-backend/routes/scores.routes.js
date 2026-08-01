@@ -76,4 +76,27 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
   res.json(rows[0]);
 }));
 
+// DELETE /api/scores/:recordKey — Admin or Teacher only.
+// Fully removes one subject<->student association: deletes the scores row
+// outright (not a soft-clear/touched=false toggle), so the subject and its
+// marks vanish from that student's summary/report card immediately. Scoped
+// to a single record_key ("SUBJECT_studentId"), so this can never touch any
+// other student's rows, the global subject lists, or grading logic — those
+// live entirely outside the `scores` table.
+router.delete('/:recordKey', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
+  const { recordKey } = req.params;
+
+  const { rows } = await db.query(
+    `DELETE FROM scores WHERE record_key = $1
+     RETURNING record_key AS "recordKey", subject, student_id AS "studentId"`,
+    [recordKey]
+  );
+
+  if (!rows.length) {
+    return res.status(404).json({ message: `No score record found for ${recordKey}.` });
+  }
+
+  res.json({ message: 'Subject unlinked and marks cleared.', removed: rows[0] });
+}));
+
 module.exports = router;

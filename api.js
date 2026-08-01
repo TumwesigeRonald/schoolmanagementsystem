@@ -71,6 +71,7 @@ const ENDPOINTS = {
     // --- Scores / Marks ---
     SCORES: "/scores",
     SCORES_BY_CLASS_SUBJECT: (cls, subject) => `/scores?class=${encodeURIComponent(cls)}&subject=${encodeURIComponent(subject)}`,
+    SCORE_BY_RECORD_KEY: (recordKey) => `/scores/${encodeURIComponent(recordKey)}`,
 
     // --- Attendance ---
     ATTENDANCE: "/attendance",
@@ -430,6 +431,13 @@ const ScoresAPI = {
             marksStorage[recordKey] = marksRecord; // keep it visible in this tab, but the caller must be told it isn't actually persisted
             throw err;
         }
+    },
+    // Fully unlinks a subject from one student: deletes the scores row
+    // outright (not a save() with cleared values, which would just re-trigger
+    // the sticky touched-flag OR'ing on the backend). Same no-silent-fallback
+    // reasoning as save() — the caller must know if this didn't persist.
+    async remove(recordKey) {
+        return apiRequest(ENDPOINTS.SCORE_BY_RECORD_KEY(recordKey), { method: "DELETE" });
     }
 };
 
