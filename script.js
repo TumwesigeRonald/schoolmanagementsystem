@@ -1480,7 +1480,7 @@ function buildOLevelRow(student, recordKey) {
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${finalTotal}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeData.grade}</td>
             <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeData.descriptor}</td>
-            <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="e.g. AR" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
+            <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
         </tr>
     `;
 }
