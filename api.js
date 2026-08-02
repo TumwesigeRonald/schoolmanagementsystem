@@ -201,7 +201,7 @@ const ROLES = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: {
-        tabs: ["students", "scores", "reports", "analytics", "attendance", "resources", "teachers"],
+        tabs: ["students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
         defaultTab: "students",
         canManageStudents: true,
         canManageScores: true,
@@ -213,7 +213,7 @@ const ROLE_PERMISSIONS = {
         canViewAllReports: true
     },
     [ROLES.TEACHER]: {
-        tabs: ["students", "scores", "reports", "analytics", "attendance", "resources", "teachers"],
+        tabs: ["students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
         defaultTab: "students",
         canManageStudents: false,   // view-only: cannot add/delete learners
         canManageScores: true,      // core duty: add/update learner scores

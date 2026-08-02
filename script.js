@@ -54,6 +54,7 @@ const aLevelSubjects = [
 const subsidiarySubjects = ["GENERAL PAPER", "SUBSIDIARY MATHEMATICS", "ICT (SUBSIDIARY)"];
 let performanceChartInstance = null;
 let gradeDistributionChartInstance = null;
+let performersLevelView = 'O-Level'; // toggle state for the Best & Worst Performers panel
 /* ---------------------------------------------------------
    1c. TERM / CALENDAR SETTINGS (persisted in memory)
    Holds the currently selected term, year, and the upcoming
@@ -385,6 +386,7 @@ function renderSidebarNav() {
         { id: 'scores', label: 'Scores', icon: 'fa-pen-to-square' },
         { id: 'reports', label: currentUser.role === 'Student' ? 'My Report Card' : 'Report Cards', icon: 'fa-file-lines' },
         { id: 'analytics', label: 'Analytics', icon: 'fa-chart-column' },
+        { id: 'performers', label: 'Best & Worst Performers', icon: 'fa-ranking-star' },
         { id: 'attendance', label: 'Attendance', icon: 'fa-calendar-check' },
         { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open' },
         { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' }
@@ -402,7 +404,7 @@ function switchTab(tabName) {
     if (!permissions.tabs.includes(tabName)) {
         tabName = permissions.defaultTab;
     }
-    const tabs = ['students', 'scores', 'reports', 'analytics', 'attendance', 'resources', 'teachers'];
+    const tabs = ['students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
@@ -419,6 +421,7 @@ function switchTab(tabName) {
         case 'scores': titleText = "Academic Score Sheets"; break;
         case 'reports': titleText = "Report Cards & Transcripts"; break;
         case 'analytics': titleText = "Learner Performance Analytics"; break;
+        case 'performers': titleText = "Best & Worst Performers"; break;
         case 'attendance': titleText = "Attendance Registry"; break;
         case 'resources': titleText = "Educational Resources"; break;
         case 'teachers': titleText = currentUser.role === 'Teacher' ? "My Teacher Profile" : "Teacher Accounts & Credentials"; break;
@@ -451,6 +454,10 @@ function switchTab(tabName) {
         case 'analytics':
             contentElem.innerHTML = renderAnalyticsModule();
             initPerformanceChart();
+            break;
+        case 'performers':
+            contentElem.innerHTML = renderPerformersModule();
+            renderPerformersContent();
             break;
         case 'attendance':
             contentElem.innerHTML = renderAttendanceModule();
@@ -2153,6 +2160,124 @@ function initPerformanceChart() {
             }
         });
     }
+}
+/* ---------------------------------------------------------
+   7b. BEST & WORST PERFORMERS PANEL
+   Reuses the exact same Overall Achievement formulas already
+   used for report cards — calculateOLevelOverallAchievement()
+   for O-Level (0-3 scale) and the summed A-Level grade points
+   from getALevelSubjectRecords() (UACE-style points) — no new
+   scoring logic is introduced here, only filtering/sorting.
+
+   O-Level: Best = 2.5-3.0 inclusive, Worst = 1.4 and below.
+   A-Level: Best = 14 points and above, Worst = 4 points and below.
+   Only learners with at least one recorded (touched) subject are
+   eligible, so a student with no marks yet is never miscounted
+   as a "worst performer".
+   --------------------------------------------------------- */
+function computePerformersData(levelType) {
+    const isALevel = levelType === 'A-Level';
+    const levels = isALevel ? ['S.5', 'S.6'] : ['S.1', 'S.2', 'S.3', 'S.4'];
+    const classStudents = studentsList.filter(s => levels.includes(s.class));
+
+    const results = classStudents.map(student => {
+        if (isALevel) {
+            const records = getALevelSubjectRecords(student);
+            const totalPoints = records.reduce((sum, r) => sum + r.gradeInfo.points, 0);
+            return { student, score: totalPoints, hasRecords: records.length > 0 };
+        }
+        const records = getOLevelSubjectRecords(student);
+        const overallAvg = records.length > 0 ? calculateOLevelOverallAchievement(student.class, records) : 0;
+        return { student, score: overallAvg, hasRecords: records.length > 0 };
+    }).filter(r => r.hasRecords);
+
+    const best = results
+        .filter(r => isALevel ? r.score >= 14 : (r.score >= 2.5 && r.score <= 3.0))
+        .sort((a, b) => b.score - a.score);
+    const worst = results
+        .filter(r => isALevel ? r.score <= 4 : r.score <= 1.4)
+        .sort((a, b) => a.score - b.score);
+
+    return { best, worst };
+}
+function renderPerformersModule() {
+    return `
+        <div class="space-y-6">
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 class="text-sm font-black text-slate-900 uppercase"><i class="fa-solid fa-ranking-star mr-2 text-teal-600"></i>Best &amp; Worst Performers</h3>
+                    <p class="text-xs font-semibold text-slate-500 mt-0.5">Learners at either end of the Overall Achievement scale, by curriculum level.</p>
+                </div>
+                <div class="inline-flex border border-slate-300 rounded-xl p-1 bg-slate-100">
+                    <button id="performers-toggle-olevel" type="button" onclick="switchPerformersLevel('O-Level')" class="px-4 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wider transition">O-Level</button>
+                    <button id="performers-toggle-alevel" type="button" onclick="switchPerformersLevel('A-Level')" class="px-4 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wider transition">A-Level</button>
+                </div>
+            </div>
+            <div id="performers-content"></div>
+        </div>
+    `;
+}
+function switchPerformersLevel(levelType) {
+    performersLevelView = levelType;
+    renderPerformersContent();
+}
+function renderPerformersContent() {
+    const oBtn = document.getElementById('performers-toggle-olevel');
+    const aBtn = document.getElementById('performers-toggle-alevel');
+    const isALevel = performersLevelView === 'A-Level';
+    if (oBtn) oBtn.className = `px-4 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wider transition ${!isALevel ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`;
+    if (aBtn) aBtn.className = `px-4 py-2 rounded-lg text-xs font-extrabold uppercase tracking-wider transition ${isALevel ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}`;
+
+    const container = document.getElementById('performers-content');
+    if (!container) return;
+    const { best, worst } = computePerformersData(performersLevelView);
+    const scoreLabel = isALevel ? 'Points' : 'Overall Achievement';
+    const criteriaBest = isALevel ? '14 points and above' : '2.5 &ndash; 3.0';
+    const criteriaWorst = isALevel ? '4 points and below' : '1.4 and below';
+
+    container.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            ${buildPerformersTable('Best Performers', true, best, isALevel, scoreLabel, criteriaBest)}
+            ${buildPerformersTable('Worst Performers', false, worst, isALevel, scoreLabel, criteriaWorst)}
+        </div>
+    `;
+}
+function buildPerformersTable(title, isBest, rows, isALevel, scoreLabel, criteriaText) {
+    const iconWrapClass = isBest ? 'w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg flex-shrink-0' : 'w-11 h-11 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg flex-shrink-0';
+    const icon = isBest ? 'fa-trophy' : 'fa-triangle-exclamation';
+    const body = rows.length > 0 ? rows.map(r => `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="p-4 font-mono text-xs font-bold text-teal-700">${r.student.id}</td>
+            <td class="p-4 font-bold text-slate-900">${r.student.name}</td>
+            <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${r.student.class}</span></td>
+            <td class="p-4 text-center font-black text-slate-900">${isALevel ? r.score : r.score.toFixed(1)}</td>
+        </tr>
+    `).join('') : `<tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs font-medium uppercase tracking-wider">No learners currently meet this criteria.</td></tr>`;
+
+    return `
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+            <div class="p-5 border-b border-slate-200 flex items-center gap-3">
+                <div class="${iconWrapClass}"><i class="fa-solid ${icon}"></i></div>
+                <div class="min-w-0">
+                    <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">${title}</h4>
+                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Criteria: ${criteriaText}</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
+                            <th class="p-4">Student ID</th>
+                            <th class="p-4">Full Name</th>
+                            <th class="p-4">Class</th>
+                            <th class="p-4 text-center">${scoreLabel}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-xs text-slate-700">${body}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
 }
 /* ---------------------------------------------------------
    8. ATTENDANCE REGISTRY MODULE (Light Theme)
