@@ -1578,19 +1578,63 @@ function getPerformanceColor(score, isALevel) {
     if (score >= bands[3]) return '#e07a2c'; // D - orange
     return '#c23b3b';                        // E - red
 }
-function buildSubjectBars(records, isALevel) {
+// Shortens a subject name to a compact axis label so up to 12+ O-Level
+// subjects can still sit legibly along the chart's x-axis. Purely a display
+// label — the full subject name is still used everywhere else (table rows,
+// tooltips via <title>), so nothing about the underlying data changes.
+function abbreviateSubjectLabel(name) {
+    const cleaned = name.replace(/\s*\([^)]*\)/g, '').trim();
+    const firstWord = cleaned.split(' ')[0];
+    return firstWord.length > 9 ? firstWord.slice(0, 8) + '\u2026' : firstWord;
+}
+// Renders the "Subject Performance Overview" as a real vector bar chart
+// (inline SVG) plotting each subject's FINAL mark on a 0-100 axis. SVG is
+// used instead of a canvas-based library (e.g. Chart.js) so the chart is
+// resolution-independent and reflows cleanly with the print/@page CSS —
+// canvas charts can render blank or mis-scaled across the report-page ->
+// print-page size change these report cards already go through.
+function buildPerformanceChartSVG(records, isALevel) {
     if (records.length === 0) return '<p class="rc-empty-note">No scores recorded yet.</p>';
-    return `<div class="rc-bars-grid">${records.map(r => {
-        const score = isALevel ? r.avgMark : r.finalTotal;
-        const width = Math.max(2, Math.min(100, score));
-        const color = getPerformanceColor(score, isALevel);
+    const W = 520, H = 168;
+    const padLeft = 24, padRight = 8, padTop = 14, padBottom = 46;
+    const plotW = W - padLeft - padRight;
+    const plotH = H - padTop - padBottom;
+    const baseY = padTop + plotH;
+    const n = records.length;
+    const slot = plotW / n;
+    const barW = Math.max(6, Math.min(30, slot * 0.55));
+
+    const gridLines = [0, 25, 50, 75, 100].map(v => {
+        const y = baseY - (v / 100) * plotH;
         return `
-        <div class="rc-bar-row">
-            <span class="rc-bar-label">${r.subj}</span>
-            <span class="rc-bar-track"><span class="rc-bar-fill" style="width:${width}%;background:${color};"></span></span>
-            <span class="rc-bar-score" style="color:${color};">${score}</span>
-        </div>`;
-    }).join('')}</div>`;
+            <line x1="${padLeft}" y1="${y.toFixed(1)}" x2="${W - padRight}" y2="${y.toFixed(1)}" class="rc-chart-grid" />
+            <text x="${padLeft - 4}" y="${(y + 2.5).toFixed(1)}" class="rc-chart-axis-label" text-anchor="end">${v}</text>`;
+    }).join('');
+
+    const bars = records.map((r, i) => {
+        const score = isALevel ? r.avgMark : r.finalTotal;
+        const clamped = Math.max(0, Math.min(100, score));
+        const barH = (clamped / 100) * plotH;
+        const cx = padLeft + i * slot + slot / 2;
+        const x = cx - barW / 2;
+        const y = baseY - barH;
+        const color = getPerformanceColor(score, isALevel);
+        const label = escapeHTML(abbreviateSubjectLabel(r.subj));
+        return `
+            <g>
+                <title>${escapeHTML(r.subj)}: ${score}</title>
+                <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(barH, 1).toFixed(1)}" rx="1.5" fill="${color}" class="rc-chart-bar" />
+                <text x="${cx.toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" class="rc-chart-value">${score}</text>
+                <text x="${cx.toFixed(1)}" y="${(baseY + 10).toFixed(1)}" text-anchor="end" class="rc-chart-axis-label" transform="rotate(-40 ${cx.toFixed(1)} ${(baseY + 10).toFixed(1)})">${label}</text>
+            </g>`;
+    }).join('');
+
+    return `
+        <svg class="rc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Subject performance chart">
+            <line x1="${padLeft}" y1="${baseY}" x2="${W - padRight}" y2="${baseY}" class="rc-chart-axis" />
+            ${gridLines}
+            ${bars}
+        </svg>`;
 }
 function buildSummarySection(student, subjectRecords, isALevel) {
     const attendance = getAttendanceSummary(student);
@@ -1616,9 +1660,9 @@ function buildSummarySection(student, subjectRecords, isALevel) {
                     <div class="rc-summary-row"><span>Attendance</span><span>${attendance.total > 0 ? `${attendance.present}/${attendance.total} days (${attendance.pct}%)` : 'Not yet recorded'}</span></div>
                     <div class="rc-summary-row"><span>Best Subject</span><span>${bestSubject ? bestSubject.subj : 'N/A'}</span></div>
                 </div>
-                <div class="rc-summary-card">
-                    <h4>Subject Performance Overview</h4>
-                    ${buildSubjectBars(subjectRecords, isALevel)}
+                <div class="rc-summary-card rc-chart-card">
+                    <h4>Subject Performance Overview <span class="rc-chart-sub">(Final Marks by Subject)</span></h4>
+                    ${buildPerformanceChartSVG(subjectRecords, isALevel)}
                 </div>
             </div>
             <div class="rc-remark-box">
@@ -1631,7 +1675,6 @@ function buildSummarySection(student, subjectRecords, isALevel) {
 function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
     const subjectRecords = getALevelSubjectRecords(student);
     const totalPoints = subjectRecords.reduce((sum, r) => sum + r.gradeInfo.points, 0);
-    const principalCount = subjectRecords.filter(r => !r.isSubsidiary).length;
 
     const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
         <tr>
@@ -1683,10 +1726,6 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 <div class="rc-overall-box">
                     <span class="rc-overall-label">Total Points</span>
                     <span class="rc-overall-value">${totalPoints}</span>
-                </div>
-                <div class="rc-overall-box">
-                    <span class="rc-overall-label">Principal Subjects</span>
-                    <span class="rc-overall-value">${principalCount}</span>
                 </div>
                 <table class="rc-legend-table">
                     <tr class="rc-legend-head"><td>Grade</td><td>A</td><td>B</td><td>C</td><td>D</td><td>E</td></tr>
