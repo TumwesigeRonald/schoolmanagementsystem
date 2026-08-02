@@ -491,14 +491,14 @@ img {
 .rc-school-info { flex: 1; text-align: center; }
 .rc-school-info h1 {
     font-family: var(--font-display);
-    font-size: 19px;
+    font-size: 23px;
     font-weight: 700;
     margin: 0 0 2px;
-    letter-spacing: 0.01em;
+    letter-spacing: 0.02em;
     color: var(--navy-900);
     line-height: 1.15;
 }
-.rc-school-info p { font-size: 9.5px; margin: 1px 0; color: #333; font-weight: 500; }
+.rc-school-info p { font-size: 10.3px; margin: 1px 0; color: #333; font-weight: 500; }
 .rc-motto { font-style: italic; font-weight: 700; color: var(--teal-700); }
 .rc-qr-box { width: 52px; height: 52px; border: 1.5px solid #999; display: flex; align-items: center; justify-content: center; font-size: 8px; text-align: center; flex-shrink: 0; color: #888; font-weight: 700; }
 .rc-report-title {
@@ -658,29 +658,35 @@ input, select, textarea {
     .report-page {
         margin: 0 auto;
         box-shadow: none;
-        /* Slightly tighter page padding than the on-screen preview, buying
-           back vertical room so a full report reliably fits one A4 page. */
-        padding: 6mm 11mm;
+        /* The @page rule below now carves a real 10mm margin out of the
+           physical sheet, so the box is sized to exactly what's left
+           (A4 210x297mm minus 10mm on every side) instead of the full
+           210x297mm used on screen. This padding is just inner breathing
+           room within that printable area, not a stand-in for margin. */
+        width: 190mm;
+        height: 277mm;
+        padding: 4mm 7mm;
     }
-    /* Trim the spacing/font-size budget across every section by a small,
-       uniform amount — enough headroom for a full subject list plus wrapped
-       remarks to stay on one page, without visibly cramping the layout.
-       Numbers/grades/points themselves are untouched — this only affects
-       how much white space and text size surrounds them. */
     .rc-comment-editable:empty:before { content: ""; }
     .rc-comment-editable { background-color: transparent !important; box-shadow: none !important; }
-    .rc-header-top { padding-bottom: 5px; }
-    .rc-logo { width: 54px; height: 54px; }
-    .rc-school-info h1 { font-size: 17px; margin-bottom: 1px; }
-    .rc-school-info p { font-size: 8.8px; margin: 0.5px 0; }
-    .rc-report-title { margin: 5px 0; padding: 4px 0; font-size: 11.5px; }
-    .rc-learner-row { margin-bottom: 5px; padding: 5px 10px; gap: 5px 16px; }
-    .rc-table { margin-top: 3px; font-size: 9px; }
-    .rc-table th, .rc-table td { padding: 3px 5px; }
-    .rc-overall-row { margin-top: 5px; gap: 6px; }
+    /* ---- Masthead: significantly larger and more prominent in print ---- */
+    .rc-header-top { padding-bottom: 6px; }
+    .rc-logo { width: 58px; height: 58px; }
+    .rc-school-info h1 { font-size: 22px; margin-bottom: 2px; }
+    .rc-school-info p { font-size: 9.8px; margin: 1px 0; }
+    /* ---- Section gaps and table row padding opened up evenly so the
+       report stretches to naturally fill the printable area, now that it's
+       sized to the true 190x277mm left after the @page margin. Data,
+       grades, and structure are unchanged -- only the whitespace and row
+       padding around them grew. ---- */
+    .rc-report-title { margin: 6px 0; padding: 4px 0; font-size: 11.5px; }
+    .rc-learner-row { margin-bottom: 6px; padding: 5px 10px; gap: 5px 16px; }
+    .rc-table { margin-top: 4px; font-size: 9px; }
+    .rc-table th, .rc-table td { padding: 4.5px 6px; }
+    .rc-overall-row { margin-top: 6px; gap: 6px; }
     .rc-overall-box { padding: 3px 10px; min-width: 90px; }
-    .rc-two-col { margin-top: 5px; gap: 6px; }
-    .rc-summary-section { margin-top: 5px; }
+    .rc-two-col { margin-top: 6px; gap: 6px; }
+    .rc-summary-section { margin-top: 6px; }
     .rc-summary-card { padding: 5px 9px; }
     .rc-summary-card h4 { margin-bottom: 3px; padding-bottom: 3px; }
     .rc-summary-row { padding: 1.5px 0; }
@@ -688,7 +694,7 @@ input, select, textarea {
     .rc-bar-row { margin: 1px 0; }
     .rc-remark-box { padding: 5px 9px; margin-top: 4px; }
     .rc-remark-box p { font-size: 9px; line-height: 1.35; }
-    .rc-footer { padding-top: 5px; }
+    .rc-footer { padding-top: 6px; }
     .rc-comment-row { padding: 4px 0 3px; }
     .rc-legal-row { margin-top: 6px; }
     * {
@@ -698,7 +704,7 @@ input, select, textarea {
     }
     @page {
         size: A4;
-        margin: 0;
+        margin: 10mm;
     }
 }
 
