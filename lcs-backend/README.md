@@ -63,6 +63,11 @@ Default logins after seeding (**change all of these before going live**):
 | Teacher | `pokello` | `teach123` |
 | Student | `LCS/001` (etc.) | same as the ID, e.g. `LCS/001` |
 
+There is no seeded Headteacher login — an Administrator creates it from the
+Teachers tab (or `PUT /headteacher`) after deploying. It gets the same
+baseline access as Teacher (class records, scores, mark sheets), just
+labeled "Headteacher" in the UI.
+
 ## 3. Deploy to Vercel
 
 ```bash
@@ -135,24 +140,26 @@ All routes are prefixed with `/api`. Protected routes require
 | POST | `/auth/logout` | — | stateless no-op (client discards token) |
 | GET | `/auth/me` | any | returns the decoded token payload |
 | POST | `/auth/change-password` | any | `{ currentPassword, newPassword }` |
-| GET | `/students` | any | Admin/Teacher: all; Student: only self |
+| GET | `/students` | any | Admin/Teacher/Headteacher: all; Student: only self |
 | POST | `/students` | Admin | creates student **and** their login |
 | DELETE | `/students/:id` | Admin | cascades to login, scores, attendance |
-| GET | `/teachers` | Admin, Teacher | |
+| GET | `/teachers` | Admin, Teacher, Headteacher | |
 | POST | `/teachers` | Admin | creates teacher **and** their login |
 | PUT | `/teachers/:id` | Admin, or self | teacher can edit only their own row |
 | DELETE | `/teachers/:id` | Admin | |
 | POST | `/teachers/:id/reset-password` | Admin | |
+| GET | `/headteacher` | Admin | current Headteacher account (no password) |
+| PUT | `/headteacher` | Admin | create/update the single Headteacher login |
 | GET | `/scores?class=&subject=` | any | Student is forced to their own ID |
-| POST | `/scores` | Admin, Teacher | upsert by `subject_studentId` |
+| POST | `/scores` | Admin, Teacher, Headteacher | upsert by `subject_studentId` |
 | GET | `/attendance?class=&date=` | any | Student is forced to their own ID |
-| POST | `/attendance` | Admin, Teacher | set one student's status |
-| PUT | `/attendance` | Admin, Teacher | bulk-save a day's register |
+| POST | `/attendance` | Admin, Teacher, Headteacher | set one student's status |
+| PUT | `/attendance` | Admin, Teacher, Headteacher | bulk-save a day's register |
 | GET | `/settings/term` | any | |
 | PUT | `/settings/term` | Admin | |
 | GET | `/resources` | any | |
-| POST | `/resources/upload` | Admin, Teacher | multipart `file` + `title` |
-| DELETE | `/resources/:id` | Admin, or uploader | |
+| POST | `/resources/upload` | Admin, Teacher, Headteacher | multipart `file` + `title` |
+| DELETE | `/resources/:id` | Admin, Headteacher, or uploader | |
 
 ## 7. Design notes / deviations from the original spec
 

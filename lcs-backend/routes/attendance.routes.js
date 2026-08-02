@@ -43,7 +43,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 
 // POST /api/attendance — set a single student's status for a date.
 // Body: { date, studentId, status }
-router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
+router.post('/', authenticate, requireRole('Administrator', 'Teacher', 'Headteacher'), asyncHandler(async (req, res) => {
   const { date, studentId, status } = req.body || {};
   if (!date || !studentId || !status) {
     return res.status(400).json({ message: 'date, studentId and status are required.' });
@@ -71,7 +71,7 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
 // (records mirrors the frontend's in-memory attendanceStorage object —
 // only keys for the given date are applied, so it's safe to pass the
 // entire client-side store without filtering it first.)
-router.put('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
+router.put('/', authenticate, requireRole('Administrator', 'Teacher', 'Headteacher'), asyncHandler(async (req, res) => {
   const { date, classLevel, records } = req.body || {};
   if (!date || !records || typeof records !== 'object') {
     return res.status(400).json({ message: 'date and records are required.' });

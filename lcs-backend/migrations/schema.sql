@@ -20,6 +20,17 @@ EXCEPTION
 END $$;
 
 -- -------------------------------------------------------------
+-- Additive: 'Headteacher' role. A single, admin-provisioned
+-- account with the same baseline access as 'Teacher' (class
+-- records, student scores, mark sheets) plus a distinct role
+-- string so the frontend can label her "Headteacher" in the nav
+-- header instead of "Teacher". Uses the same `users` table as
+-- every other role — no new table needed. Safe to re-run: adding
+-- an enum value that already exists is a no-op.
+-- -------------------------------------------------------------
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'Headteacher';
+
+-- -------------------------------------------------------------
 -- students — the learner registry (Admin-managed)
 -- id uses the school's own format, e.g. "LCS/001"
 -- -------------------------------------------------------------

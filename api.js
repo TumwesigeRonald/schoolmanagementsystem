@@ -68,6 +68,9 @@ const ENDPOINTS = {
     TEACHER_BY_ID: (id) => `/teachers/${encodeURIComponent(id)}`,
     TEACHER_RESET_PASSWORD: (id) => `/teachers/${encodeURIComponent(id)}/reset-password`,
 
+    // --- Headteacher account (single, admin-provisioned) ---
+    HEADTEACHER: "/headteacher",
+
     // --- Scores / Marks ---
     SCORES: "/scores",
     SCORES_BY_CLASS_SUBJECT: (cls, subject) => `/scores?class=${encodeURIComponent(cls)}&subject=${encodeURIComponent(subject)}`,
@@ -196,7 +199,8 @@ async function apiRequest(path, { method = "GET", body = null, isFormData = fals
 const ROLES = {
     ADMIN: "Administrator",
     TEACHER: "Teacher",
-    STUDENT: "Student"
+    STUDENT: "Student",
+    HEADTEACHER: "Headteacher"
 };
 
 const ROLE_PERMISSIONS = {
@@ -225,6 +229,24 @@ const ROLE_PERMISSIONS = {
         canManageTerm: false,       // calendar/term dates are admin-only
         canViewAllReports: true,
         canManageNotices: false     // can read the bulletin, not post to it
+    },
+    // Headteacher: same baseline access as Teacher (class records, learner
+    // scores, mark sheets) — she's just labeled/identified distinctly so the
+    // UI can render "Headteacher" in the nav header instead of "Teacher".
+    // Kept as an explicit copy (not a reference to ROLE_PERMISSIONS[ROLES.TEACHER])
+    // so tweaking Teacher permissions later can't silently change hers too.
+    [ROLES.HEADTEACHER]: {
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
+        defaultTab: "dashboard",
+        canManageStudents: false,
+        canManageScores: true,
+        canManageAttendance: true,
+        canManageResources: true,
+        canDeleteAnyResource: false,
+        canManageTeachers: false,
+        canManageTerm: false,
+        canViewAllReports: true,
+        canManageNotices: false
     },
     [ROLES.STUDENT]: {
         tabs: ["reports", "resources"],
@@ -285,6 +307,16 @@ const AuthAPI = {
         );
         if (admin) {
             const user = { username: admin.username, role: admin.role, name: admin.name };
+            TokenStore.set("local-dev-token");
+            TokenStore.setUser(user);
+            return { ok: true, user };
+        }
+        if (
+            headteacherAccount && headteacherAccount.username &&
+            headteacherAccount.username.toLowerCase() === username.toLowerCase() &&
+            headteacherAccount.password === password
+        ) {
+            const user = { username: headteacherAccount.username, role: ROLES.HEADTEACHER, name: headteacherAccount.name || "Headteacher" };
             TokenStore.set("local-dev-token");
             TokenStore.setUser(user);
             return { ok: true, user };
@@ -402,6 +434,28 @@ const TeachersAPI = {
                 if (t) t.password = newPassword;
                 return true;
             }
+        );
+    }
+};
+
+/* ---------------------------------------------------------
+   8b. HEADTEACHER ACCOUNT DATA-ACCESS LAYER
+   Admin-only create/update of the single Headteacher login.
+   Mirrors TeachersAPI's remote-first/local-fallback shape, but
+   there's exactly one record (headteacherAccount in script.js)
+   instead of a list.
+   --------------------------------------------------------- */
+const HeadteacherAPI = {
+    async get() {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.HEADTEACHER),
+            () => (headteacherAccount && headteacherAccount.username ? headteacherAccount : null)
+        );
+    },
+    async save(account) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.HEADTEACHER, { method: "PUT", body: account }),
+            () => { Object.assign(headteacherAccount, account); return headteacherAccount; }
         );
     }
 };
