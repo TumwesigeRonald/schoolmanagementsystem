@@ -83,7 +83,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 // POST /api/resources/upload — Admin or Teacher only.
 // Stores the file in Vercel Blob when configured, and falls back to
 // base64-in-Postgres otherwise — see lib/storage.js.
-router.post('/upload', authenticate, requireRole('Administrator', 'Teacher', 'Headteacher'), handleResourceUpload, asyncHandler(async (req, res) => {
+router.post('/upload', authenticate, requireRole('Administrator', 'Teacher'), handleResourceUpload, asyncHandler(async (req, res) => {
   // NOTE: the frontend's upload form sends the target level as "level"
   // (not "classLevel") — match that field name here.
   const { title, subject, level } = req.body || {};
@@ -116,7 +116,7 @@ router.post('/upload', authenticate, requireRole('Administrator', 'Teacher', 'He
 }));
 
 // DELETE /api/resources/:id — Admin can delete any; Teacher only their own upload.
-router.delete('/:id', authenticate, requireRole('Administrator', 'Teacher', 'Headteacher'), asyncHandler(async (req, res) => {
+router.delete('/:id', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const { rows } = await db.query('SELECT uploaded_by AS "uploadedBy" FROM resources WHERE id = $1', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'Resource not found.' });
   if (req.user.role !== 'Administrator' && rows[0].uploadedBy !== req.user.name) {

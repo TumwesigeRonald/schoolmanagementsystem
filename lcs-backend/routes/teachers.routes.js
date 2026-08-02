@@ -9,7 +9,7 @@ const HASH_ROUNDS = 10;
 
 // GET /api/teachers — Admin and Teacher can both see the staff list
 // (frontend shows the "teachers" tab to both; Teachers just can't edit others).
-router.get('/', authenticate, requireRole('Administrator', 'Teacher', 'Headteacher'), asyncHandler(async (req, res) => {
+router.get('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const { rows } = await db.query('SELECT id, name, username, subject FROM teachers ORDER BY id');
   res.json(rows);
 }));

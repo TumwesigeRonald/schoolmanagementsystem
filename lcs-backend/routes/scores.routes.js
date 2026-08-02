@@ -41,7 +41,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 // POST /api/scores — Admin or Teacher only.
 // Body: { subject, studentId, classLevel?, ao1?, ao2?, eot?, p1?, p2?, remarks?, touched? }
 // Upserts by record_key = `${subject}_${studentId}` (same convention script.js uses).
-router.post('/', authenticate, requireRole('Administrator', 'Teacher', 'Headteacher'), asyncHandler(async (req, res) => {
+router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const { subject, studentId, classLevel, ao1, ao2, eot, p1, p2, remarks, touched } = req.body || {};
   if (!subject || !studentId) {
     return res.status(400).json({ message: 'subject and studentId are required.' });
@@ -83,7 +83,7 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher', 'Headteac
 // to a single record_key ("SUBJECT_studentId"), so this can never touch any
 // other student's rows, the global subject lists, or grading logic — those
 // live entirely outside the `scores` table.
-router.delete('/:recordKey', authenticate, requireRole('Administrator', 'Teacher', 'Headteacher'), asyncHandler(async (req, res) => {
+router.delete('/:recordKey', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const { recordKey } = req.params;
 
   const { rows } = await db.query(

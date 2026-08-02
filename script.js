@@ -38,9 +38,6 @@ let teachersList = [
     { id: "T001", name: "Namuli Grace", username: "gnamuli", password: "teach123", subject: "MATHEMATICS" },
     { id: "T002", name: "Okello Peter", username: "pokello", password: "teach123", subject: "ENGLISH" }
 ];
-// Single admin-provisioned Headteacher login (see HeadteacherAPI in
-// api.js). Empty until the admin sets it via the Teachers tab.
-let headteacherAccount = { username: "", password: "", name: "Headteacher" };
 let currentUser = { username: "", role: "", name: "", studentId: null, teacherId: null };
 const oLevelSubjects = [
     "ENGLISH", "MATHEMATICS", "PHYSICS", "CHEMISTRY", "BIOLOGY", 
@@ -239,18 +236,6 @@ async function refreshTeachersList() {
         if (Array.isArray(remote)) teachersList = remote;
     } catch (e) { /* keep existing local list */ }
 }
-// Admin-only — pulls the current Headteacher account (if one has been
-// created) so the "Headteacher Account" form in the Teachers tab reflects
-// the real saved username/name instead of going stale after a refresh.
-async function refreshHeadteacherAccount() {
-    try {
-        const remote = await HeadteacherAPI.get();
-        if (remote && remote.username) {
-            headteacherAccount.username = remote.username;
-            headteacherAccount.name = remote.name || "Headteacher";
-        }
-    } catch (e) { /* keep existing local headteacherAccount */ }
-}
 async function refreshResourcesList() {
     try {
         const remote = await ResourcesAPI.list();
@@ -397,7 +382,6 @@ async function applySessionUser(user) {
         const greetings = {
             [ROLES.ADMIN]: `Full administrative access &mdash; classes, students, subjects, term dates, user roles, and system-wide records.`,
             [ROLES.TEACHER]: `You have view access across the system, with permission to add and update learner scores.`,
-            [ROLES.HEADTEACHER]: `You have view access across the system, with permission to manage class records, learner scores, and mark sheets.`,
             [ROLES.STUDENT]: `This view is limited to your own report card and shared learning resources.`
         };
         banner.innerHTML = `Welcome back, ${currentUser.name || currentUser.username}<span>${greetings[currentUser.role] || ''}</span>`;
@@ -433,7 +417,7 @@ function renderSidebarNav() {
         { id: 'performers', label: 'Best & Worst Performers', icon: 'fa-ranking-star' },
         { id: 'attendance', label: 'Attendance', icon: 'fa-calendar-check' },
         { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open' },
-        { id: 'teachers', label: (currentUser.role === 'Teacher' || currentUser.role === ROLES.HEADTEACHER) ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' }
+        { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
     // styles.css), so unselected items use a light slate (#e2e8f0) instead of
@@ -451,7 +435,7 @@ function renderSidebarNav() {
 // Admin & Teacher only (same audience as the Dashboard), matching the
 // existing left-aligned style and high-visibility text color exactly.
 function renderFinanceNavItem() {
-    if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.TEACHER && currentUser.role !== ROLES.HEADTEACHER) return '';
+    if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.TEACHER) return '';
     return `
         <button id="nav-finance" onclick="openUnderConstructionNotice('School Finance'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors mb-1">
             <i class="fa-solid fa-sack-dollar mr-2"></i>School Finance
@@ -510,7 +494,7 @@ function switchTab(tabName) {
         case 'performers': titleText = "Best & Worst Performers"; break;
         case 'attendance': titleText = "Attendance Registry"; break;
         case 'resources': titleText = "Educational Resources"; break;
-        case 'teachers': titleText = (currentUser.role === 'Teacher' || currentUser.role === ROLES.HEADTEACHER) ? "My Teacher Profile" : "Teacher Accounts & Credentials"; break;
+        case 'teachers': titleText = currentUser.role === 'Teacher' ? "My Teacher Profile" : "Teacher Accounts & Credentials"; break;
     }
     if (titleElem) titleElem.innerText = titleText;
     const contentElem = document.getElementById('tab-content');
@@ -3036,28 +3020,6 @@ function renderTeachersModule() {
     if (currentUser.role === 'Administrator') {
         return `
             <div class="space-y-6">
-                <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
-                    <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider mb-1"><i class="fa-solid fa-user-tie mr-2"></i>Headteacher Account</h4>
-                    <p class="text-xs font-semibold text-slate-500 mb-4">Set or update the dedicated login for the Headteacher. She gets standard Teacher-level access (class records, scores, mark sheets) shown under the "Headteacher" title in her navigation header.</p>
-                    <form onsubmit="handleSaveHeadteacherAccount(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                        <div>
-                            <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Full Name</label>
-                            <input type="text" id="ht-name" placeholder="e.g. Nakato Sarah" value="${escapeHTML(headteacherAccount.name || '')}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Username</label>
-                            <input type="text" id="ht-username" placeholder="e.g. headteacher" required value="${escapeHTML(headteacherAccount.username || '')}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
-                        </div>
-                        <div>
-                            <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">${headteacherAccount.username ? 'New Password' : 'Password'}</label>
-                            <input type="text" id="ht-password" placeholder="${headteacherAccount.username ? 'Leave blank to keep current' : 'Set a password'}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
-                        </div>
-                        <div class="flex items-end">
-                            <button type="submit" class="w-full bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>${headteacherAccount.username ? 'Update' : 'Create'} Account</button>
-                        </div>
-                        <div id="headteacher-account-msg" class="hidden sm:col-span-2 md:col-span-4 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"></div>
-                    </form>
-                </div>
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <p class="text-xs font-semibold text-slate-500">Add, remove, or reset login credentials for teacher accounts.</p>
                     <button onclick="toggleTeacherForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
@@ -3147,51 +3109,7 @@ function renderTeachersModule() {
         </div>
     `;
 }
-async function loadHeadteacherAccountForm() {
-    if (currentUser.role !== 'Administrator') return; // admin-only section
-    await refreshHeadteacherAccount();
-    const nameInput = document.getElementById('ht-name');
-    const usernameInput = document.getElementById('ht-username');
-    if (nameInput) nameInput.value = headteacherAccount.name || '';
-    if (usernameInput) usernameInput.value = headteacherAccount.username || '';
-}
-async function handleSaveHeadteacherAccount(event) {
-    event.preventDefault();
-    if (currentUser.role !== 'Administrator') return; // RBAC guard: Administrator only
-    const username = document.getElementById('ht-username').value.trim();
-    const password = document.getElementById('ht-password').value.trim();
-    const name = document.getElementById('ht-name').value.trim();
-    if (username === '') {
-        alert('Please enter a username for the Headteacher account.');
-        return;
-    }
-    if (!headteacherAccount.username && password === '') {
-        alert('Please set a password to create the Headteacher account.');
-        return;
-    }
-    try {
-        await HeadteacherAPI.save({ username, password: password || undefined, name: name || 'Headteacher' });
-    } catch (err) {
-        alert(err.message || 'Could not save the Headteacher account. Please try again.');
-        return;
-    }
-    headteacherAccount.username = username;
-    headteacherAccount.name = name || 'Headteacher';
-    if (password) headteacherAccount.password = password; // local-fallback login only; never sent back to the UI by the backend
-
-    // Re-render so the form's "Create"/"Update" labels and placeholder text
-    // reflect that an account now exists, then show the confirmation.
-    const contentElem = document.getElementById('tab-content');
-    if (contentElem) contentElem.innerHTML = renderTeachersModule();
-    loadTeacherData();
-    const msg = document.getElementById('headteacher-account-msg');
-    if (msg) {
-        msg.innerText = 'Headteacher account saved successfully.';
-        msg.classList.remove('hidden');
-    }
-}
 function loadTeacherData() {
-    loadHeadteacherAccountForm();
     const tbody = document.getElementById('teacher-table-body');
     if (!tbody) return;
     tbody.innerHTML = "";
