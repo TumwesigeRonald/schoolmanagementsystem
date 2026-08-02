@@ -427,7 +427,39 @@ function renderSidebarNav() {
         <button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors mb-1">
             <i class="fa-solid ${item.icon} mr-2"></i>${item.label}
         </button>
-    `).join('');
+    `).join('') + renderFinanceNavItem();
+}
+// "School Finance" is intentionally NOT part of the tabs/RBAC routing array
+// above — it's a placeholder entry that never actually navigates, so it's
+// kept fully separate from switchTab()'s real routing logic. Shown to
+// Admin & Teacher only (same audience as the Dashboard), matching the
+// existing left-aligned style and high-visibility text color exactly.
+function renderFinanceNavItem() {
+    if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.TEACHER) return '';
+    return `
+        <button id="nav-finance" onclick="openUnderConstructionNotice('School Finance'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors mb-1">
+            <i class="fa-solid fa-sack-dollar mr-2"></i>School Finance
+        </button>
+    `;
+}
+// Professional "coming soon" modal for placeholder sidebar sections. Reuses
+// the existing #modal-root + closeModal() pattern already used by the
+// Bulk Import and Student Profile modals — no new modal machinery.
+function openUnderConstructionNotice(sectionName) {
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                <div class="p-6 text-center">
+                    <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-person-digging"></i></div>
+                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">${escapeHTML(sectionName)}</h3>
+                    <p class="text-xs font-semibold text-slate-500 mt-2 leading-relaxed">This section is currently under construction by the Tech Engineer and will be available soon. Thank you for your patience.</p>
+                    <button onclick="closeModal()" class="mt-5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Got It</button>
+                </div>
+            </div>
+        </div>
+    `;
 }
 function switchTab(tabName) {
     // RBAC gate: never render a tab this role isn't permitted to access,
