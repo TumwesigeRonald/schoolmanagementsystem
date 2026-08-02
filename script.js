@@ -443,9 +443,12 @@ function switchTab(tabName) {
         if (tab === tabName) {
             // teal-700 (not teal-600) is used here specifically so white nav
             // text clears the 4.5:1 WCAG AA contrast ratio against the fill.
-            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider bg-teal-700 text-white shadow-sm";
+            // w-full + text-left keep this left-aligned like the unselected
+            // state below — without them, the browser's default centered
+            // button text styling was applying only to the active item.
+            navItem.className = "block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider bg-teal-700 text-white shadow-sm";
         } else {
-            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors";
+            navItem.className = "block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors";
         }
     });
     const titleElem = document.getElementById('page-title');
