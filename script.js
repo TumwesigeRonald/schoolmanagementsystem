@@ -54,7 +54,34 @@ const aLevelSubjects = [
 const subsidiarySubjects = ["GENERAL PAPER", "SUBSIDIARY MATHEMATICS", "ICT (SUBSIDIARY)"];
 let performanceChartInstance = null;
 let gradeDistributionChartInstance = null;
+let dashboardClassChartInstance = null;
 let performersLevelView = 'O-Level'; // toggle state for the Best & Worst Performers panel
+/* ---------------------------------------------------------
+   1e. ADMIN NOTICE BOARD / SCHOOL BULLETIN (Dashboard widget)
+   Client-side only, exactly like reportRemarksStorage above — a
+   pure additive productivity feature with its own localStorage
+   key, its own RBAC flag (canManageNotices), and no connection to
+   marksStorage, the scores schema, or any existing API route.
+   --------------------------------------------------------- */
+let noticesList = [
+    { id: 1, title: "Welcome Back, Term Starts Monday", message: "All staff are requested to be at school by 7:30am on the first day of term for the assembly and class allocation briefing.", author: "Head Teacher", date: new Date().toISOString().slice(0, 10) },
+    { id: 2, title: "Mid-Term Reports Deadline", message: "Class teachers should have all scores entered into the system at least 3 days before report cards are generated.", author: "Administration", date: new Date().toISOString().slice(0, 10) }
+];
+let noticeIdCounter = 3;
+try {
+    const storedNotices = localStorage.getItem('lcs_notices');
+    if (storedNotices) {
+        const parsed = JSON.parse(storedNotices);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            noticesList = parsed;
+            noticeIdCounter = Math.max(...parsed.map(n => n.id)) + 1;
+        }
+    }
+} catch (e) { /* localStorage unavailable — falls back to the seeded demo notices above */ }
+function persistNotices() {
+    try { localStorage.setItem('lcs_notices', JSON.stringify(noticesList)); }
+    catch (e) { /* best-effort only, same as reportRemarksStorage persistence */ }
+}
 /* ---------------------------------------------------------
    1c. TERM / CALENDAR SETTINGS (persisted in memory)
    Holds the currently selected term, year, and the upcoming
@@ -382,6 +409,7 @@ function renderSidebarNav() {
     if (!nav) return;
     const allowedTabs = getPermissions(currentUser.role).tabs;
     const items = [
+        { id: 'dashboard', label: 'Dashboard', icon: 'fa-gauge-high' },
         { id: 'students', label: 'Students', icon: 'fa-user-graduate' },
         { id: 'scores', label: 'Scores', icon: 'fa-pen-to-square' },
         { id: 'reports', label: currentUser.role === 'Student' ? 'My Report Card' : 'Report Cards', icon: 'fa-file-lines' },
@@ -391,8 +419,12 @@ function renderSidebarNav() {
         { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open' },
         { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' }
     ].filter(item => allowedTabs.includes(item.id));
+    // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
+    // styles.css), so unselected items use a light slate (#e2e8f0) instead of
+    // the dark slate previously used here, which was unreadable against the
+    // dark background. Hover/selected states use white for maximum contrast.
     nav.innerHTML = items.map(item => `
-        <button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors mb-1">
+        <button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors mb-1">
             <i class="fa-solid ${item.icon} mr-2"></i>${item.label}
         </button>
     `).join('');
@@ -404,19 +436,22 @@ function switchTab(tabName) {
     if (!permissions.tabs.includes(tabName)) {
         tabName = permissions.defaultTab;
     }
-    const tabs = ['students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers'];
+    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
         if (tab === tabName) {
-            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider bg-teal-600 text-white shadow-sm";
+            // teal-700 (not teal-600) is used here specifically so white nav
+            // text clears the 4.5:1 WCAG AA contrast ratio against the fill.
+            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider bg-teal-700 text-white shadow-sm";
         } else {
-            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors";
+            navItem.className = "block py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors";
         }
     });
     const titleElem = document.getElementById('page-title');
     let titleText = "";
     switch (tabName) {
+        case 'dashboard': titleText = "Dashboard"; break;
         case 'students': titleText = "Student Records Management"; break;
         case 'scores': titleText = "Academic Score Sheets"; break;
         case 'reports': titleText = "Report Cards & Transcripts"; break;
@@ -438,7 +473,15 @@ function switchTab(tabName) {
         gradeDistributionChartInstance.destroy();
         gradeDistributionChartInstance = null;
     }
+    if (dashboardClassChartInstance) {
+        dashboardClassChartInstance.destroy();
+        dashboardClassChartInstance = null;
+    }
     switch (tabName) {
+        case 'dashboard':
+            contentElem.innerHTML = renderDashboardModule();
+            initDashboardModule();
+            break;
         case 'students':
             contentElem.innerHTML = renderStudentsModule();
             loadStudentData();
@@ -498,6 +541,287 @@ function updateDashboardStats() {
     if (elClasses) elClasses.innerText = uniqueClasses;
     if (elSubjects) elSubjects.innerText = totalSubjects;
     if (elMarks) elMarks.innerText = totalMarksRecorded;
+}
+/* ---------------------------------------------------------
+   3b. COMPREHENSIVE DASHBOARD OVERVIEW MODULE
+   A new, additive "Dashboard" tab. Reuses existing, already-tested
+   calculations only (computePerformersData, computeAnalyticsData,
+   studentsList/marksStorage counts) — it introduces no new grading,
+   scoring, or storage logic beyond the client-side notice board
+   above. Does not touch any other module's rendering or state.
+   --------------------------------------------------------- */
+function computeDashboardSummary() {
+    const totalStudents = studentsList.length;
+    const boys = studentsList.filter(s => s.gender === 'Male').length;
+    const girls = studentsList.filter(s => s.gender === 'Female').length;
+    const uniqueClasses = [...new Set(studentsList.map(s => s.class))].length;
+    const totalSubjects = oLevelSubjects.length + aLevelSubjects.length;
+    const totalMarksRecorded = Object.values(marksStorage).filter(m => m && m.touched).length;
+    return { totalStudents, boys, girls, uniqueClasses, totalSubjects, totalMarksRecorded };
+}
+// Combines the O-Level and A-Level performer lists (same criteria and
+// underlying scores as the full Best & Worst Performers tab) into one
+// short, level-tagged preview capped at maxRows per side.
+function computeDashboardPerformersPreview(maxRows) {
+    const oLevel = computePerformersData('O-Level');
+    const aLevel = computePerformersData('A-Level');
+    const tag = (rows, level) => rows.map(r => ({ ...r, level }));
+    const best = [...tag(oLevel.best, 'O-Level'), ...tag(aLevel.best, 'A-Level')].slice(0, maxRows);
+    const worst = [...tag(oLevel.worst, 'O-Level'), ...tag(aLevel.worst, 'A-Level')].slice(0, maxRows);
+    return { best, worst };
+}
+function renderDashboardModule() {
+    const s = computeDashboardSummary();
+    const { best, worst } = computeDashboardPerformersPreview(5);
+    const canManageStudents = getPermissions(currentUser.role).canManageStudents;
+    const canManageNotices = getPermissions(currentUser.role).canManageNotices;
+
+    const previewRow = (r) => `
+        <tr class="hover:bg-slate-50 transition">
+            <td class="p-3 font-bold text-slate-900">${r.student.name}</td>
+            <td class="p-3"><span class="bg-teal-50 text-teal-800 font-extrabold px-2 py-0.5 rounded-lg text-[10px] border border-teal-200">${r.student.class}</span></td>
+            <td class="p-3 text-slate-500 font-semibold text-[11px]">${r.level}</td>
+            <td class="p-3 text-center font-black text-slate-900">${r.level === 'A-Level' ? r.score : r.score.toFixed(1)}</td>
+        </tr>`;
+    const bestBody = best.length > 0 ? best.map(previewRow).join('') : `<tr><td colspan="4" class="p-6 text-center text-slate-400 text-xs font-medium uppercase tracking-wider">No top performers yet.</td></tr>`;
+    const worstBody = worst.length > 0 ? worst.map(previewRow).join('') : `<tr><td colspan="4" class="p-6 text-center text-slate-400 text-xs font-medium uppercase tracking-wider">No at-risk learners yet.</td></tr>`;
+
+    return `
+        <div class="space-y-6">
+            <!-- Summary Metric Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Active Enrollment</span>
+                        <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-user-graduate"></i></div>
+                    </div>
+                    <p class="text-2xl font-black text-slate-900 mt-2">${s.totalStudents}</p>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1"><i class="fa-solid fa-mars text-blue-500 mr-1"></i>${s.boys} Boys &nbsp;&bull;&nbsp; <i class="fa-solid fa-venus text-rose-500 mr-1"></i>${s.girls} Girls</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Classes</span>
+                        <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-school"></i></div>
+                    </div>
+                    <p class="text-2xl font-black text-slate-900 mt-2">${s.uniqueClasses}</p>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1">S.1 &ndash; S.6</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Subjects</span>
+                        <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-book"></i></div>
+                    </div>
+                    <p class="text-2xl font-black text-slate-900 mt-2">${s.totalSubjects}</p>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1">O-Level &amp; A-Level combined</p>
+                </div>
+                <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Marks Recorded</span>
+                        <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-pen-to-square"></i></div>
+                    </div>
+                    <p class="text-2xl font-black text-slate-900 mt-2">${s.totalMarksRecorded}</p>
+                    <p class="text-[11px] font-bold text-slate-500 mt-1">Across all subjects &amp; classes</p>
+                </div>
+            </div>
+
+            <!-- Quick Action Toolbar -->
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h3 class="text-sm font-black text-slate-900 uppercase"><i class="fa-solid fa-bolt mr-2 text-teal-600"></i>Quick Actions</h3>
+                    <p class="text-xs font-semibold text-slate-500 mt-0.5">Common tasks, one click away.</p>
+                </div>
+                ${canManageStudents ? `
+                <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <button onclick="openBulkImportModal()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
+                        <i class="fa-solid fa-file-csv mr-2"></i>Bulk Import (CSV)
+                    </button>
+                    <button onclick="goToAddStudentForm()" class="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                        <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
+                    </button>
+                </div>` : `
+                <span class="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider bg-slate-100 px-3 py-2 rounded-lg">View Only</span>`}
+            </div>
+
+            <!-- Academic Performance Highlights -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                    <div class="p-5 border-b border-slate-200 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-base flex-shrink-0"><i class="fa-solid fa-trophy"></i></div>
+                            <div>
+                                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">Top Performers</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">O-Level 2.5&ndash;3.0 &bull; A-Level 14+ pts</p>
+                            </div>
+                        </div>
+                        <button onclick="switchTab('performers')" class="text-[10px] font-extrabold uppercase tracking-wider text-teal-700 hover:text-teal-800 whitespace-nowrap">View All <i class="fa-solid fa-arrow-right ml-1"></i></button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead><tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
+                                <th class="p-3">Name</th><th class="p-3">Class</th><th class="p-3">Level</th><th class="p-3 text-center">Score</th>
+                            </tr></thead>
+                            <tbody class="divide-y divide-slate-100 text-xs text-slate-700">${bestBody}</tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                    <div class="p-5 border-b border-slate-200 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-base flex-shrink-0"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <div>
+                                <h4 class="text-xs font-black text-slate-900 uppercase tracking-wider">At-Risk Students</h4>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">O-Level &le;1.4 &bull; A-Level &le;4 pts</p>
+                            </div>
+                        </div>
+                        <button onclick="switchTab('performers')" class="text-[10px] font-extrabold uppercase tracking-wider text-teal-700 hover:text-teal-800 whitespace-nowrap">View All <i class="fa-solid fa-arrow-right ml-1"></i></button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead><tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
+                                <th class="p-3">Name</th><th class="p-3">Class</th><th class="p-3">Level</th><th class="p-3 text-center">Score</th>
+                            </tr></thead>
+                            <tbody class="divide-y divide-slate-100 text-xs text-slate-700">${worstBody}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visual Analytics: Class-by-Class Performance Comparison -->
+            <div class="bg-white border border-slate-200 p-6 rounded-2xl shadow-xs">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-chart-column mr-2 text-teal-600"></i>Class-by-Class Performance Comparison</h4>
+                <div class="relative h-80">
+                    <canvas id="dashboardClassChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Digital Notice Board -->
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
+                <div class="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                        <h3 class="text-sm font-black text-slate-900 uppercase"><i class="fa-solid fa-bullhorn mr-2 text-teal-600"></i>Administrative Notice Board</h3>
+                        <p class="text-xs font-semibold text-slate-500 mt-0.5">Staff announcements and school bulletin.</p>
+                    </div>
+                    ${canManageNotices ? `
+                    <button onclick="toggleNoticeForm()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                        <i class="fa-solid fa-plus mr-2"></i>Post Notice
+                    </button>` : ''}
+                </div>
+                ${canManageNotices ? `
+                <div id="notice-form-container" class="hidden p-5 border-b border-slate-200 bg-slate-50">
+                    <form onsubmit="handleAddNotice(event)" class="space-y-3">
+                        <div>
+                            <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Title</label>
+                            <input type="text" id="notice-title" placeholder="e.g. Staff Meeting Reminder" required class="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Message</label>
+                            <textarea id="notice-message" rows="3" placeholder="Announcement details..." required class="w-full p-2.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700"></textarea>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" onclick="toggleNoticeForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
+                            <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Post</button>
+                        </div>
+                    </form>
+                </div>` : ''}
+                <div id="notice-board-list" class="divide-y divide-slate-100"></div>
+            </div>
+        </div>
+    `;
+}
+function renderNoticeBoardList() {
+    const container = document.getElementById('notice-board-list');
+    if (!container) return;
+    const canManageNotices = getPermissions(currentUser.role).canManageNotices;
+    if (noticesList.length === 0) {
+        container.innerHTML = `<p class="p-8 text-center text-slate-400 text-xs font-medium uppercase tracking-wider">No notices posted yet.</p>`;
+        return;
+    }
+    const sorted = [...noticesList].sort((a, b) => b.id - a.id);
+    container.innerHTML = sorted.map(n => `
+        <div class="p-5 flex justify-between items-start gap-4">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h5 class="text-xs font-black text-slate-900">${escapeHTML(n.title)}</h5>
+                    <span class="text-[10px] font-bold text-slate-400">${escapeHTML(n.date)}</span>
+                </div>
+                <p class="text-xs text-slate-600 font-medium mt-1.5 leading-relaxed">${escapeHTML(n.message)}</p>
+                <p class="text-[10px] font-extrabold text-teal-700 uppercase tracking-wider mt-2">&mdash; ${escapeHTML(n.author)}</p>
+            </div>
+            ${canManageNotices ? `<button onclick="deleteNotice(${n.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors flex-shrink-0"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
+        </div>
+    `).join('');
+}
+function toggleNoticeForm() {
+    if (!getPermissions(currentUser.role).canManageNotices) return; // RBAC guard
+    const formContainer = document.getElementById('notice-form-container');
+    if (formContainer) formContainer.classList.toggle('hidden');
+}
+function handleAddNotice(event) {
+    event.preventDefault();
+    if (!getPermissions(currentUser.role).canManageNotices) return; // RBAC guard
+    const title = document.getElementById('notice-title').value.trim();
+    const message = document.getElementById('notice-message').value.trim();
+    if (!title || !message) return;
+    noticesList.push({
+        id: noticeIdCounter++,
+        title, message,
+        author: currentUser.name || currentUser.username,
+        date: new Date().toISOString().slice(0, 10)
+    });
+    persistNotices();
+    document.getElementById('notice-title').value = '';
+    document.getElementById('notice-message').value = '';
+    toggleNoticeForm();
+    renderNoticeBoardList();
+}
+function deleteNotice(id) {
+    if (!getPermissions(currentUser.role).canManageNotices) return; // RBAC guard
+    noticesList = noticesList.filter(n => n.id !== id);
+    persistNotices();
+    renderNoticeBoardList();
+}
+// Quick-action shortcut: jumps to the Students tab and opens the same
+// "Add New Student" form used there — no duplicate form/logic is created.
+function goToAddStudentForm() {
+    switchTab('students');
+    setTimeout(() => {
+        const formContainer = document.getElementById('student-form-container');
+        if (formContainer) formContainer.classList.remove('hidden');
+    }, 0);
+}
+function initDashboardModule() {
+    renderNoticeBoardList();
+    const analytics = computeAnalyticsData();
+    const ctx = document.getElementById('dashboardClassChart');
+    if (!ctx) return;
+    if (dashboardClassChartInstance) {
+        dashboardClassChartInstance.destroy();
+    }
+    dashboardClassChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ANALYTICS_CLASS_LEVELS,
+            datasets: [{
+                label: 'Class Mean Score (%)',
+                data: ANALYTICS_CLASS_LEVELS.map(level => analytics.classAverages[level]),
+                backgroundColor: 'rgba(13, 148, 136, 0.8)',
+                borderColor: 'rgba(15, 118, 110, 1)',
+                borderWidth: 1,
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { font: { weight: 'bold', size: 11 } } }
+            },
+            scales: {
+                y: { beginAtZero: true, max: 100, ticks: { font: { weight: 'bold' } } },
+                x: { ticks: { font: { weight: 'bold' } } }
+            }
+        }
+    });
 }
 /* ---------------------------------------------------------
    4. STUDENT RECORDS MODULE (Light Theme)

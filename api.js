@@ -201,7 +201,7 @@ const ROLES = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: {
-        tabs: ["students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
         defaultTab: "students",
         canManageStudents: true,
         canManageScores: true,
@@ -210,10 +210,11 @@ const ROLE_PERMISSIONS = {
         canDeleteAnyResource: true,
         canManageTeachers: true,
         canManageTerm: true,
-        canViewAllReports: true
+        canViewAllReports: true,
+        canManageNotices: true      // post/delete school bulletin notices
     },
     [ROLES.TEACHER]: {
-        tabs: ["students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
         defaultTab: "students",
         canManageStudents: false,   // view-only: cannot add/delete learners
         canManageScores: true,      // core duty: add/update learner scores
@@ -222,7 +223,8 @@ const ROLE_PERMISSIONS = {
         canDeleteAnyResource: false,
         canManageTeachers: false,   // can only edit their own profile
         canManageTerm: false,       // calendar/term dates are admin-only
-        canViewAllReports: true
+        canViewAllReports: true,
+        canManageNotices: false     // can read the bulletin, not post to it
     },
     [ROLES.STUDENT]: {
         tabs: ["reports", "resources"],
@@ -234,7 +236,8 @@ const ROLE_PERMISSIONS = {
         canDeleteAnyResource: false,
         canManageTeachers: false,
         canManageTerm: false,
-        canViewAllReports: false    // can only ever see their own report card
+        canViewAllReports: false,   // can only ever see their own report card
+        canManageNotices: false
     }
 };
 
