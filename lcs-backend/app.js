@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/auth.routes');
 const studentsRoutes = require('./routes/students.routes');
@@ -20,6 +22,42 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json({ limit: '5mb' }));
+
+// --- Security headers ---
+// Sets sane defaults (X-Content-Type-Options, HSTS, X-Frame-Options, etc.)
+// for a JSON API. contentSecurityPolicy/crossOriginEmbedderPolicy are
+// disabled here because this process only ever serves JSON to a separate
+// frontend origin, not HTML — leaving them on adds their headers to API
+// responses with no benefit (no HTML/inline-script surface to protect on
+// this server) and occasionally confuses non-browser API clients.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+
+// --- Rate limiting ---
+// Defends against brute-force credential guessing and traffic spikes
+// (accidental or malicious) overwhelming the DB connection pool. Uses
+// express-rate-limit's default in-memory store, which is per-instance —
+// on Vercel that means each serverless instance tracks its own counters
+// rather than one global count, so this is a best-effort mitigation layer
+// rather than a hard guarantee; pairing it with account lockout or a
+// shared store (e.g. Redis) would tighten this further if it's ever
+// needed, but this already meaningfully raises the cost of both a
+// password-guessing script and a naive flood of requests.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 login attempts per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts. Please wait a few minutes and try again.' }
+});
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 300, // generous ceiling for normal multi-user use (dashboards, bulk saves), just enough to blunt a runaway client/script
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please slow down and try again shortly.' }
+});
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
 
 // --- Health check (useful for Vercel/Render uptime checks) ---
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));

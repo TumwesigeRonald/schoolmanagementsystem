@@ -613,8 +613,8 @@ function renderDashboardModule() {
 
     const previewRow = (r) => `
         <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 font-bold text-slate-900">${r.student.name}</td>
-            <td class="p-3"><span class="bg-teal-50 text-teal-800 font-extrabold px-2 py-0.5 rounded-lg text-[10px] border border-teal-200">${r.student.class}</span></td>
+            <td class="p-3 font-bold text-slate-900">${escapeHTML(r.student.name)}</td>
+            <td class="p-3"><span class="bg-teal-50 text-teal-800 font-extrabold px-2 py-0.5 rounded-lg text-[10px] border border-teal-200">${escapeHTML(r.student.class)}</span></td>
             <td class="p-3 text-slate-500 font-semibold text-[11px]">${r.level}</td>
             <td class="p-3 text-center font-black text-slate-900">${r.level === 'A-Level' ? r.score : r.score.toFixed(1)}</td>
         </tr>`;
@@ -965,9 +965,9 @@ function loadStudentData() {
     const rowsHtml = filteredStudents.map((student) => `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
-                <td class="p-4 font-bold text-slate-900">${student.name}</td>
-                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${student.class}</span></td>
-                <td class="p-4 text-slate-600 font-semibold">${student.gender}</td>
+                <td class="p-4 font-bold text-slate-900">${escapeHTML(student.name)}</td>
+                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${escapeHTML(student.class)}</span></td>
+                <td class="p-4 text-slate-600 font-semibold">${escapeHTML(student.gender)}</td>
                 <td class="p-4 text-center space-x-2 whitespace-nowrap">
                     <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
                     ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
@@ -998,8 +998,8 @@ async function openStudentProfileModal(studentId) {
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
                 <div class="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
                     <div>
-                        <h3 class="text-sm font-extrabold text-slate-900">${student.name}</h3>
-                        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${student.id} &middot; ${student.class} &middot; ${student.gender}</p>
+                        <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
+                        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
@@ -1453,14 +1453,14 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
             <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${escapeHTML(student.name)}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(avgMark)}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade)}</td>
             <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor)}</td>
             <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${displayOrDash(gradeInfo.points)}</td>
-            <td class="p-4"><input type="text" value="${marks.remarks || ''}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
+            <td class="p-4"><input type="text" value="${escapeHTML(marks.remarks || '')}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
         </tr>
     `;
 }
@@ -1476,7 +1476,7 @@ function buildOLevelRow(student, recordKey) {
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
             <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${escapeHTML(student.name)}</td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
@@ -1485,7 +1485,7 @@ function buildOLevelRow(student, recordKey) {
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal)}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade)}</td>
             <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeData.descriptor)}</td>
-            <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
+            <td class="p-4"><input type="text" maxlength="4" value="${escapeHTML(marks.remarks || '')}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
         </tr>
     `;
 }
@@ -1891,7 +1891,7 @@ function renderOwnReportModule() {
     return `
         <div class="space-y-6">
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <p class="text-xs font-semibold text-slate-500">Showing <span class="font-extrabold text-slate-700">${t.term}, ${t.year}</span> for ${student.name} (${student.id}). Only you can view this report.</p>
+                <p class="text-xs font-semibold text-slate-500">Showing <span class="font-extrabold text-slate-700">${t.term}, ${t.year}</span> for ${escapeHTML(student.name)} (${escapeHTML(student.id)}). Only you can view this report.</p>
                 <button onclick="printOwnReportCard()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF</button>
             </div>
             <div id="own-report-preview">${page}</div>
@@ -1942,10 +1942,14 @@ async function generateReportCards() {
     previewArea.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">Loading attendance history for ${selectedClass}&hellip;</div>`;
     await Promise.all(classStudents.map(s => refreshAttendanceForStudent(s.id)));
 
+    // Build the date->status lookup once for the whole class instead of
+    // letting every student's report card re-scan the entire attendanceStorage
+    // object for its own rows (see buildAttendanceIndexByStudent for why).
+    const attendanceIndex = buildAttendanceIndexByStudent();
     previewArea.innerHTML = classStudents.map(student =>
         isALevel
-            ? buildALevelReportPage(student, term, year, nextBegins, nextEnds)
-            : buildOLevelReportPage(student, term, year, nextBegins, nextEnds)
+            ? buildALevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex)
+            : buildOLevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex)
     ).join('');
 }
 /* ---------------------------------------------------------
@@ -1986,11 +1990,36 @@ function getOLevelSubjectRecords(student) {
             return { subj, marks, avScore, faScore, finalTotal, gradeData };
         });
 }
-function getAttendanceSummary(student) {
-    const suffix = `_${student.id}`;
-    const records = Object.keys(attendanceStorage)
-        .filter(key => key.endsWith(suffix))
-        .map(key => attendanceStorage[key]);
+// Groups attendanceStorage (keyed "date_studentId") by studentId in a
+// single O(total attendance rows) pass. Pass the result into
+// getAttendanceSummary() as `index` when computing summaries for many
+// students back-to-back (e.g. printing a whole class's report cards) —
+// without it, getAttendanceSummary falls back to scanning the entire
+// attendanceStorage object on every call, which is fine for one student
+// (profile modal, a student's own report) but turns into an O(students x
+// attendance rows) scan when repeated for a full class/school, which is
+// exactly the kind of thing that made "Generate Report Cards" for a large
+// class feel like it was freezing.
+function buildAttendanceIndexByStudent() {
+    const index = {};
+    for (const key in attendanceStorage) {
+        // key = "<date>_<studentId>" — studentId is everything after the
+        // first underscore since dates are always YYYY-MM-DD (no
+        // underscores of their own).
+        const studentId = key.slice(key.indexOf('_') + 1);
+        (index[studentId] || (index[studentId] = [])).push(attendanceStorage[key]);
+    }
+    return index;
+}
+function getAttendanceSummary(student, index = null) {
+    const records = index
+        ? (index[student.id] || [])
+        : (() => {
+            const suffix = `_${student.id}`;
+            return Object.keys(attendanceStorage)
+                .filter(key => key.endsWith(suffix))
+                .map(key => attendanceStorage[key]);
+        })();
     const present = records.filter(r => r === 'Present').length;
     const absent = records.filter(r => r === 'Absent').length;
     const excused = records.filter(r => r === 'Excused').length;
@@ -2042,8 +2071,8 @@ function buildSubjectBars(records, isALevel) {
         </div>`;
     }).join('')}</div>`;
 }
-function buildSummarySection(student, subjectRecords, isALevel) {
-    const attendance = getAttendanceSummary(student);
+function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex = null) {
+    const attendance = getAttendanceSummary(student, attendanceIndex);
     const remarkText = buildPerformanceRemark(subjectRecords, isALevel);
     // Subjects awaiting a valid mark are excluded from the average and from
     // "best subject" — an ungraded subject must never count as a 0 that
@@ -2082,7 +2111,7 @@ function buildSummarySection(student, subjectRecords, isALevel) {
         </div>
     `;
 }
-function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
+function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
     const subjectRecords = getALevelSubjectRecords(student);
     // A subject still awaiting a valid mark contributes no points — it must
     // never be silently counted as an 'E' (1 point) in the term's total.
@@ -2096,7 +2125,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-num">${displayOrDash(r.avgMark)}</td>
             <td class="rc-grade">${displayOrDash(r.gradeInfo.grade)}</td>
             <td class="rc-grade">${r.gradeInfo.grade === null ? '-' : `${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})`}</td>
-            <td class="rc-descriptor">${r.marks.remarks ? r.marks.remarks : displayOrDash(r.gradeInfo.descriptor, 'Not yet graded')}</td>
+            <td class="rc-descriptor">${r.marks.remarks ? escapeHTML(r.marks.remarks) : displayOrDash(r.gradeInfo.descriptor, 'Not yet graded')}</td>
         </tr>
     `).join('') : `<tr><td colspan="7" class="rc-empty">No scores recorded for this learner yet. Enter marks in the Scores tab and they will appear here automatically.</td></tr>`;
 
@@ -2114,8 +2143,8 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
             </div>
             <div class="rc-report-title">END OF TERM ACADEMIC REPORT CARD &mdash; A-LEVEL</div>
             <div class="rc-learner-row">
-                <div><span>NAME:</span>${student.name}</div>
-                <div><span>CLASS:</span><span class="rc-tag">${student.class}</span></div>
+                <div><span>NAME:</span>${escapeHTML(student.name)}</div>
+                <div><span>CLASS:</span><span class="rc-tag">${escapeHTML(student.class)}</span></div>
                 <div><span>TERM:</span><span class="rc-tag">${term}</span></div>
                 <div><span>YEAR:</span><span class="rc-tag">${year}</span></div>
                 <div><span>STUDENT ID:</span>${student.id}</div>
@@ -2147,7 +2176,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <tr><td>Points (Subsidiary)</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr>
                 </table>
             </div>
-            ${buildSummarySection(student, subjectRecords, true)}
+            ${buildSummarySection(student, subjectRecords, true, attendanceIndex)}
             <div class="rc-footer">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
@@ -2207,7 +2236,7 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     const totalScore = subjectRecords.reduce((sum, r) => sum + (r.finalTotal ?? 0), 0);
     return (totalScore / denominator) * 3;
 }
-function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
+function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
     const subjectRecords = getOLevelSubjectRecords(student);
 
     const overallAvg = calculateOLevelOverallAchievement(student.class, subjectRecords);
@@ -2224,7 +2253,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
             <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
             <td class="rc-descriptor">${getCompetencyDescriptor(r.gradeData.grade)}</td>
-            <td class="rc-num">${r.marks.remarks || ''}</td>
+            <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
         </tr>
     `).join('') : `<tr><td colspan="10" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
 
@@ -2242,8 +2271,8 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             </div>
             <div class="rc-report-title">LEARNER'S TERMLY ACHIEVEMENT REPORT</div>
             <div class="rc-learner-row">
-                <div><span>LEARNER'S NAME:</span>${student.name}</div>
-                <div><span>CLASS:</span><span class="rc-tag">${student.class}</span></div>
+                <div><span>LEARNER'S NAME:</span>${escapeHTML(student.name)}</div>
+                <div><span>CLASS:</span><span class="rc-tag">${escapeHTML(student.class)}</span></div>
                 <div><span>TERM:</span><span class="rc-tag">${term}</span></div>
                 <div><span>YEAR:</span><span class="rc-tag">${year}</span></div>
                 <div><span>STUDENT ID:</span>${student.id}</div>
@@ -2291,7 +2320,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <tr><td>E</td><td>Elementary</td></tr>
                 </table>
             </div>
-            ${buildSummarySection(student, subjectRecords, false)}
+            ${buildSummarySection(student, subjectRecords, false, attendanceIndex)}
             <div class="rc-footer">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
@@ -2672,8 +2701,8 @@ function buildPerformersTable(title, isBest, rows, isALevel, scoreLabel, criteri
     const body = rows.length > 0 ? rows.map(r => `
         <tr class="hover:bg-slate-50 transition">
             <td class="p-4 font-mono text-xs font-bold text-teal-700">${r.student.id}</td>
-            <td class="p-4 font-bold text-slate-900">${r.student.name}</td>
-            <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${r.student.class}</span></td>
+            <td class="p-4 font-bold text-slate-900">${escapeHTML(r.student.name)}</td>
+            <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${escapeHTML(r.student.class)}</span></td>
             <td class="p-4 text-center font-black text-slate-900">${isALevel ? r.score : r.score.toFixed(1)}</td>
         </tr>
     `).join('') : `<tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs font-medium uppercase tracking-wider">No learners currently meet this criteria.</td></tr>`;
@@ -2777,8 +2806,8 @@ function loadAttendanceData() {
         return `
             <tr class="hover:bg-slate-50 transition">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
-                <td class="p-4 font-bold text-slate-900">${student.name}</td>
-                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${student.class}</span></td>
+                <td class="p-4 font-bold text-slate-900">${escapeHTML(student.name)}</td>
+                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${escapeHTML(student.class)}</span></td>
                 <td class="p-4 text-center space-x-2">
                     <button type="button" onclick="setAttendanceStatus('${student.id}', 'Present')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Present' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}"><i class="fa-solid fa-check mr-1"></i>Present</button>
                     <button type="button" onclick="setAttendanceStatus('${student.id}', 'Absent')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Absent' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}"><i class="fa-solid fa-xmark mr-1"></i>Absent</button>
@@ -3059,8 +3088,8 @@ function buildResourceCard(r) {
                     <i class="fa-solid ${getFileIcon(r.fileName)}"></i>
                 </div>
                 <div class="min-w-0">
-                    <p class="font-bold text-slate-900 text-sm truncate" title="${r.title}">${r.title}</p>
-                    <p class="text-[11px] font-semibold text-slate-500 truncate">${r.subject} &middot; ${r.level}</p>
+                    <p class="font-bold text-slate-900 text-sm truncate" title="${escapeHTML(r.title)}">${escapeHTML(r.title)}</p>
+                    <p class="text-[11px] font-semibold text-slate-500 truncate">${escapeHTML(r.subject)} &middot; ${escapeHTML(r.level)}</p>
                 </div>
             </div>
             <div class="flex flex-wrap gap-1.5">
@@ -3068,10 +3097,10 @@ function buildResourceCard(r) {
                 ${fileSizeLabel ? `<span class="text-[10px] font-bold text-slate-400 self-center">${fileSizeLabel}</span>` : ''}
             </div>
             <div class="text-[10.5px] font-semibold text-slate-400 border-t border-slate-100 pt-2">
-                Uploaded by ${r.uploadedBy} &middot; ${formatReportDate(uploadedDate)}
+                Uploaded by ${escapeHTML(r.uploadedBy)} &middot; ${formatReportDate(uploadedDate)}
             </div>
             <div class="flex gap-2 pt-1">
-                <a href="${r.fileUrl}" download="${r.fileName}" target="_blank" rel="noopener" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
+                <a href="${r.fileUrl}" download="${escapeHTML(r.fileName)}" target="_blank" rel="noopener" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
                     <i class="fa-solid fa-download mr-1"></i>Download
                 </a>
                 ${canDelete ? `<button onclick="deleteResource(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
@@ -3153,11 +3182,11 @@ function renderTeachersModule() {
             <form onsubmit="saveOwnTeacherProfile(event)" class="space-y-4">
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Full Name</label>
-                    <input type="text" id="my-teach-name" value="${me.name}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    <input type="text" id="my-teach-name" value="${escapeHTML(me.name)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Username</label>
-                    <input type="text" id="my-teach-username" value="${me.username}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    <input type="text" id="my-teach-username" value="${escapeHTML(me.username)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">New Password</label>
@@ -3165,7 +3194,7 @@ function renderTeachersModule() {
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Subject</label>
-                    <input type="text" id="my-teach-subject" value="${me.subject || ''}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    <input type="text" id="my-teach-subject" value="${escapeHTML(me.subject || '')}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                 </div>
                 <div id="teacher-profile-msg" class="hidden text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"></div>
                 <div class="flex justify-end pt-2">
@@ -3186,9 +3215,9 @@ function loadTeacherData() {
     tbody.innerHTML = teachersList.map((teacher, index) => `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${teacher.id}</td>
-                <td class="p-4 font-bold text-slate-900">${teacher.name}</td>
-                <td class="p-4 text-slate-600 font-semibold">${teacher.username}</td>
-                <td class="p-4 text-slate-600 font-semibold">${teacher.subject || '-'}</td>
+                <td class="p-4 font-bold text-slate-900">${escapeHTML(teacher.name)}</td>
+                <td class="p-4 text-slate-600 font-semibold">${escapeHTML(teacher.username)}</td>
+                <td class="p-4 text-slate-600 font-semibold">${escapeHTML(teacher.subject || '-')}</td>
                 <td class="p-4 font-mono text-xs text-slate-500" title="Passwords are never shown in plain text once stored securely on the server.">${teacher.password ? teacher.password : '••••••••'}</td>
                 <td class="p-4 text-center space-x-2">
                     <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>
