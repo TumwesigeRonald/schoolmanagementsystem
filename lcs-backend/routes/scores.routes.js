@@ -42,7 +42,8 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 // Body: { subject, studentId, classLevel?, ao1?, ao2?, eot?, p1?, p2?, remarks?, touched? }
 // Upserts by record_key = `${subject}_${studentId}` (same convention script.js uses).
 router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
-  const { subject, studentId, classLevel, ao1, ao2, eot, p1, p2, remarks, touched } = req.body || {};
+  const body = req.body || {};
+  const { subject, studentId, classLevel, remarks, touched } = body;
   if (!subject || !studentId) {
     return res.status(400).json({ message: 'subject and studentId are required.' });
   }
@@ -55,22 +56,40 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
   const recordKey = `${subject}_${studentId}`;
   const resolvedClass = classLevel || student.rows[0].class;
 
+  // A mark field can legitimately be sent as `null` to mean "this mark was
+  // cleared/deleted" — that must actually be persisted as null. The old
+  // COALESCE(EXCLUDED.x, scores.x) treated an explicit null exactly like a
+  // field that was never sent at all, so a cleared mark silently reverted
+  // to whatever number was previously stored. Track presence per field
+  // (script.js always sends every relevant field for a subject's type, so
+  // "present" reliably means "the client has an opinion about this field"),
+  // and only fall back to the existing stored value when a field is truly
+  // absent from the request body.
+  const has = (name) => Object.prototype.hasOwnProperty.call(body, name);
+  const hasAo1 = has('ao1'), hasAo2 = has('ao2'), hasEot = has('eot'), hasP1 = has('p1'), hasP2 = has('p2');
+  const ao1 = has('ao1') ? body.ao1 : null;
+  const ao2 = has('ao2') ? body.ao2 : null;
+  const eot = has('eot') ? body.eot : null;
+  const p1 = has('p1') ? body.p1 : null;
+  const p2 = has('p2') ? body.p2 : null;
+
   const { rows } = await db.query(
     `INSERT INTO scores (record_key, subject, student_id, class_level, ao1, ao2, eot, p1, p2, remarks, touched, updated_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
      ON CONFLICT (record_key) DO UPDATE SET
        class_level = EXCLUDED.class_level,
-       ao1 = COALESCE(EXCLUDED.ao1, scores.ao1),
-       ao2 = COALESCE(EXCLUDED.ao2, scores.ao2),
-       eot = COALESCE(EXCLUDED.eot, scores.eot),
-       p1 = COALESCE(EXCLUDED.p1, scores.p1),
-       p2 = COALESCE(EXCLUDED.p2, scores.p2),
+       ao1 = CASE WHEN $12 THEN EXCLUDED.ao1 ELSE scores.ao1 END,
+       ao2 = CASE WHEN $13 THEN EXCLUDED.ao2 ELSE scores.ao2 END,
+       eot = CASE WHEN $14 THEN EXCLUDED.eot ELSE scores.eot END,
+       p1 = CASE WHEN $15 THEN EXCLUDED.p1 ELSE scores.p1 END,
+       p2 = CASE WHEN $16 THEN EXCLUDED.p2 ELSE scores.p2 END,
        remarks = COALESCE(EXCLUDED.remarks, scores.remarks),
        touched = EXCLUDED.touched OR scores.touched,
        updated_at = now()
      RETURNING record_key AS "recordKey", subject, student_id AS "studentId", class_level AS "classLevel",
                ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt"`,
-    [recordKey, subject, studentId, resolvedClass, ao1 ?? null, ao2 ?? null, eot ?? null, p1 ?? null, p2 ?? null, remarks ?? null, !!touched]
+    [recordKey, subject, studentId, resolvedClass, ao1, ao2, eot, p1, p2, remarks ?? null, !!touched,
+     hasAo1, hasAo2, hasEot, hasP1, hasP2]
   );
 
   res.json(rows[0]);

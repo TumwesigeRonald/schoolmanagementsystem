@@ -1034,7 +1034,7 @@ function renderStudentProfileBody(student) {
         const removeBtn = canManageScores
             ? `<button onclick="removeStudentSubject('${student.id}', '${r.subj}')" title="Remove ${r.subj} from this student" class="text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-md w-6 h-6 inline-flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[11px]"></i></button>`
             : '';
-        return `<tr class="border-b border-slate-100"><td class="p-2 font-semibold">${r.subj}</td><td class="p-2 text-center">${score}</td><td class="p-2 text-center font-extrabold" style="color:${getPerformanceColor(score, isALevel)};">${grade}</td><td class="p-2 text-center">${removeBtn}</td></tr>`;
+        return `<tr class="border-b border-slate-100"><td class="p-2 font-semibold">${r.subj}</td><td class="p-2 text-center">${displayOrDash(score)}</td><td class="p-2 text-center font-extrabold" style="color:${getPerformanceColor(score, isALevel)};">${displayOrDash(grade)}</td><td class="p-2 text-center">${removeBtn}</td></tr>`;
     }).join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">No subject scores recorded yet.</td></tr>`;
 
     body.innerHTML = `
@@ -1446,21 +1446,20 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     // A subject must only be considered "recorded" once the teacher actually types a mark
     // (see updateALevelMarks, which sets `touched: true`). Otherwise merely opening a
     // subject in the dropdown would make it falsely appear on every student's report card.
-    const marks = marksStorage[recordKey] || { p1: 0, p2: 0 };
-    const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
-    const avgMark = attemptedPapers.length > 0 ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length) : 0;
+    const marks = marksStorage[recordKey] || { p1: null, p2: null };
+    const avgMark = computeALevelAvgMark(marks);
     const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
             <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
             <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${avgMark}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeInfo.grade}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeInfo.descriptor}</td>
-            <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${gradeInfo.points}</td>
+            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(avgMark)}</td>
+            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade)}</td>
+            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor)}</td>
+            <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${displayOrDash(gradeInfo.points)}</td>
             <td class="p-4"><input type="text" value="${marks.remarks || ''}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
         </tr>
     `;
@@ -1468,10 +1467,10 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
 function buildOLevelRow(student, recordKey) {
     // Same principle as buildALevelRow: rendering a row must never write a phantom
     // zero-mark record into storage. Only an actual teacher edit (updateMarks) does that.
-    const marks = marksStorage[recordKey] || { ao1: 0, ao2: 0, eot: 0 };
+    const marks = marksStorage[recordKey] || { ao1: null, ao2: null, eot: null };
     const avScore = calculateAOAverage(marks.ao1, marks.ao2).toFixed(1);
     const faScore = ((avScore / 3.0) * 20).toFixed(1);
-    const finalTotal = Math.round(Number(faScore) + Number(marks.eot));
+    const finalTotal = computeOLevelFinalTotal(marks, faScore);
     const gradeData = computeOfficialGrade(finalTotal);
     
     return `
@@ -1483,18 +1482,54 @@ function buildOLevelRow(student, recordKey) {
             <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
             <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${finalTotal}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeData.grade}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeData.descriptor}</td>
+            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal)}</td>
+            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade)}</td>
+            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeData.descriptor)}</td>
             <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
         </tr>
     `;
 }
 const O_LEVEL_FIELD_LIMITS = { ao1: [0, 3], ao2: [0, 3], eot: [0, 80] };
+// A cleared/deleted/blank input must become a true null "no mark" state,
+// NOT a numeric 0 — a 0 here used to silently become a real (and wrong)
+// contributor to averages/grades. Only an actual invalid (non-numeric,
+// non-blank) entry falls back to null too, since there's nothing valid to
+// clamp. A real entered number is still clamped to [min, max] as before.
 function clampValue(rawValue, min, max) {
-    let val = Number(rawValue);
-    if (isNaN(val)) val = min;
+    if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+    const val = Number(rawValue);
+    if (isNaN(val)) return null;
     return Math.min(max, Math.max(min, val));
+}
+/* ---------------------------------------------------------
+   5b-i. UNGRADED-MARK HELPERS
+   A subject only has a real Final/Average score (and therefore a
+   real grade) once its required mark(s) have actually been entered.
+   These three helpers are the single source of truth for that:
+   no other code should re-derive "is this mark missing?" locally.
+   --------------------------------------------------------- */
+// Cosmetic-only: renders null/undefined as a dash instead of blank/0,
+// for any value that came out of the functions below.
+function displayOrDash(value, dash = '-') {
+    return (value === null || value === undefined) ? dash : value;
+}
+// A-Level: mirrors the pre-existing "only count papers actually
+// attempted" filter, but now yields null (no average yet) instead of
+// 0 when neither paper has been entered, so an ungraded subject is
+// never silently scored/graded as if it had a real 0.
+function computeALevelAvgMark(marks) {
+    const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
+    return attemptedPapers.length > 0
+        ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length)
+        : null;
+}
+// O-Level: the Final/100 mark requires an actual E.O.T entry. If E.O.T
+// has been cleared/deleted or was never entered, there is no valid
+// Final mark yet — return null rather than treating the missing E.O.T
+// as 0 (which used to silently produce a real, wrong Final score).
+function computeOLevelFinalTotal(marks, faScore) {
+    if (marks.eot === null || marks.eot === undefined) return null;
+    return Math.round(Number(faScore) + Number(marks.eot));
 }
 /* ---------------------------------------------------------
    5b. SCORE SAVE-STATUS TRACKING
@@ -1627,24 +1662,24 @@ function updateMarks(studId, type, value, inputEl) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: 0, ao2: 0, eot: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: null, ao2: null, eot: null };
     const [min, max] = O_LEVEL_FIELD_LIMITS[type] || [0, 100];
     const cleanValue = clampValue(value, min, max);
     marksStorage[recordKey][type] = cleanValue;
     marksStorage[recordKey].touched = true;
-    if (inputEl) inputEl.value = cleanValue;
+    if (inputEl) inputEl.value = cleanValue === null ? '' : cleanValue;
     
     const marks = marksStorage[recordKey];
     const avScore = calculateAOAverage(marks.ao1, marks.ao2).toFixed(1);
     const faScore = ((avScore / 3.0) * 20).toFixed(1);
-    const finalTotal = Math.round(Number(faScore) + marks.eot);
+    const finalTotal = computeOLevelFinalTotal(marks, faScore);
     const gradeData = computeOfficialGrade(finalTotal);
     
     document.getElementById(`av-${studId}`).innerText = avScore;
     document.getElementById(`fa-${studId}`).innerText = faScore;
-    document.getElementById(`total-${studId}`).innerText = finalTotal;
-    document.getElementById(`grade-${studId}`).innerText = gradeData.grade;
-    document.getElementById(`descriptor-${studId}`).innerText = gradeData.descriptor;
+    document.getElementById(`total-${studId}`).innerText = displayOrDash(finalTotal);
+    document.getElementById(`grade-${studId}`).innerText = displayOrDash(gradeData.grade);
+    document.getElementById(`descriptor-${studId}`).innerText = displayOrDash(gradeData.descriptor);
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
@@ -1656,22 +1691,21 @@ function updateALevelMarks(studId, type, value, inputEl) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: 0, p2: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: null, p2: null };
     const cleanValue = clampValue(value, 0, 100);
     marksStorage[recordKey][type] = cleanValue;
     marksStorage[recordKey].touched = true;
-    if (inputEl) inputEl.value = cleanValue;
+    if (inputEl) inputEl.value = cleanValue === null ? '' : cleanValue;
     
     const marks = marksStorage[recordKey];
-    const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
-    const avgMark = attemptedPapers.length > 0 ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length) : 0;
+    const avgMark = computeALevelAvgMark(marks);
     const isSubsidiary = subsidiarySubjects.includes(selectedSubject.toUpperCase());
     const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
     
-    document.getElementById(`total-${studId}`).innerText = avgMark;
-    document.getElementById(`grade-${studId}`).innerText = gradeInfo.grade;
-    document.getElementById(`descriptor-${studId}`).innerText = gradeInfo.descriptor;
-    document.getElementById(`points-${studId}`).innerText = gradeInfo.points;
+    document.getElementById(`total-${studId}`).innerText = displayOrDash(avgMark);
+    document.getElementById(`grade-${studId}`).innerText = displayOrDash(gradeInfo.grade);
+    document.getElementById(`descriptor-${studId}`).innerText = displayOrDash(gradeInfo.descriptor);
+    document.getElementById(`points-${studId}`).innerText = displayOrDash(gradeInfo.points);
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
@@ -1683,7 +1717,7 @@ function updateOLevelRemarks(studId, value) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: 0, ao2: 0, eot: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: null, ao2: null, eot: null };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
     unsavedScoreRows.add(recordKey);
@@ -1696,7 +1730,7 @@ function updateALevelRemarks(studId, value) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: 0, p2: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: null, p2: null };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
     unsavedScoreRows.add(recordKey);
@@ -1708,6 +1742,8 @@ function updateALevelRemarks(studId, value) {
    6. GRADING LOGIC
    --------------------------------------------------------- */
 function computeOfficialGrade(score) {
+    // No valid Final mark yet (E.O.T missing/cleared) — ungraded, not an 'E'.
+    if (score === null || score === undefined) return { grade: null, descriptor: null };
     if (score >= 75) return { grade: 'A', descriptor: 'EXCEPTIONAL' };
     if (score >= 65) return { grade: 'B', descriptor: 'OUTSTANDING' };
     if (score >= 55) return { grade: 'C', descriptor: 'SATISFACTORY' };
@@ -1715,6 +1751,8 @@ function computeOfficialGrade(score) {
     return { grade: 'E', descriptor: 'ELEMENTARY' };
 }
 function computeALevelGrade(score, isSubsidiary) {
+    // No paper attempted yet — ungraded, not an 'E'.
+    if (score === null || score === undefined) return { grade: null, descriptor: null, points: null };
     let grade, descriptor, points;
     if (score >= 80) { grade = "A"; descriptor = "EXCEPTIONAL"; points = isSubsidiary ? 1 : 5; }
     else if (score >= 70) { grade = "B"; descriptor = "OUTSTANDING"; points = isSubsidiary ? 1 : 4; }
@@ -1927,8 +1965,7 @@ function getALevelSubjectRecords(student) {
             const recordKey = `${subj}_${student.id}`;
             const marks = marksStorage[recordKey];
             const isSubsidiary = subsidiarySubjects.includes(subj.toUpperCase());
-            const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
-            const avgMark = attemptedPapers.length > 0 ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length) : 0;
+            const avgMark = computeALevelAvgMark(marks);
             const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
             return { subj, isSubsidiary, marks, avgMark, gradeInfo };
         });
@@ -1944,7 +1981,7 @@ function getOLevelSubjectRecords(student) {
             const marks = marksStorage[recordKey];
             const avScore = calculateAOAverage(marks.ao1, marks.ao2);
             const faScore = (avScore / 3.0) * 20;
-            const finalTotal = Math.round(faScore + Number(marks.eot));
+            const finalTotal = computeOLevelFinalTotal(marks, faScore);
             const gradeData = computeOfficialGrade(finalTotal);
             return { subj, marks, avScore, faScore, finalTotal, gradeData };
         });
@@ -1963,9 +2000,14 @@ function getAttendanceSummary(student) {
 }
 function buildPerformanceRemark(records, isALevel) {
     if (records.length === 0) return "No subject scores have been recorded for this learner yet this term.";
+    // Only subjects with an actual valid mark (avgMark/finalTotal not null)
+    // count toward the term average — a subject still awaiting its mark
+    // must never drag the average down as if it scored 0.
+    const gradedRecords = records.filter(r => (isALevel ? r.avgMark : r.finalTotal) !== null);
+    if (gradedRecords.length === 0) return "No subject scores have been recorded for this learner yet this term.";
     const avgPercent = isALevel
-        ? records.reduce((s, r) => s + r.avgMark, 0) / records.length
-        : records.reduce((s, r) => s + r.finalTotal, 0) / records.length;
+        ? gradedRecords.reduce((s, r) => s + r.avgMark, 0) / gradedRecords.length
+        : gradedRecords.reduce((s, r) => s + r.finalTotal, 0) / gradedRecords.length;
     const rounded = avgPercent.toFixed(1);
     if (avgPercent >= 75) return `An exceptional term overall, averaging ${rounded}%. The learner consistently demonstrates strong mastery across subjects &mdash; keep nurturing this excellent standard.`;
     if (avgPercent >= 65) return `An outstanding term overall, averaging ${rounded}%. With continued consistency, even higher grades are within reach.`;
@@ -1976,6 +2018,7 @@ function buildPerformanceRemark(records, isALevel) {
 // Colour bands mirror each level's own grading scale, so a bar's colour always
 // reflects how that specific score was actually graded (A=green ... E=red).
 function getPerformanceColor(score, isALevel) {
+    if (score === null || score === undefined) return '#94a3b8'; // ungraded - neutral slate
     const bands = isALevel ? [80, 70, 60, 50] : [75, 65, 55, 45];
     if (score >= bands[0]) return '#1f7a4d'; // A - green
     if (score >= bands[1]) return '#0f8a8f'; // B - teal
@@ -1987,26 +2030,32 @@ function buildSubjectBars(records, isALevel) {
     if (records.length === 0) return '<p class="rc-empty-note">No scores recorded yet.</p>';
     return `<div class="rc-bars-grid">${records.map(r => {
         const score = isALevel ? r.avgMark : r.finalTotal;
-        const width = Math.max(2, Math.min(100, score));
         const color = getPerformanceColor(score, isALevel);
+        // Ungraded subject (mark not yet entered) — show an empty track and
+        // a dash instead of drawing a fake 0-width-floor bar.
+        const width = score === null ? 0 : Math.max(2, Math.min(100, score));
         return `
         <div class="rc-bar-row">
             <span class="rc-bar-label">${r.subj}</span>
             <span class="rc-bar-track"><span class="rc-bar-fill" style="width:${width}%;background:${color};"></span></span>
-            <span class="rc-bar-score" style="color:${color};">${score}</span>
+            <span class="rc-bar-score" style="color:${color};">${displayOrDash(score)}</span>
         </div>`;
     }).join('')}</div>`;
 }
 function buildSummarySection(student, subjectRecords, isALevel) {
     const attendance = getAttendanceSummary(student);
     const remarkText = buildPerformanceRemark(subjectRecords, isALevel);
-    const avgScore = subjectRecords.length > 0
+    // Subjects awaiting a valid mark are excluded from the average and from
+    // "best subject" — an ungraded subject must never count as a 0 that
+    // drags the average down, nor be picked as the top performer.
+    const gradedRecords = subjectRecords.filter(r => (isALevel ? r.avgMark : r.finalTotal) !== null);
+    const avgScore = gradedRecords.length > 0
         ? (isALevel
-            ? subjectRecords.reduce((s, r) => s + r.avgMark, 0) / subjectRecords.length
-            : subjectRecords.reduce((s, r) => s + r.finalTotal, 0) / subjectRecords.length)
+            ? gradedRecords.reduce((s, r) => s + r.avgMark, 0) / gradedRecords.length
+            : gradedRecords.reduce((s, r) => s + r.finalTotal, 0) / gradedRecords.length)
         : null;
-    const bestSubject = subjectRecords.length > 0
-        ? subjectRecords.reduce((best, r) => {
+    const bestSubject = gradedRecords.length > 0
+        ? gradedRecords.reduce((best, r) => {
             const score = isALevel ? r.avgMark : r.finalTotal;
             const bestScore = isALevel ? best.avgMark : best.finalTotal;
             return score > bestScore ? r : best;
@@ -2035,17 +2084,19 @@ function buildSummarySection(student, subjectRecords, isALevel) {
 }
 function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
     const subjectRecords = getALevelSubjectRecords(student);
-    const totalPoints = subjectRecords.reduce((sum, r) => sum + r.gradeInfo.points, 0);
+    // A subject still awaiting a valid mark contributes no points — it must
+    // never be silently counted as an 'E' (1 point) in the term's total.
+    const totalPoints = subjectRecords.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0);
 
     const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
         <tr>
             <td class="rc-subj">${r.subj}${r.isSubsidiary ? ' <span class="rc-sub-tag">SUB</span>' : ''}</td>
-            <td class="rc-num">${r.marks.p1 || '-'}</td>
-            <td class="rc-num">${r.marks.p2 || '-'}</td>
-            <td class="rc-num">${r.avgMark}</td>
-            <td class="rc-grade">${r.gradeInfo.grade}</td>
-            <td class="rc-grade">${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})</td>
-            <td class="rc-descriptor">${r.marks.remarks ? r.marks.remarks : r.gradeInfo.descriptor}</td>
+            <td class="rc-num">${r.marks.p1 ?? '-'}</td>
+            <td class="rc-num">${r.marks.p2 ?? '-'}</td>
+            <td class="rc-num">${displayOrDash(r.avgMark)}</td>
+            <td class="rc-grade">${displayOrDash(r.gradeInfo.grade)}</td>
+            <td class="rc-grade">${r.gradeInfo.grade === null ? '-' : `${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})`}</td>
+            <td class="rc-descriptor">${r.marks.remarks ? r.marks.remarks : displayOrDash(r.gradeInfo.descriptor, 'Not yet graded')}</td>
         </tr>
     `).join('') : `<tr><td colspan="7" class="rc-empty">No scores recorded for this learner yet. Enter marks in the Scores tab and they will appear here automatically.</td></tr>`;
 
@@ -2127,7 +2178,8 @@ function getCompetencyDescriptor(grade) {
         case 'B': return "Demonstrates a high level of competency";
         case 'C': return "Demonstrates an adequate level of competency";
         case 'D': return "Demonstrates a minimum level of competency";
-        default: return "Demonstrates below the basic level of competency";
+        case 'E': return "Demonstrates below the basic level of competency";
+        default: return "Not yet graded — awaiting a valid mark";
     }
 }
 function getOverallIdentifier(avgScore) {
@@ -2150,7 +2202,9 @@ const O_LEVEL_TIER_SUBJECT_COUNTS = { 'S.1': 12, 'S.2': 12, 'S.3': 9, 'S.4': 9 }
 function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     const tierSubjectCount = O_LEVEL_TIER_SUBJECT_COUNTS[classLevel] || 12;
     const denominator = tierSubjectCount * 100; // 1200 for S.1/S.2, 900 for S.3/S.4
-    const totalScore = subjectRecords.reduce((sum, r) => sum + r.finalTotal, 0);
+    // A subject still awaiting a valid Final mark contributes nothing here —
+    // it must never be silently counted as a 0.
+    const totalScore = subjectRecords.reduce((sum, r) => sum + (r.finalTotal ?? 0), 0);
     return (totalScore / denominator) * 3;
 }
 function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
@@ -2167,8 +2221,8 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-num">${r.avScore.toFixed(1)}</td>
             <td class="rc-num">${r.faScore.toFixed(1)}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
-            <td class="rc-final">${r.finalTotal}</td>
-            <td class="rc-grade">${r.gradeData.grade}</td>
+            <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
+            <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
             <td class="rc-descriptor">${getCompetencyDescriptor(r.gradeData.grade)}</td>
             <td class="rc-num">${r.marks.remarks || ''}</td>
         </tr>
@@ -2328,6 +2382,10 @@ function computeAnalyticsData() {
             records.forEach(r => {
                 const grade = isALevel ? r.gradeInfo.grade : r.gradeData.grade;
                 const score = isALevel ? r.avgMark : r.finalTotal;
+                // A subject still awaiting a valid mark has no grade/score yet —
+                // it must be left out of every count and average below, not
+                // counted as an 'E' or a 0.
+                if (score === null || grade === null) return;
                 if (gradeCounts[grade] !== undefined) gradeCounts[grade]++;
                 if (overallGradeCounts[grade] !== undefined) overallGradeCounts[grade]++;
                 scoreSum += score;
@@ -2548,7 +2606,8 @@ function computePerformersData(levelType) {
     const results = classStudents.map(student => {
         if (isALevel) {
             const records = getALevelSubjectRecords(student);
-            const totalPoints = records.reduce((sum, r) => sum + r.gradeInfo.points, 0);
+            // Ungraded subjects (no valid mark yet) contribute no points.
+            const totalPoints = records.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0);
             return { student, score: totalPoints, hasRecords: records.length > 0 };
         }
         const records = getOLevelSubjectRecords(student);
