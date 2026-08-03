@@ -330,6 +330,19 @@ img {
         left: 0;
         bottom: 0;
         height: 100dvh;
+        /* Narrower on phones so the drawer doesn't swallow the whole
+           screen — capped at 300px even on larger phones/small tablets. */
+        width: 75%;
+        max-width: 300px;
+    }
+    /* The drawer is pinned to the raw viewport here (unlike desktop, where
+       it docks below .app-header, which already has its own safe-area
+       padding) — so its own header needs the inset to clear the iPhone
+       status bar/notch itself. Plain px first as a fallback for browsers
+       without env() support. */
+    .sidebar-brand {
+        padding-top: 20px;
+        padding-top: calc(20px + env(safe-area-inset-top));
     }
 }
 @media (min-width: 768px) {
