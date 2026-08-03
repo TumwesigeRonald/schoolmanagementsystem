@@ -956,8 +956,13 @@ function loadStudentData() {
         tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium">No student records found for ${selectedClass}.</td></tr>`;
         return;
     }
-    filteredStudents.forEach((student) => {
-        tbody.innerHTML += `
+    // Build every row as a string first and write the table once. Using
+    // `tbody.innerHTML += rowHtml` inside the loop (the old code) forces the
+    // browser to re-parse and re-render the *entire* accumulated table on
+    // every single iteration — cost grows quadratically with student count,
+    // which is exactly what made this panel lag/freeze once the school had
+    // a few hundred students. One assignment at the end is O(n).
+    const rowsHtml = filteredStudents.map((student) => `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
                 <td class="p-4 font-bold text-slate-900">${student.name}</td>
@@ -968,8 +973,8 @@ function loadStudentData() {
                     ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
                 </td>
             </tr>
-        `;
-    });
+        `).join('');
+    tbody.innerHTML = rowsHtml;
 }
 /* ---------------------------------------------------------
    4b. STUDENT PROFILE MODAL
@@ -1398,10 +1403,11 @@ function loadScoreSheetData() {
         return;
     }
     
-    classStudents.forEach(student => {
+    // Same fix as loadStudentData(): assemble all rows first, write once.
+    tbody.innerHTML = classStudents.map(student => {
         const recordKey = `${selectedSubject}_${student.id}`;
-        tbody.innerHTML += isALevel ? buildALevelRow(student, recordKey, isSubsidiary) : buildOLevelRow(student, recordKey);
-    });
+        return isALevel ? buildALevelRow(student, recordKey, isSubsidiary) : buildOLevelRow(student, recordKey);
+    }).join('');
 }
 function buildALevelHeader() {
     return `
@@ -2704,12 +2710,12 @@ function loadAttendanceData() {
         return;
     }
     
-    classStudents.forEach(student => {
+    const rowsHtml = classStudents.map(student => {
         const recordKey = `${selectedDate}_${student.id}`;
         if (!attendanceStorage[recordKey]) attendanceStorage[recordKey] = 'Present';
         const currentStatus = attendanceStorage[recordKey];
         
-        tbody.innerHTML += `
+        return `
             <tr class="hover:bg-slate-50 transition">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
                 <td class="p-4 font-bold text-slate-900">${student.name}</td>
@@ -2721,7 +2727,8 @@ function loadAttendanceData() {
                 </td>
             </tr>
         `;
-    });
+    }).join('');
+    tbody.innerHTML = rowsHtml;
 }
 // Daily register shortcut: sets every currently-listed student in the
 // selected class/date to "Present" in one click, instead of clicking
@@ -3117,8 +3124,7 @@ function loadTeacherData() {
         tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 text-xs font-medium">No teacher accounts yet.</td></tr>`;
         return;
     }
-    teachersList.forEach((teacher, index) => {
-        tbody.innerHTML += `
+    tbody.innerHTML = teachersList.map((teacher, index) => `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${teacher.id}</td>
                 <td class="p-4 font-bold text-slate-900">${teacher.name}</td>
@@ -3130,8 +3136,7 @@ function loadTeacherData() {
                     <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
                 </td>
             </tr>
-        `;
-    });
+        `).join('');
 }
 function toggleTeacherForm() {
     const formContainer = document.getElementById('teacher-form-container');
