@@ -890,8 +890,22 @@ input, select, textarea {
 thead .score-sticky-col-1,
 thead .score-sticky-col-2 {
     background-color: #f8fafc;
-    z-index: 3;
+    /* This corner cell is frozen on both axes at once (left, via the
+       score-sticky-col rule above, AND top, via the sticky top-0 utility
+       classes on the <th> in script.js), so it needs to stay above the
+       plain top-only sticky header cells (z-20) as the table scrolls
+       horizontally underneath it. Scoped entirely to the Score tab's
+       own scrollable table container below. */
+    z-index: 30;
 }
+/* ---------------------------------------------------------
+   SCORE TAB TABLE — SELF-CONTAINED STICKY HEADER
+   The wrapper around the marks-entry table (see renderScoresModule
+   in script.js) is its own bounded, scrollable box (max-h + overflow-auto),
+   so `sticky top-0` on the header cells pins only within that box as the
+   student list scrolls — it never affects the outer page, the app header,
+   or any other tab.
+   --------------------------------------------------------- */
 tbody tr:hover .score-sticky-col-1,
 tbody tr:hover .score-sticky-col-2 {
     background-color: #f8fafc;

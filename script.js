@@ -1346,7 +1346,7 @@ function renderScoresModule() {
                 </div>
                 <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
-            <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
+            <div class="overflow-auto max-h-[65vh] bg-white border border-slate-200 rounded-2xl shadow-xs">
                 <table class="w-full text-left border-collapse">
                     <thead id="score-table-head"></thead>
                     <tbody id="score-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
@@ -1412,32 +1412,32 @@ function loadScoreSheetData() {
 function buildALevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Student Name</th>
-            <th class="p-4 text-center">Paper 1 (100)</th>
-            <th class="p-4 text-center">Paper 2 (100)</th>
-            <th class="p-4 text-center">Average</th>
-            <th class="p-4 text-center">Grade</th>
-            <th class="p-4 text-center">Descriptor</th>
-            <th class="p-4 text-center">Points</th>
-            <th class="p-4">Remarks</th>
+            <th class="p-4 sticky top-0 z-30 bg-slate-50 score-sticky-col-1">Student ID</th>
+            <th class="p-4 sticky top-0 z-30 bg-slate-50 score-sticky-col-2">Student Name</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Paper 1 (100)</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Paper 2 (100)</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Average</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Grade</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Descriptor</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Points</th>
+            <th class="p-4 sticky top-0 z-20 bg-slate-50">Remarks</th>
         </tr>
     `;
 }
 function buildOLevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Full Name</th>
-            <th class="p-4 text-center">AO1 (3.0)</th>
-            <th class="p-4 text-center">AO2 (3.0)</th>
-            <th class="p-4 text-center">Av. Score</th>
-            <th class="p-4 text-center">F.A (20)</th>
-            <th class="p-4 text-center">E.O.T (80)</th>
-            <th class="p-4 text-center">Final (100)</th>
-            <th class="p-4 text-center">Grade</th>
-            <th class="p-4 text-center">Descriptor</th>
-            <th class="p-4">TR's Initial</th>
+            <th class="p-4 sticky top-0 z-30 bg-slate-50 score-sticky-col-1">Student ID</th>
+            <th class="p-4 sticky top-0 z-30 bg-slate-50 score-sticky-col-2">Full Name</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">AO1 (3.0)</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">AO2 (3.0)</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Av. Score</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">F.A (20)</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">E.O.T (80)</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Final (100)</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Grade</th>
+            <th class="p-4 text-center sticky top-0 z-20 bg-slate-50">Descriptor</th>
+            <th class="p-4 sticky top-0 z-20 bg-slate-50">TR's Initial</th>
         </tr>
     `;
 }
