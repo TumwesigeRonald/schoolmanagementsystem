@@ -890,7 +890,32 @@ input, select, textarea {
 thead .score-sticky-col-1,
 thead .score-sticky-col-2 {
     background-color: #f8fafc;
-    z-index: 3;
+    /* Must sit above the plain sticky header cells (Tailwind z-20 in
+       script.js) since this corner cell is frozen on BOTH axes (top
+       AND left) once the header row itself is pinned via sticky top-0. */
+    z-index: 31;
+}
+/* ---------------------------------------------------------
+   MARKS ENTRY TABLE — MOBILE SCROLL + STICKY HEADER SUPPORT
+   The horizontal scroll wrapper gets native-feeling momentum
+   scrolling on touch devices. min-w on the <table> itself
+   (set in script.js) stops columns from being squeezed on
+   narrow screens, forcing a comfortable horizontal scroll
+   instead. The sticky header (top-0, set in script.js) relies
+   on .main-content being the scrolling ancestor for the Y axis.
+   --------------------------------------------------------- */
+.score-table-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+}
+@media (max-width: 640px) {
+    .score-table-scroll table th,
+    .score-table-scroll table td {
+        scroll-snap-align: start;
+    }
+    .score-table-scroll {
+        scroll-snap-type: x proximity;
+    }
 }
 tbody tr:hover .score-sticky-col-1,
 tbody tr:hover .score-sticky-col-2 {

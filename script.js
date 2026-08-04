@@ -1346,8 +1346,8 @@ function renderScoresModule() {
                 </div>
                 <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
-            <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
-                <table class="w-full text-left border-collapse">
+            <div class="score-table-scroll overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <table class="w-full min-w-[860px] text-left border-collapse">
                     <thead id="score-table-head"></thead>
                     <tbody id="score-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
                 </table>
@@ -1412,32 +1412,32 @@ function loadScoreSheetData() {
 function buildALevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Student Name</th>
-            <th class="p-4 text-center">Paper 1 (100)</th>
-            <th class="p-4 text-center">Paper 2 (100)</th>
-            <th class="p-4 text-center">Average</th>
-            <th class="p-4 text-center">Grade</th>
-            <th class="p-4 text-center">Descriptor</th>
-            <th class="p-4 text-center">Points</th>
-            <th class="p-4">Remarks</th>
+            <th class="p-3 sm:p-4 whitespace-nowrap sticky top-0 z-30 bg-slate-50 score-sticky-col-1">Student ID</th>
+            <th class="p-3 sm:p-4 whitespace-nowrap sticky top-0 z-30 bg-slate-50 score-sticky-col-2">Student Name</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Paper 1 (100)</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Paper 2 (100)</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Average</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Grade</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Descriptor</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Points</th>
+            <th class="p-3 sm:p-4 whitespace-nowrap sticky top-0 z-20 bg-slate-50">Remarks</th>
         </tr>
     `;
 }
 function buildOLevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Full Name</th>
-            <th class="p-4 text-center">AO1 (3.0)</th>
-            <th class="p-4 text-center">AO2 (3.0)</th>
-            <th class="p-4 text-center">Av. Score</th>
-            <th class="p-4 text-center">F.A (20)</th>
-            <th class="p-4 text-center">E.O.T (80)</th>
-            <th class="p-4 text-center">Final (100)</th>
-            <th class="p-4 text-center">Grade</th>
-            <th class="p-4 text-center">Descriptor</th>
-            <th class="p-4">TR's Initial</th>
+            <th class="p-3 sm:p-4 whitespace-nowrap sticky top-0 z-30 bg-slate-50 score-sticky-col-1">Student ID</th>
+            <th class="p-3 sm:p-4 whitespace-nowrap sticky top-0 z-30 bg-slate-50 score-sticky-col-2">Full Name</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">AO1 (3.0)</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">AO2 (3.0)</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Av. Score</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">F.A (20)</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">E.O.T (80)</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Final (100)</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Grade</th>
+            <th class="p-3 sm:p-4 text-center whitespace-nowrap sticky top-0 z-20 bg-slate-50">Descriptor</th>
+            <th class="p-3 sm:p-4 whitespace-nowrap sticky top-0 z-20 bg-slate-50">TR's Initial</th>
         </tr>
     `;
 }
@@ -1452,15 +1452,15 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${escapeHTML(student.name)}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(avgMark)}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade)}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor)}</td>
-            <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${displayOrDash(gradeInfo.points)}</td>
-            <td class="p-4"><input type="text" value="${escapeHTML(marks.remarks || '')}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
+            <td class="p-3 sm:p-4 font-mono text-xs font-bold text-teal-700 whitespace-nowrap score-sticky-col-1">${student.id}</td>
+            <td class="p-3 sm:p-4 font-bold text-slate-900 whitespace-nowrap score-sticky-col-2">${escapeHTML(student.name)}</td>
+            <td class="p-3 sm:p-4 text-center"><input type="number" inputmode="numeric" min="0" max="100" value="${marks.p1 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 sm:w-16 py-2.5 px-1.5 sm:py-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-sm sm:text-xs font-bold text-slate-800"></td>
+            <td class="p-3 sm:p-4 text-center"><input type="number" inputmode="numeric" min="0" max="100" value="${marks.p2 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 sm:w-16 py-2.5 px-1.5 sm:py-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-sm sm:text-xs font-bold text-slate-800"></td>
+            <td id="total-${student.id}" class="p-3 sm:p-4 text-center font-extrabold text-slate-800">${displayOrDash(avgMark)}</td>
+            <td id="grade-${student.id}" class="p-3 sm:p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade)}</td>
+            <td id="descriptor-${student.id}" class="p-3 sm:p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor)}</td>
+            <td id="points-${student.id}" class="p-3 sm:p-4 text-center text-xs font-extrabold text-slate-500">${displayOrDash(gradeInfo.points)}</td>
+            <td class="p-3 sm:p-4"><input type="text" value="${escapeHTML(marks.remarks || '')}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 py-2.5 px-1.5 sm:py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm sm:text-xs font-semibold text-slate-700"></td>
         </tr>
     `;
 }
@@ -1475,17 +1475,17 @@ function buildOLevelRow(student, recordKey) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${escapeHTML(student.name)}</td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
-            <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal)}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade)}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeData.descriptor)}</td>
-            <td class="p-4"><input type="text" maxlength="4" value="${escapeHTML(marks.remarks || '')}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
+            <td class="p-3 sm:p-4 font-mono text-xs font-bold text-teal-700 whitespace-nowrap score-sticky-col-1">${student.id}</td>
+            <td class="p-3 sm:p-4 font-bold text-slate-900 whitespace-nowrap score-sticky-col-2">${escapeHTML(student.name)}</td>
+            <td class="p-3 sm:p-4 text-center"><input type="number" inputmode="decimal" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 py-2.5 px-1.5 sm:py-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-sm sm:text-xs font-bold text-slate-800"></td>
+            <td class="p-3 sm:p-4 text-center"><input type="number" inputmode="decimal" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 py-2.5 px-1.5 sm:py-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-sm sm:text-xs font-bold text-slate-800"></td>
+            <td id="av-${student.id}" class="p-3 sm:p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
+            <td id="fa-${student.id}" class="p-3 sm:p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
+            <td class="p-3 sm:p-4 text-center"><input type="number" inputmode="numeric" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 py-2.5 px-1.5 sm:py-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-sm sm:text-xs font-bold text-slate-800"></td>
+            <td id="total-${student.id}" class="p-3 sm:p-4 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal)}</td>
+            <td id="grade-${student.id}" class="p-3 sm:p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade)}</td>
+            <td id="descriptor-${student.id}" class="p-3 sm:p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeData.descriptor)}</td>
+            <td class="p-3 sm:p-4"><input type="text" maxlength="4" value="${escapeHTML(marks.remarks || '')}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 py-2.5 px-1.5 sm:py-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-sm sm:text-xs font-bold uppercase text-slate-800"></td>
         </tr>
     `;
 }
