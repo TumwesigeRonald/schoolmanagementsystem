@@ -1419,7 +1419,7 @@ function loadScoreSheetData() {
     updateDashboardStats();
     
     if (classStudents.length === 0) {
-        const colSpan = isALevel ? 9 : 11;
+        const colSpan = isALevel ? 8 : 10;
         tbody.innerHTML = `<tr><td colspan="${colSpan}" class="p-8 text-center text-slate-400 text-xs font-medium">No students registered in ${selectedClass} yet. Add them in the Students tab first.</td></tr>`;
         return;
     }
@@ -1433,8 +1433,7 @@ function loadScoreSheetData() {
 function buildALevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Student Name</th>
+            <th class="p-4 score-sticky-name-col">Student Name</th>
             <th class="p-4 text-center">Paper 1 (100)</th>
             <th class="p-4 text-center">Paper 2 (100)</th>
             <th class="p-4 text-center">Average</th>
@@ -1448,8 +1447,7 @@ function buildALevelHeader() {
 function buildOLevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Full Name</th>
+            <th class="p-4 score-sticky-name-col">Full Name</th>
             <th class="p-4 text-center">AO1 (3.0)</th>
             <th class="p-4 text-center">AO2 (3.0)</th>
             <th class="p-4 text-center">Av. Score</th>
@@ -1473,14 +1471,13 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${avgMark}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeInfo.grade}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeInfo.descriptor}</td>
-            <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${gradeInfo.points}</td>
+            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(avgMark, '')}</td>
+            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade, '')}</td>
+            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor, '')}</td>
+            <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${displayOrDash(gradeInfo.points, '')}</td>
             <td class="p-4"><input type="text" value="${marks.remarks || ''}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
         </tr>
     `;
@@ -1496,16 +1493,15 @@ function buildOLevelRow(student, recordKey) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}</td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
             <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${finalTotal}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeData.grade}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeData.descriptor}</td>
+            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal, '')}</td>
+            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade, '')}</td>
+            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeData.descriptor, '')}</td>
             <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
         </tr>
     `;
@@ -1709,9 +1705,9 @@ function updateMarks(studId, type, value, inputEl) {
     const descriptorEl = document.getElementById(`descriptor-${studId}`);
     if (avEl) avEl.innerText = avScore;
     if (faEl) faEl.innerText = faScore;
-    if (totalEl) totalEl.innerText = displayOrDash(finalTotal);
-    if (gradeEl) gradeEl.innerText = displayOrDash(gradeData.grade);
-    if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeData.descriptor);
+    if (totalEl) totalEl.innerText = displayOrDash(finalTotal, '');
+    if (gradeEl) gradeEl.innerText = displayOrDash(gradeData.grade, '');
+    if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeData.descriptor, '');
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
@@ -1740,10 +1736,10 @@ function updateALevelMarks(studId, type, value, inputEl) {
     const gradeEl = document.getElementById(`grade-${studId}`);
     const descriptorEl = document.getElementById(`descriptor-${studId}`);
     const pointsEl = document.getElementById(`points-${studId}`);
-    if (totalEl) totalEl.innerText = displayOrDash(avgMark);
-    if (gradeEl) gradeEl.innerText = displayOrDash(gradeInfo.grade);
-    if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeInfo.descriptor);
-    if (pointsEl) pointsEl.innerText = displayOrDash(gradeInfo.points);
+    if (totalEl) totalEl.innerText = displayOrDash(avgMark, '');
+    if (gradeEl) gradeEl.innerText = displayOrDash(gradeInfo.grade, '');
+    if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeInfo.descriptor, '');
+    if (pointsEl) pointsEl.innerText = displayOrDash(gradeInfo.points, '');
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))

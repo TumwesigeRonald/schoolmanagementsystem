@@ -859,39 +859,27 @@ input, select, textarea {
 }
 
 /* ---------------------------------------------------------
-   MARKS ENTRY TABLE — FROZEN STUDENT ID / NAME COLUMNS
-   Keeps the "Student ID" and "Full Name" columns pinned to the
-   left (Excel-style freeze panes) while horizontally scrolling
-   across to the AO/EOT/Final columns on mobile or narrow screens.
-   A solid background on each sticky cell is required so the
-   scrolling columns don't show through underneath; the hover and
-   error-row rules below keep that background in sync with the
-   row's own state instead of looking visually "stuck".
+   MARKS ENTRY TABLE — FROZEN FULL NAME COLUMN
+   The "Student ID" column has been removed from this table entirely
+   (see buildOLevelHeader/buildALevelRow etc. in script.js) to free up
+   room for mark inputs. "Full Name" is now the sole frozen column,
+   pinned to the left (Excel-style freeze pane) while horizontally
+   scrolling across to the AO/EOT/Final columns. No max-width/ellipsis
+   is applied here — the column has only a min-width and is left to
+   grow with its content so long names (e.g. "SEMWOGERERE LORIAN")
+   are never cut off. A solid background on the sticky cell is
+   required so the scrolling columns don't show through underneath;
+   the hover and error-row rules below keep that background in sync
+   with the row's own state instead of looking visually "stuck".
    --------------------------------------------------------- */
-.score-sticky-col-1,
-.score-sticky-col-2 {
+.score-sticky-name-col {
     position: sticky;
+    left: 0;
     z-index: 2;
     background-color: #fff;
-}
-.score-sticky-col-1 {
-    left: 0;
-    width: 84px;
-    min-width: 84px;
-    max-width: 84px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    min-width: 180px;
     white-space: nowrap;
-}
-.score-sticky-col-2 {
-    left: 84px;
-    width: 128px;
-    min-width: 128px;
-    max-width: 128px;
     box-shadow: 4px 0 6px -4px rgba(15, 42, 61, 0.2);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 /* ---------------------------------------------------------
@@ -922,17 +910,8 @@ input, select, textarea {
    two assessment columns (e.g. AO1 + AO2) are visible side-by-side
    in the remaining viewport without horizontal scrolling. */
 @media (max-width: 640px) {
-    .score-sticky-col-1 {
-        width: 58px;
-        min-width: 58px;
-        max-width: 58px;
-        font-size: 11px;
-    }
-    .score-sticky-col-2 {
-        left: 58px;
-        width: 84px;
-        min-width: 84px;
-        max-width: 84px;
+    .score-sticky-name-col {
+        min-width: 140px;
         font-size: 11px;
     }
     #score-table-head th,
@@ -952,31 +931,34 @@ input, select, textarea {
         font-size: 11px;
     }
 }
-thead .score-sticky-col-1,
-thead .score-sticky-col-2 {
-    background-color: #f8fafc;
-    /* This corner cell is frozen on both axes at once (left, via the
-       score-sticky-col rule above, AND top, via the sticky top-0 utility
-       classes on the <th> in script.js), so it needs to stay above the
-       plain top-only sticky header cells (z-20) as the table scrolls
-       horizontally underneath it. Scoped entirely to the Score tab's
-       own scrollable table container below. */
-    z-index: 30;
-}
 /* ---------------------------------------------------------
    SCORE TAB TABLE — SELF-CONTAINED STICKY HEADER
    The wrapper around the marks-entry table (see renderScoresModule
-   in script.js) is its own bounded, scrollable box (max-h + overflow-auto),
-   so `sticky top-0` on the header cells pins only within that box as the
-   student list scrolls — it never affects the outer page, the app header,
-   or any other tab.
+   in script.js) is its own bounded, scrollable box (max-h + overflow-auto).
+   Every header cell in #score-table-head gets `position: sticky; top: 0`
+   here, so all headers (including the frozen "Full Name" header) stay
+   visible when scrolling the student list down — scoped entirely to the
+   Score tab's own scrollable table container, it never affects the outer
+   page, the app header, or any other tab.
    --------------------------------------------------------- */
-tbody tr:hover .score-sticky-col-1,
-tbody tr:hover .score-sticky-col-2 {
+#score-table-head th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     background-color: #f8fafc;
 }
-tr.score-save-error .score-sticky-col-1,
-tr.score-save-error .score-sticky-col-2 {
+#score-table-head th.score-sticky-name-col {
+    /* This corner cell is frozen on both axes at once (left, via the
+       score-sticky-name-col rule above, AND top, via the rule directly
+       above), so it needs to stay above the plain top-only sticky
+       header cells (z-index: 10) as the table scrolls horizontally
+       underneath it. */
+    z-index: 30;
+}
+tbody tr:hover .score-sticky-name-col {
+    background-color: #f8fafc;
+}
+tr.score-save-error .score-sticky-name-col {
     background-color: #fef2f2 !important;
 }
 
