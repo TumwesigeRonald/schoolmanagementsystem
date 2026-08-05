@@ -876,22 +876,101 @@ input, select, textarea {
 }
 .score-sticky-col-1 {
     left: 0;
-    width: 108px;
-    min-width: 108px;
-    max-width: 108px;
+    width: 84px;
+    min-width: 84px;
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .score-sticky-col-2 {
-    left: 108px;
-    width: 168px;
-    min-width: 168px;
-    max-width: 168px;
+    left: 84px;
+    width: 128px;
+    min-width: 128px;
+    max-width: 128px;
     box-shadow: 4px 0 6px -4px rgba(15, 42, 61, 0.2);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------------------------------------------------------
+   MARKS ENTRY TABLE — COMPACT CELLS + INPUT SIZING
+   #score-table-head / #score-table-body are the two containers
+   rendered in renderScoresModule (script.js); scoping padding
+   overrides to their th/td keeps this from touching any other
+   table in the app. score-mark-input is applied only to the
+   actual AO1/AO2/EOT/Paper 1/Paper 2 entry boxes (see
+   buildOLevelRow/buildALevelRow), never the wider Remarks /
+   TR's Initial text inputs.
+   --------------------------------------------------------- */
+#score-table-head th,
+#score-table-body td {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 8px;
+    padding-right: 8px;
+    line-height: 1.25;
+}
+.score-mark-input {
+    width: 48px;
+    padding: 5px 4px;
+}
+
+/* Below 640px: shrink the frozen ID/Name columns further, tighten
+   cell padding again, and shrink the mark-entry boxes so at least
+   two assessment columns (e.g. AO1 + AO2) are visible side-by-side
+   in the remaining viewport without horizontal scrolling. */
+@media (max-width: 640px) {
+    .score-sticky-col-1 {
+        width: 58px;
+        min-width: 58px;
+        max-width: 58px;
+        font-size: 11px;
+    }
+    .score-sticky-col-2 {
+        left: 58px;
+        width: 84px;
+        min-width: 84px;
+        max-width: 84px;
+        font-size: 11px;
+    }
+    #score-table-head th,
+    #score-table-body td {
+        padding-top: 6px;
+        padding-bottom: 6px;
+        padding-left: 5px;
+        padding-right: 5px;
+        font-size: 11px;
+    }
+    #score-table-head th {
+        font-size: 9px;
+    }
+    .score-mark-input {
+        width: 38px;
+        padding: 4px 2px;
+        font-size: 11px;
+    }
 }
 thead .score-sticky-col-1,
 thead .score-sticky-col-2 {
     background-color: #f8fafc;
-    z-index: 3;
+    /* This corner cell is frozen on both axes at once (left, via the
+       score-sticky-col rule above, AND top, via the sticky top-0 utility
+       classes on the <th> in script.js), so it needs to stay above the
+       plain top-only sticky header cells (z-20) as the table scrolls
+       horizontally underneath it. Scoped entirely to the Score tab's
+       own scrollable table container below. */
+    z-index: 30;
 }
+/* ---------------------------------------------------------
+   SCORE TAB TABLE — SELF-CONTAINED STICKY HEADER
+   The wrapper around the marks-entry table (see renderScoresModule
+   in script.js) is its own bounded, scrollable box (max-h + overflow-auto),
+   so `sticky top-0` on the header cells pins only within that box as the
+   student list scrolls — it never affects the outer page, the app header,
+   or any other tab.
+   --------------------------------------------------------- */
 tbody tr:hover .score-sticky-col-1,
 tbody tr:hover .score-sticky-col-2 {
     background-color: #f8fafc;

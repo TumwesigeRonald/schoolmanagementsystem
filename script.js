@@ -613,8 +613,8 @@ function renderDashboardModule() {
 
     const previewRow = (r) => `
         <tr class="hover:bg-slate-50 transition">
-            <td class="p-3 font-bold text-slate-900">${r.student.name}</td>
-            <td class="p-3"><span class="bg-teal-50 text-teal-800 font-extrabold px-2 py-0.5 rounded-lg text-[10px] border border-teal-200">${r.student.class}</span></td>
+            <td class="p-3 font-bold text-slate-900">${escapeHTML(r.student.name)}</td>
+            <td class="p-3"><span class="bg-teal-50 text-teal-800 font-extrabold px-2 py-0.5 rounded-lg text-[10px] border border-teal-200">${escapeHTML(r.student.class)}</span></td>
             <td class="p-3 text-slate-500 font-semibold text-[11px]">${r.level}</td>
             <td class="p-3 text-center font-black text-slate-900">${r.level === 'A-Level' ? r.score : r.score.toFixed(1)}</td>
         </tr>`;
@@ -965,9 +965,9 @@ function loadStudentData() {
     const rowsHtml = filteredStudents.map((student) => `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
-                <td class="p-4 font-bold text-slate-900">${student.name}</td>
-                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${student.class}</span></td>
-                <td class="p-4 text-slate-600 font-semibold">${student.gender}</td>
+                <td class="p-4 font-bold text-slate-900">${escapeHTML(student.name)}</td>
+                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${escapeHTML(student.class)}</span></td>
+                <td class="p-4 text-slate-600 font-semibold">${escapeHTML(student.gender)}</td>
                 <td class="p-4 text-center space-x-2 whitespace-nowrap">
                     <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
                     ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
@@ -998,8 +998,8 @@ async function openStudentProfileModal(studentId) {
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
                 <div class="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
                     <div>
-                        <h3 class="text-sm font-extrabold text-slate-900">${student.name}</h3>
-                        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${student.id} &middot; ${student.class} &middot; ${student.gender}</p>
+                        <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
+                        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
@@ -1034,7 +1034,7 @@ function renderStudentProfileBody(student) {
         const removeBtn = canManageScores
             ? `<button onclick="removeStudentSubject('${student.id}', '${r.subj}')" title="Remove ${r.subj} from this student" class="text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-md w-6 h-6 inline-flex items-center justify-center transition-colors"><i class="fa-solid fa-trash text-[11px]"></i></button>`
             : '';
-        return `<tr class="border-b border-slate-100"><td class="p-2 font-semibold">${r.subj}</td><td class="p-2 text-center">${score}</td><td class="p-2 text-center font-extrabold" style="color:${getPerformanceColor(score, isALevel)};">${grade}</td><td class="p-2 text-center">${removeBtn}</td></tr>`;
+        return `<tr class="border-b border-slate-100"><td class="p-2 font-semibold">${r.subj}</td><td class="p-2 text-center">${displayOrDash(score)}</td><td class="p-2 text-center font-extrabold" style="color:${getPerformanceColor(score, isALevel)};">${displayOrDash(grade)}</td><td class="p-2 text-center">${removeBtn}</td></tr>`;
     }).join('') : `<tr><td colspan="4" class="p-4 text-center text-slate-400">No subject scores recorded yet.</td></tr>`;
 
     body.innerHTML = `
@@ -1346,7 +1346,7 @@ function renderScoresModule() {
                 </div>
                 <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
-            <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
+            <div class="overflow-auto max-h-[65vh] bg-white border border-slate-200 rounded-2xl shadow-xs">
                 <table class="w-full text-left border-collapse">
                     <thead id="score-table-head"></thead>
                     <tbody id="score-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
@@ -1412,32 +1412,32 @@ function loadScoreSheetData() {
 function buildALevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Student Name</th>
-            <th class="p-4 text-center">Paper 1 (100)</th>
-            <th class="p-4 text-center">Paper 2 (100)</th>
-            <th class="p-4 text-center">Average</th>
-            <th class="p-4 text-center">Grade</th>
-            <th class="p-4 text-center">Descriptor</th>
-            <th class="p-4 text-center">Points</th>
-            <th class="p-4">Remarks</th>
+            <th class="p-2 sm:p-3 sticky top-0 z-30 bg-slate-50 score-sticky-col-1">Student ID</th>
+            <th class="p-2 sm:p-3 sticky top-0 z-30 bg-slate-50 score-sticky-col-2">Student Name</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Paper 1 (100)</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Paper 2 (100)</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Average</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Grade</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Descriptor</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Points</th>
+            <th class="p-2 sm:p-3 sticky top-0 z-20 bg-slate-50">Remarks</th>
         </tr>
     `;
 }
 function buildOLevelHeader() {
     return `
         <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
-            <th class="p-4 score-sticky-col-1">Student ID</th>
-            <th class="p-4 score-sticky-col-2">Full Name</th>
-            <th class="p-4 text-center">AO1 (3.0)</th>
-            <th class="p-4 text-center">AO2 (3.0)</th>
-            <th class="p-4 text-center">Av. Score</th>
-            <th class="p-4 text-center">F.A (20)</th>
-            <th class="p-4 text-center">E.O.T (80)</th>
-            <th class="p-4 text-center">Final (100)</th>
-            <th class="p-4 text-center">Grade</th>
-            <th class="p-4 text-center">Descriptor</th>
-            <th class="p-4">TR's Initial</th>
+            <th class="p-2 sm:p-3 sticky top-0 z-30 bg-slate-50 score-sticky-col-1">Student ID</th>
+            <th class="p-2 sm:p-3 sticky top-0 z-30 bg-slate-50 score-sticky-col-2">Full Name</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">AO1 (3.0)</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">AO2 (3.0)</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Av. Score</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">F.A (20)</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">E.O.T (80)</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Final (100)</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Grade</th>
+            <th class="p-2 sm:p-3 text-center sticky top-0 z-20 bg-slate-50">Descriptor</th>
+            <th class="p-2 sm:p-3 sticky top-0 z-20 bg-slate-50">TR's Initial</th>
         </tr>
     `;
 }
@@ -1446,55 +1446,90 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     // A subject must only be considered "recorded" once the teacher actually types a mark
     // (see updateALevelMarks, which sets `touched: true`). Otherwise merely opening a
     // subject in the dropdown would make it falsely appear on every student's report card.
-    const marks = marksStorage[recordKey] || { p1: 0, p2: 0 };
-    const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
-    const avgMark = attemptedPapers.length > 0 ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length) : 0;
+    const marks = marksStorage[recordKey] || { p1: null, p2: null };
+    const avgMark = computeALevelAvgMark(marks);
     const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${avgMark}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeInfo.grade}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeInfo.descriptor}</td>
-            <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${gradeInfo.points}</td>
-            <td class="p-4"><input type="text" value="${marks.remarks || ''}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
+            <td class="p-2 sm:p-3 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
+            <td class="p-2 sm:p-3 font-bold text-slate-900 score-sticky-col-2">${escapeHTML(student.name)}</td>
+            <td class="p-2 sm:p-3 text-center"><input type="number" min="0" max="100" value="${marks.p1 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="score-mark-input w-12 p-1 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-2 sm:p-3 text-center"><input type="number" min="0" max="100" value="${marks.p2 ?? ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="score-mark-input w-12 p-1 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td id="total-${student.id}" class="p-2 sm:p-3 text-center font-extrabold text-slate-800">${displayOrDash(avgMark)}</td>
+            <td id="grade-${student.id}" class="p-2 sm:p-3 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade)}</td>
+            <td id="descriptor-${student.id}" class="p-2 sm:p-3 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor)}</td>
+            <td id="points-${student.id}" class="p-2 sm:p-3 text-center text-xs font-extrabold text-slate-500">${displayOrDash(gradeInfo.points)}</td>
+            <td class="p-2 sm:p-3"><input type="text" value="${escapeHTML(marks.remarks || '')}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
         </tr>
     `;
 }
 function buildOLevelRow(student, recordKey) {
     // Same principle as buildALevelRow: rendering a row must never write a phantom
     // zero-mark record into storage. Only an actual teacher edit (updateMarks) does that.
-    const marks = marksStorage[recordKey] || { ao1: 0, ao2: 0, eot: 0 };
+    const marks = marksStorage[recordKey] || { ao1: null, ao2: null, eot: null };
     const avScore = calculateAOAverage(marks.ao1, marks.ao2).toFixed(1);
     const faScore = ((avScore / 3.0) * 20).toFixed(1);
-    const finalTotal = Math.round(Number(faScore) + Number(marks.eot));
+    const finalTotal = computeOLevelFinalTotal(marks, faScore);
     const gradeData = computeOfficialGrade(finalTotal);
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
-            <td class="p-4 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
-            <td class="p-4 font-bold text-slate-900 score-sticky-col-2">${student.name}</td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
-            <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${finalTotal}</td>
-            <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${gradeData.grade}</td>
-            <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${gradeData.descriptor}</td>
-            <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
+            <td class="p-2 sm:p-3 font-mono text-xs font-bold text-teal-700 score-sticky-col-1">${student.id}</td>
+            <td class="p-2 sm:p-3 font-bold text-slate-900 score-sticky-col-2">${escapeHTML(student.name)}</td>
+            <td class="p-2 sm:p-3 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="score-mark-input w-12 p-1 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-2 sm:p-3 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="score-mark-input w-12 p-1 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td id="av-${student.id}" class="p-2 sm:p-3 text-center text-xs font-bold text-slate-500">${avScore}</td>
+            <td id="fa-${student.id}" class="p-2 sm:p-3 text-center text-xs font-bold text-slate-500">${faScore}</td>
+            <td class="p-2 sm:p-3 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="score-mark-input w-12 p-1 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td id="total-${student.id}" class="p-2 sm:p-3 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal)}</td>
+            <td id="grade-${student.id}" class="p-2 sm:p-3 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade)}</td>
+            <td id="descriptor-${student.id}" class="p-2 sm:p-3 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeData.descriptor)}</td>
+            <td class="p-2 sm:p-3"><input type="text" maxlength="4" value="${escapeHTML(marks.remarks || '')}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
         </tr>
     `;
 }
 const O_LEVEL_FIELD_LIMITS = { ao1: [0, 3], ao2: [0, 3], eot: [0, 80] };
+// A cleared/deleted/blank input must become a true null "no mark" state,
+// NOT a numeric 0 — a 0 here used to silently become a real (and wrong)
+// contributor to averages/grades. Only an actual invalid (non-numeric,
+// non-blank) entry falls back to null too, since there's nothing valid to
+// clamp. A real entered number is still clamped to [min, max] as before.
 function clampValue(rawValue, min, max) {
-    let val = Number(rawValue);
-    if (isNaN(val)) val = min;
+    if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+    const val = Number(rawValue);
+    if (isNaN(val)) return null;
     return Math.min(max, Math.max(min, val));
+}
+/* ---------------------------------------------------------
+   5b-i. UNGRADED-MARK HELPERS
+   A subject only has a real Final/Average score (and therefore a
+   real grade) once its required mark(s) have actually been entered.
+   These three helpers are the single source of truth for that:
+   no other code should re-derive "is this mark missing?" locally.
+   --------------------------------------------------------- */
+// Cosmetic-only: renders null/undefined as a dash instead of blank/0,
+// for any value that came out of the functions below.
+function displayOrDash(value, dash = '-') {
+    return (value === null || value === undefined) ? dash : value;
+}
+// A-Level: mirrors the pre-existing "only count papers actually
+// attempted" filter, but now yields null (no average yet) instead of
+// 0 when neither paper has been entered, so an ungraded subject is
+// never silently scored/graded as if it had a real 0.
+function computeALevelAvgMark(marks) {
+    const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
+    return attemptedPapers.length > 0
+        ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length)
+        : null;
+}
+// O-Level: the Final/100 mark requires an actual E.O.T entry. If E.O.T
+// has been cleared/deleted or was never entered, there is no valid
+// Final mark yet — return null rather than treating the missing E.O.T
+// as 0 (which used to silently produce a real, wrong Final score).
+function computeOLevelFinalTotal(marks, faScore) {
+    if (marks.eot === null || marks.eot === undefined) return null;
+    return Math.round(Number(faScore) + Number(marks.eot));
 }
 /* ---------------------------------------------------------
    5b. SCORE SAVE-STATUS TRACKING
@@ -1627,24 +1662,24 @@ function updateMarks(studId, type, value, inputEl) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: 0, ao2: 0, eot: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: null, ao2: null, eot: null };
     const [min, max] = O_LEVEL_FIELD_LIMITS[type] || [0, 100];
     const cleanValue = clampValue(value, min, max);
     marksStorage[recordKey][type] = cleanValue;
     marksStorage[recordKey].touched = true;
-    if (inputEl) inputEl.value = cleanValue;
+    if (inputEl) inputEl.value = cleanValue === null ? '' : cleanValue;
     
     const marks = marksStorage[recordKey];
     const avScore = calculateAOAverage(marks.ao1, marks.ao2).toFixed(1);
     const faScore = ((avScore / 3.0) * 20).toFixed(1);
-    const finalTotal = Math.round(Number(faScore) + marks.eot);
+    const finalTotal = computeOLevelFinalTotal(marks, faScore);
     const gradeData = computeOfficialGrade(finalTotal);
     
     document.getElementById(`av-${studId}`).innerText = avScore;
     document.getElementById(`fa-${studId}`).innerText = faScore;
-    document.getElementById(`total-${studId}`).innerText = finalTotal;
-    document.getElementById(`grade-${studId}`).innerText = gradeData.grade;
-    document.getElementById(`descriptor-${studId}`).innerText = gradeData.descriptor;
+    document.getElementById(`total-${studId}`).innerText = displayOrDash(finalTotal);
+    document.getElementById(`grade-${studId}`).innerText = displayOrDash(gradeData.grade);
+    document.getElementById(`descriptor-${studId}`).innerText = displayOrDash(gradeData.descriptor);
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
@@ -1656,22 +1691,21 @@ function updateALevelMarks(studId, type, value, inputEl) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: 0, p2: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: null, p2: null };
     const cleanValue = clampValue(value, 0, 100);
     marksStorage[recordKey][type] = cleanValue;
     marksStorage[recordKey].touched = true;
-    if (inputEl) inputEl.value = cleanValue;
+    if (inputEl) inputEl.value = cleanValue === null ? '' : cleanValue;
     
     const marks = marksStorage[recordKey];
-    const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
-    const avgMark = attemptedPapers.length > 0 ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length) : 0;
+    const avgMark = computeALevelAvgMark(marks);
     const isSubsidiary = subsidiarySubjects.includes(selectedSubject.toUpperCase());
     const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
     
-    document.getElementById(`total-${studId}`).innerText = avgMark;
-    document.getElementById(`grade-${studId}`).innerText = gradeInfo.grade;
-    document.getElementById(`descriptor-${studId}`).innerText = gradeInfo.descriptor;
-    document.getElementById(`points-${studId}`).innerText = gradeInfo.points;
+    document.getElementById(`total-${studId}`).innerText = displayOrDash(avgMark);
+    document.getElementById(`grade-${studId}`).innerText = displayOrDash(gradeInfo.grade);
+    document.getElementById(`descriptor-${studId}`).innerText = displayOrDash(gradeInfo.descriptor);
+    document.getElementById(`points-${studId}`).innerText = displayOrDash(gradeInfo.points);
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
@@ -1683,7 +1717,7 @@ function updateOLevelRemarks(studId, value) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: 0, ao2: 0, eot: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: null, ao2: null, eot: null };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
     unsavedScoreRows.add(recordKey);
@@ -1696,7 +1730,7 @@ function updateALevelRemarks(studId, value) {
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
-    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: 0, p2: 0 };
+    if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: null, p2: null };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
     unsavedScoreRows.add(recordKey);
@@ -1708,6 +1742,8 @@ function updateALevelRemarks(studId, value) {
    6. GRADING LOGIC
    --------------------------------------------------------- */
 function computeOfficialGrade(score) {
+    // No valid Final mark yet (E.O.T missing/cleared) — ungraded, not an 'E'.
+    if (score === null || score === undefined) return { grade: null, descriptor: null };
     if (score >= 75) return { grade: 'A', descriptor: 'EXCEPTIONAL' };
     if (score >= 65) return { grade: 'B', descriptor: 'OUTSTANDING' };
     if (score >= 55) return { grade: 'C', descriptor: 'SATISFACTORY' };
@@ -1715,6 +1751,8 @@ function computeOfficialGrade(score) {
     return { grade: 'E', descriptor: 'ELEMENTARY' };
 }
 function computeALevelGrade(score, isSubsidiary) {
+    // No paper attempted yet — ungraded, not an 'E'.
+    if (score === null || score === undefined) return { grade: null, descriptor: null, points: null };
     let grade, descriptor, points;
     if (score >= 80) { grade = "A"; descriptor = "EXCEPTIONAL"; points = isSubsidiary ? 1 : 5; }
     else if (score >= 70) { grade = "B"; descriptor = "OUTSTANDING"; points = isSubsidiary ? 1 : 4; }
@@ -1853,7 +1891,7 @@ function renderOwnReportModule() {
     return `
         <div class="space-y-6">
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <p class="text-xs font-semibold text-slate-500">Showing <span class="font-extrabold text-slate-700">${t.term}, ${t.year}</span> for ${student.name} (${student.id}). Only you can view this report.</p>
+                <p class="text-xs font-semibold text-slate-500">Showing <span class="font-extrabold text-slate-700">${t.term}, ${t.year}</span> for ${escapeHTML(student.name)} (${escapeHTML(student.id)}). Only you can view this report.</p>
                 <button onclick="printOwnReportCard()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF</button>
             </div>
             <div id="own-report-preview">${page}</div>
@@ -1904,10 +1942,14 @@ async function generateReportCards() {
     previewArea.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">Loading attendance history for ${selectedClass}&hellip;</div>`;
     await Promise.all(classStudents.map(s => refreshAttendanceForStudent(s.id)));
 
+    // Build the date->status lookup once for the whole class instead of
+    // letting every student's report card re-scan the entire attendanceStorage
+    // object for its own rows (see buildAttendanceIndexByStudent for why).
+    const attendanceIndex = buildAttendanceIndexByStudent();
     previewArea.innerHTML = classStudents.map(student =>
         isALevel
-            ? buildALevelReportPage(student, term, year, nextBegins, nextEnds)
-            : buildOLevelReportPage(student, term, year, nextBegins, nextEnds)
+            ? buildALevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex)
+            : buildOLevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex)
     ).join('');
 }
 /* ---------------------------------------------------------
@@ -1927,8 +1969,7 @@ function getALevelSubjectRecords(student) {
             const recordKey = `${subj}_${student.id}`;
             const marks = marksStorage[recordKey];
             const isSubsidiary = subsidiarySubjects.includes(subj.toUpperCase());
-            const attemptedPapers = [Number(marks.p1), Number(marks.p2)].filter(p => p > 0);
-            const avgMark = attemptedPapers.length > 0 ? Math.round(attemptedPapers.reduce((sum, p) => sum + p, 0) / attemptedPapers.length) : 0;
+            const avgMark = computeALevelAvgMark(marks);
             const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
             return { subj, isSubsidiary, marks, avgMark, gradeInfo };
         });
@@ -1944,16 +1985,41 @@ function getOLevelSubjectRecords(student) {
             const marks = marksStorage[recordKey];
             const avScore = calculateAOAverage(marks.ao1, marks.ao2);
             const faScore = (avScore / 3.0) * 20;
-            const finalTotal = Math.round(faScore + Number(marks.eot));
+            const finalTotal = computeOLevelFinalTotal(marks, faScore);
             const gradeData = computeOfficialGrade(finalTotal);
             return { subj, marks, avScore, faScore, finalTotal, gradeData };
         });
 }
-function getAttendanceSummary(student) {
-    const suffix = `_${student.id}`;
-    const records = Object.keys(attendanceStorage)
-        .filter(key => key.endsWith(suffix))
-        .map(key => attendanceStorage[key]);
+// Groups attendanceStorage (keyed "date_studentId") by studentId in a
+// single O(total attendance rows) pass. Pass the result into
+// getAttendanceSummary() as `index` when computing summaries for many
+// students back-to-back (e.g. printing a whole class's report cards) —
+// without it, getAttendanceSummary falls back to scanning the entire
+// attendanceStorage object on every call, which is fine for one student
+// (profile modal, a student's own report) but turns into an O(students x
+// attendance rows) scan when repeated for a full class/school, which is
+// exactly the kind of thing that made "Generate Report Cards" for a large
+// class feel like it was freezing.
+function buildAttendanceIndexByStudent() {
+    const index = {};
+    for (const key in attendanceStorage) {
+        // key = "<date>_<studentId>" — studentId is everything after the
+        // first underscore since dates are always YYYY-MM-DD (no
+        // underscores of their own).
+        const studentId = key.slice(key.indexOf('_') + 1);
+        (index[studentId] || (index[studentId] = [])).push(attendanceStorage[key]);
+    }
+    return index;
+}
+function getAttendanceSummary(student, index = null) {
+    const records = index
+        ? (index[student.id] || [])
+        : (() => {
+            const suffix = `_${student.id}`;
+            return Object.keys(attendanceStorage)
+                .filter(key => key.endsWith(suffix))
+                .map(key => attendanceStorage[key]);
+        })();
     const present = records.filter(r => r === 'Present').length;
     const absent = records.filter(r => r === 'Absent').length;
     const excused = records.filter(r => r === 'Excused').length;
@@ -1963,9 +2029,14 @@ function getAttendanceSummary(student) {
 }
 function buildPerformanceRemark(records, isALevel) {
     if (records.length === 0) return "No subject scores have been recorded for this learner yet this term.";
+    // Only subjects with an actual valid mark (avgMark/finalTotal not null)
+    // count toward the term average — a subject still awaiting its mark
+    // must never drag the average down as if it scored 0.
+    const gradedRecords = records.filter(r => (isALevel ? r.avgMark : r.finalTotal) !== null);
+    if (gradedRecords.length === 0) return "No subject scores have been recorded for this learner yet this term.";
     const avgPercent = isALevel
-        ? records.reduce((s, r) => s + r.avgMark, 0) / records.length
-        : records.reduce((s, r) => s + r.finalTotal, 0) / records.length;
+        ? gradedRecords.reduce((s, r) => s + r.avgMark, 0) / gradedRecords.length
+        : gradedRecords.reduce((s, r) => s + r.finalTotal, 0) / gradedRecords.length;
     const rounded = avgPercent.toFixed(1);
     if (avgPercent >= 75) return `An exceptional term overall, averaging ${rounded}%. The learner consistently demonstrates strong mastery across subjects &mdash; keep nurturing this excellent standard.`;
     if (avgPercent >= 65) return `An outstanding term overall, averaging ${rounded}%. With continued consistency, even higher grades are within reach.`;
@@ -1976,6 +2047,7 @@ function buildPerformanceRemark(records, isALevel) {
 // Colour bands mirror each level's own grading scale, so a bar's colour always
 // reflects how that specific score was actually graded (A=green ... E=red).
 function getPerformanceColor(score, isALevel) {
+    if (score === null || score === undefined) return '#94a3b8'; // ungraded - neutral slate
     const bands = isALevel ? [80, 70, 60, 50] : [75, 65, 55, 45];
     if (score >= bands[0]) return '#1f7a4d'; // A - green
     if (score >= bands[1]) return '#0f8a8f'; // B - teal
@@ -1987,26 +2059,32 @@ function buildSubjectBars(records, isALevel) {
     if (records.length === 0) return '<p class="rc-empty-note">No scores recorded yet.</p>';
     return `<div class="rc-bars-grid">${records.map(r => {
         const score = isALevel ? r.avgMark : r.finalTotal;
-        const width = Math.max(2, Math.min(100, score));
         const color = getPerformanceColor(score, isALevel);
+        // Ungraded subject (mark not yet entered) — show an empty track and
+        // a dash instead of drawing a fake 0-width-floor bar.
+        const width = score === null ? 0 : Math.max(2, Math.min(100, score));
         return `
         <div class="rc-bar-row">
             <span class="rc-bar-label">${r.subj}</span>
             <span class="rc-bar-track"><span class="rc-bar-fill" style="width:${width}%;background:${color};"></span></span>
-            <span class="rc-bar-score" style="color:${color};">${score}</span>
+            <span class="rc-bar-score" style="color:${color};">${displayOrDash(score)}</span>
         </div>`;
     }).join('')}</div>`;
 }
-function buildSummarySection(student, subjectRecords, isALevel) {
-    const attendance = getAttendanceSummary(student);
+function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex = null) {
+    const attendance = getAttendanceSummary(student, attendanceIndex);
     const remarkText = buildPerformanceRemark(subjectRecords, isALevel);
-    const avgScore = subjectRecords.length > 0
+    // Subjects awaiting a valid mark are excluded from the average and from
+    // "best subject" — an ungraded subject must never count as a 0 that
+    // drags the average down, nor be picked as the top performer.
+    const gradedRecords = subjectRecords.filter(r => (isALevel ? r.avgMark : r.finalTotal) !== null);
+    const avgScore = gradedRecords.length > 0
         ? (isALevel
-            ? subjectRecords.reduce((s, r) => s + r.avgMark, 0) / subjectRecords.length
-            : subjectRecords.reduce((s, r) => s + r.finalTotal, 0) / subjectRecords.length)
+            ? gradedRecords.reduce((s, r) => s + r.avgMark, 0) / gradedRecords.length
+            : gradedRecords.reduce((s, r) => s + r.finalTotal, 0) / gradedRecords.length)
         : null;
-    const bestSubject = subjectRecords.length > 0
-        ? subjectRecords.reduce((best, r) => {
+    const bestSubject = gradedRecords.length > 0
+        ? gradedRecords.reduce((best, r) => {
             const score = isALevel ? r.avgMark : r.finalTotal;
             const bestScore = isALevel ? best.avgMark : best.finalTotal;
             return score > bestScore ? r : best;
@@ -2033,19 +2111,21 @@ function buildSummarySection(student, subjectRecords, isALevel) {
         </div>
     `;
 }
-function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
+function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
     const subjectRecords = getALevelSubjectRecords(student);
-    const totalPoints = subjectRecords.reduce((sum, r) => sum + r.gradeInfo.points, 0);
+    // A subject still awaiting a valid mark contributes no points — it must
+    // never be silently counted as an 'E' (1 point) in the term's total.
+    const totalPoints = subjectRecords.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0);
 
     const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
         <tr>
             <td class="rc-subj">${r.subj}${r.isSubsidiary ? ' <span class="rc-sub-tag">SUB</span>' : ''}</td>
-            <td class="rc-num">${r.marks.p1 || '-'}</td>
-            <td class="rc-num">${r.marks.p2 || '-'}</td>
-            <td class="rc-num">${r.avgMark}</td>
-            <td class="rc-grade">${r.gradeInfo.grade}</td>
-            <td class="rc-grade">${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})</td>
-            <td class="rc-descriptor">${r.marks.remarks ? r.marks.remarks : r.gradeInfo.descriptor}</td>
+            <td class="rc-num">${r.marks.p1 ?? '-'}</td>
+            <td class="rc-num">${r.marks.p2 ?? '-'}</td>
+            <td class="rc-num">${displayOrDash(r.avgMark)}</td>
+            <td class="rc-grade">${displayOrDash(r.gradeInfo.grade)}</td>
+            <td class="rc-grade">${r.gradeInfo.grade === null ? '-' : `${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})`}</td>
+            <td class="rc-descriptor">${r.marks.remarks ? escapeHTML(r.marks.remarks) : displayOrDash(r.gradeInfo.descriptor, 'Not yet graded')}</td>
         </tr>
     `).join('') : `<tr><td colspan="7" class="rc-empty">No scores recorded for this learner yet. Enter marks in the Scores tab and they will appear here automatically.</td></tr>`;
 
@@ -2063,8 +2143,8 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
             </div>
             <div class="rc-report-title">END OF TERM ACADEMIC REPORT CARD &mdash; A-LEVEL</div>
             <div class="rc-learner-row">
-                <div><span>NAME:</span>${student.name}</div>
-                <div><span>CLASS:</span><span class="rc-tag">${student.class}</span></div>
+                <div><span>NAME:</span>${escapeHTML(student.name)}</div>
+                <div><span>CLASS:</span><span class="rc-tag">${escapeHTML(student.class)}</span></div>
                 <div><span>TERM:</span><span class="rc-tag">${term}</span></div>
                 <div><span>YEAR:</span><span class="rc-tag">${year}</span></div>
                 <div><span>STUDENT ID:</span>${student.id}</div>
@@ -2096,7 +2176,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <tr><td>Points (Subsidiary)</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr>
                 </table>
             </div>
-            ${buildSummarySection(student, subjectRecords, true)}
+            ${buildSummarySection(student, subjectRecords, true, attendanceIndex)}
             <div class="rc-footer">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
@@ -2127,7 +2207,8 @@ function getCompetencyDescriptor(grade) {
         case 'B': return "Demonstrates a high level of competency";
         case 'C': return "Demonstrates an adequate level of competency";
         case 'D': return "Demonstrates a minimum level of competency";
-        default: return "Demonstrates below the basic level of competency";
+        case 'E': return "Demonstrates below the basic level of competency";
+        default: return "Not yet graded — awaiting a valid mark";
     }
 }
 function getOverallIdentifier(avgScore) {
@@ -2150,10 +2231,12 @@ const O_LEVEL_TIER_SUBJECT_COUNTS = { 'S.1': 12, 'S.2': 12, 'S.3': 9, 'S.4': 9 }
 function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     const tierSubjectCount = O_LEVEL_TIER_SUBJECT_COUNTS[classLevel] || 12;
     const denominator = tierSubjectCount * 100; // 1200 for S.1/S.2, 900 for S.3/S.4
-    const totalScore = subjectRecords.reduce((sum, r) => sum + r.finalTotal, 0);
+    // A subject still awaiting a valid Final mark contributes nothing here —
+    // it must never be silently counted as a 0.
+    const totalScore = subjectRecords.reduce((sum, r) => sum + (r.finalTotal ?? 0), 0);
     return (totalScore / denominator) * 3;
 }
-function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true) {
+function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
     const subjectRecords = getOLevelSubjectRecords(student);
 
     const overallAvg = calculateOLevelOverallAchievement(student.class, subjectRecords);
@@ -2167,10 +2250,10 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-num">${r.avScore.toFixed(1)}</td>
             <td class="rc-num">${r.faScore.toFixed(1)}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
-            <td class="rc-final">${r.finalTotal}</td>
-            <td class="rc-grade">${r.gradeData.grade}</td>
+            <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
+            <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
             <td class="rc-descriptor">${getCompetencyDescriptor(r.gradeData.grade)}</td>
-            <td class="rc-num">${r.marks.remarks || ''}</td>
+            <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
         </tr>
     `).join('') : `<tr><td colspan="10" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
 
@@ -2188,8 +2271,8 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             </div>
             <div class="rc-report-title">LEARNER'S TERMLY ACHIEVEMENT REPORT</div>
             <div class="rc-learner-row">
-                <div><span>LEARNER'S NAME:</span>${student.name}</div>
-                <div><span>CLASS:</span><span class="rc-tag">${student.class}</span></div>
+                <div><span>LEARNER'S NAME:</span>${escapeHTML(student.name)}</div>
+                <div><span>CLASS:</span><span class="rc-tag">${escapeHTML(student.class)}</span></div>
                 <div><span>TERM:</span><span class="rc-tag">${term}</span></div>
                 <div><span>YEAR:</span><span class="rc-tag">${year}</span></div>
                 <div><span>STUDENT ID:</span>${student.id}</div>
@@ -2237,7 +2320,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <tr><td>E</td><td>Elementary</td></tr>
                 </table>
             </div>
-            ${buildSummarySection(student, subjectRecords, false)}
+            ${buildSummarySection(student, subjectRecords, false, attendanceIndex)}
             <div class="rc-footer">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
@@ -2328,6 +2411,10 @@ function computeAnalyticsData() {
             records.forEach(r => {
                 const grade = isALevel ? r.gradeInfo.grade : r.gradeData.grade;
                 const score = isALevel ? r.avgMark : r.finalTotal;
+                // A subject still awaiting a valid mark has no grade/score yet —
+                // it must be left out of every count and average below, not
+                // counted as an 'E' or a 0.
+                if (score === null || grade === null) return;
                 if (gradeCounts[grade] !== undefined) gradeCounts[grade]++;
                 if (overallGradeCounts[grade] !== undefined) overallGradeCounts[grade]++;
                 scoreSum += score;
@@ -2548,7 +2635,8 @@ function computePerformersData(levelType) {
     const results = classStudents.map(student => {
         if (isALevel) {
             const records = getALevelSubjectRecords(student);
-            const totalPoints = records.reduce((sum, r) => sum + r.gradeInfo.points, 0);
+            // Ungraded subjects (no valid mark yet) contribute no points.
+            const totalPoints = records.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0);
             return { student, score: totalPoints, hasRecords: records.length > 0 };
         }
         const records = getOLevelSubjectRecords(student);
@@ -2613,8 +2701,8 @@ function buildPerformersTable(title, isBest, rows, isALevel, scoreLabel, criteri
     const body = rows.length > 0 ? rows.map(r => `
         <tr class="hover:bg-slate-50 transition">
             <td class="p-4 font-mono text-xs font-bold text-teal-700">${r.student.id}</td>
-            <td class="p-4 font-bold text-slate-900">${r.student.name}</td>
-            <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${r.student.class}</span></td>
+            <td class="p-4 font-bold text-slate-900">${escapeHTML(r.student.name)}</td>
+            <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${escapeHTML(r.student.class)}</span></td>
             <td class="p-4 text-center font-black text-slate-900">${isALevel ? r.score : r.score.toFixed(1)}</td>
         </tr>
     `).join('') : `<tr><td colspan="4" class="p-8 text-center text-slate-400 text-xs font-medium uppercase tracking-wider">No learners currently meet this criteria.</td></tr>`;
@@ -2718,8 +2806,8 @@ function loadAttendanceData() {
         return `
             <tr class="hover:bg-slate-50 transition">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
-                <td class="p-4 font-bold text-slate-900">${student.name}</td>
-                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${student.class}</span></td>
+                <td class="p-4 font-bold text-slate-900">${escapeHTML(student.name)}</td>
+                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-xs border border-teal-200">${escapeHTML(student.class)}</span></td>
                 <td class="p-4 text-center space-x-2">
                     <button type="button" onclick="setAttendanceStatus('${student.id}', 'Present')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Present' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}"><i class="fa-solid fa-check mr-1"></i>Present</button>
                     <button type="button" onclick="setAttendanceStatus('${student.id}', 'Absent')" class="px-3 py-1.5 rounded-lg text-xs font-extrabold uppercase transition ${currentStatus === 'Absent' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 border border-slate-300 hover:bg-slate-200'}"><i class="fa-solid fa-xmark mr-1"></i>Absent</button>
@@ -3000,8 +3088,8 @@ function buildResourceCard(r) {
                     <i class="fa-solid ${getFileIcon(r.fileName)}"></i>
                 </div>
                 <div class="min-w-0">
-                    <p class="font-bold text-slate-900 text-sm truncate" title="${r.title}">${r.title}</p>
-                    <p class="text-[11px] font-semibold text-slate-500 truncate">${r.subject} &middot; ${r.level}</p>
+                    <p class="font-bold text-slate-900 text-sm truncate" title="${escapeHTML(r.title)}">${escapeHTML(r.title)}</p>
+                    <p class="text-[11px] font-semibold text-slate-500 truncate">${escapeHTML(r.subject)} &middot; ${escapeHTML(r.level)}</p>
                 </div>
             </div>
             <div class="flex flex-wrap gap-1.5">
@@ -3009,10 +3097,10 @@ function buildResourceCard(r) {
                 ${fileSizeLabel ? `<span class="text-[10px] font-bold text-slate-400 self-center">${fileSizeLabel}</span>` : ''}
             </div>
             <div class="text-[10.5px] font-semibold text-slate-400 border-t border-slate-100 pt-2">
-                Uploaded by ${r.uploadedBy} &middot; ${formatReportDate(uploadedDate)}
+                Uploaded by ${escapeHTML(r.uploadedBy)} &middot; ${formatReportDate(uploadedDate)}
             </div>
             <div class="flex gap-2 pt-1">
-                <a href="${r.fileUrl}" download="${r.fileName}" target="_blank" rel="noopener" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
+                <a href="${r.fileUrl}" download="${escapeHTML(r.fileName)}" target="_blank" rel="noopener" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
                     <i class="fa-solid fa-download mr-1"></i>Download
                 </a>
                 ${canDelete ? `<button onclick="deleteResource(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
@@ -3094,11 +3182,11 @@ function renderTeachersModule() {
             <form onsubmit="saveOwnTeacherProfile(event)" class="space-y-4">
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Full Name</label>
-                    <input type="text" id="my-teach-name" value="${me.name}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    <input type="text" id="my-teach-name" value="${escapeHTML(me.name)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Username</label>
-                    <input type="text" id="my-teach-username" value="${me.username}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    <input type="text" id="my-teach-username" value="${escapeHTML(me.username)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">New Password</label>
@@ -3106,7 +3194,7 @@ function renderTeachersModule() {
                 </div>
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Subject</label>
-                    <input type="text" id="my-teach-subject" value="${me.subject || ''}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    <input type="text" id="my-teach-subject" value="${escapeHTML(me.subject || '')}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                 </div>
                 <div id="teacher-profile-msg" class="hidden text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"></div>
                 <div class="flex justify-end pt-2">
@@ -3127,9 +3215,9 @@ function loadTeacherData() {
     tbody.innerHTML = teachersList.map((teacher, index) => `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${teacher.id}</td>
-                <td class="p-4 font-bold text-slate-900">${teacher.name}</td>
-                <td class="p-4 text-slate-600 font-semibold">${teacher.username}</td>
-                <td class="p-4 text-slate-600 font-semibold">${teacher.subject || '-'}</td>
+                <td class="p-4 font-bold text-slate-900">${escapeHTML(teacher.name)}</td>
+                <td class="p-4 text-slate-600 font-semibold">${escapeHTML(teacher.username)}</td>
+                <td class="p-4 text-slate-600 font-semibold">${escapeHTML(teacher.subject || '-')}</td>
                 <td class="p-4 font-mono text-xs text-slate-500" title="Passwords are never shown in plain text once stored securely on the server.">${teacher.password ? teacher.password : '••••••••'}</td>
                 <td class="p-4 text-center space-x-2">
                     <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>

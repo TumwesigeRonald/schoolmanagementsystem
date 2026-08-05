@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 const { put } = require('@vercel/blob');
+const { authenticate, requireRole } = require('../middleware/auth');
 
 // This endpoint previously handed the raw (still multipart-encoded) request
 // stream straight to Blob's put() — that stores the multipart envelope
@@ -13,7 +14,19 @@ const { put } = require('@vercel/blob');
 const RESOURCE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: RESOURCE_UPLOAD_MAX_BYTES } });
 
-router.post('/', (req, res) => {
+// SECURITY FIX: this route previously had no `authenticate`/`requireRole`
+// guard at all — unlike every other write endpoint in the app (including
+// the near-identical POST /api/resources/upload), it was reachable by
+// anyone on the internet with no login, letting an anonymous caller push
+// arbitrary files to the school's public Blob storage and burn through
+// storage/bandwidth quota. Locking it down to logged-in Admin/Teacher
+// accounts matches the access rule already enforced on the resources
+// upload route and does not change how the (already-authenticated)
+// frontend calls this endpoint — it doesn't, in fact; ResourcesAPI.upload
+// only ever calls /api/resources/upload, so this brings a live-but-unused
+// route up to the same security bar as the rest of the API instead of
+// leaving it as an open door.
+router.post('/', authenticate, requireRole('Administrator', 'Teacher'), (req, res) => {
   upload.single('file')(req, res, async (multerErr) => {
     if (multerErr) {
       console.error('[upload] multer error while parsing the upload:', multerErr);
