@@ -317,12 +317,23 @@ async function syncAllRemoteData() {
 /* ---------------------------------------------------------
    2. AUTHENTICATION & NAVIGATION
    --------------------------------------------------------- */
+// Defensive helper: safely reads an <input>/<select>/<textarea> value by id
+// instead of throwing "Cannot read properties of null" when the element
+// isn't in the DOM yet (e.g. a tab that hasn't finished rendering, or a
+// form container that got dropped by a bad merge).
+function getInputValue(id, fallback = '') {
+    const el = document.getElementById(id);
+    return el ? el.value : fallback;
+}
 async function handleLogin(event) {
     event.preventDefault();
-    const username = document.getElementById('login-username').value.trim();
-    const password = document.getElementById('login-password').value;
+    const usernameEl = document.getElementById('login-username');
+    const passwordEl = document.getElementById('login-password');
     const errorBox = document.getElementById('login-error');
     const submitBtn = event.target.querySelector('button[type="submit"]');
+    if (!usernameEl || !passwordEl) return; // login form isn't in the DOM — nothing we can safely do
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value;
 
     if (username === "" || password.trim() === "") {
         if (errorBox) {
@@ -360,8 +371,10 @@ async function applySessionUser(user) {
     currentUser.studentId = user.studentId || null;
     currentUser.teacherId = user.teacherId || null;
 
-    document.getElementById('login-section').classList.add('hidden');
-    document.getElementById('dashboard-section').classList.remove('hidden');
+    const loginSection = document.getElementById('login-section');
+    const dashboardSection = document.getElementById('dashboard-section');
+    if (loginSection) loginSection.classList.add('hidden');
+    if (dashboardSection) dashboardSection.classList.remove('hidden');
 
     // Pull the current, authoritative state from the backend/Neon before
     // rendering anything below, so the dashboard reflects real data
@@ -399,10 +412,14 @@ function handleLogout() {
     currentUser.name = "";
     currentUser.studentId = null;
     currentUser.teacherId = null;
-    document.getElementById('dashboard-section').classList.add('hidden');
-    document.getElementById('login-section').classList.remove('hidden');
-    document.getElementById('login-username').value = "";
-    document.getElementById('login-password').value = "";
+    const dashboardSection = document.getElementById('dashboard-section');
+    const loginSection = document.getElementById('login-section');
+    const usernameEl = document.getElementById('login-username');
+    const passwordEl = document.getElementById('login-password');
+    if (dashboardSection) dashboardSection.classList.add('hidden');
+    if (loginSection) loginSection.classList.remove('hidden');
+    if (usernameEl) usernameEl.value = "";
+    if (passwordEl) passwordEl.value = "";
 }
 function renderSidebarNav() {
     const nav = document.getElementById('sidebar-nav');
@@ -794,8 +811,8 @@ function toggleNoticeForm() {
 function handleAddNotice(event) {
     event.preventDefault();
     if (!getPermissions(currentUser.role).canManageNotices) return; // RBAC guard
-    const title = document.getElementById('notice-title').value.trim();
-    const message = document.getElementById('notice-message').value.trim();
+    const title = getInputValue('notice-title').trim();
+    const message = getInputValue('notice-message').trim();
     if (!title || !message) return;
     noticesList.push({
         id: noticeIdCounter++,
@@ -804,8 +821,10 @@ function handleAddNotice(event) {
         date: new Date().toISOString().slice(0, 10)
     });
     persistNotices();
-    document.getElementById('notice-title').value = '';
-    document.getElementById('notice-message').value = '';
+    const titleEl = document.getElementById('notice-title');
+    const messageEl = document.getElementById('notice-message');
+    if (titleEl) titleEl.value = '';
+    if (messageEl) messageEl.value = '';
     toggleNoticeForm();
     renderNoticeBoardList();
 }
@@ -1274,10 +1293,10 @@ async function handleAddStudent(event) {
     event.preventDefault();
     if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
     const newStudent = {
-        id: document.getElementById('stud-id').value.trim().toUpperCase(),
-        name: document.getElementById('stud-name').value.trim(),
-        class: document.getElementById('stud-class').value,
-        gender: document.getElementById('stud-gender').value
+        id: getInputValue('stud-id').trim().toUpperCase(),
+        name: getInputValue('stud-name').trim(),
+        class: getInputValue('stud-class'),
+        gender: getInputValue('stud-gender')
     };
     if (newStudent.id === '' || newStudent.name === '') {
         alert('Please provide both a Student ID and a Full Name.');
@@ -1296,8 +1315,10 @@ async function handleAddStudent(event) {
     await refreshStudentsList();
     loadStudentData();
     toggleStudentForm();
-    document.getElementById('stud-id').value = "";
-    document.getElementById('stud-name').value = "";
+    const studIdEl = document.getElementById('stud-id');
+    const studNameEl = document.getElementById('stud-name');
+    if (studIdEl) studIdEl.value = "";
+    if (studNameEl) studNameEl.value = "";
     updateDashboardStats();
 }
 async function deleteStudent(studentId) {
@@ -1675,11 +1696,22 @@ function updateMarks(studId, type, value, inputEl) {
     const finalTotal = computeOLevelFinalTotal(marks, faScore);
     const gradeData = computeOfficialGrade(finalTotal);
     
-    document.getElementById(`av-${studId}`).innerText = avScore;
-    document.getElementById(`fa-${studId}`).innerText = faScore;
-    document.getElementById(`total-${studId}`).innerText = displayOrDash(finalTotal);
-    document.getElementById(`grade-${studId}`).innerText = displayOrDash(gradeData.grade);
-    document.getElementById(`descriptor-${studId}`).innerText = displayOrDash(gradeData.descriptor);
+    // Guard every cell individually: if the score sheet was re-rendered or
+    // the tab was switched away between the user's edit and this update
+    // (e.g. the class/subject dropdown changed mid-edit), these row cells
+    // may no longer be in the DOM. Without the null checks this used to
+    // throw "Cannot set properties of null (setting 'innerText')" and abort
+    // the rest of the function — which also skipped the save call below.
+    const avEl = document.getElementById(`av-${studId}`);
+    const faEl = document.getElementById(`fa-${studId}`);
+    const totalEl = document.getElementById(`total-${studId}`);
+    const gradeEl = document.getElementById(`grade-${studId}`);
+    const descriptorEl = document.getElementById(`descriptor-${studId}`);
+    if (avEl) avEl.innerText = avScore;
+    if (faEl) faEl.innerText = faScore;
+    if (totalEl) totalEl.innerText = displayOrDash(finalTotal);
+    if (gradeEl) gradeEl.innerText = displayOrDash(gradeData.grade);
+    if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeData.descriptor);
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
@@ -1702,10 +1734,16 @@ function updateALevelMarks(studId, type, value, inputEl) {
     const isSubsidiary = subsidiarySubjects.includes(selectedSubject.toUpperCase());
     const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
     
-    document.getElementById(`total-${studId}`).innerText = displayOrDash(avgMark);
-    document.getElementById(`grade-${studId}`).innerText = displayOrDash(gradeInfo.grade);
-    document.getElementById(`descriptor-${studId}`).innerText = displayOrDash(gradeInfo.descriptor);
-    document.getElementById(`points-${studId}`).innerText = displayOrDash(gradeInfo.points);
+    // Same defensive guard as updateMarks() above — the row this cell
+    // belongs to may have been removed by a re-render before this runs.
+    const totalEl = document.getElementById(`total-${studId}`);
+    const gradeEl = document.getElementById(`grade-${studId}`);
+    const descriptorEl = document.getElementById(`descriptor-${studId}`);
+    const pointsEl = document.getElementById(`points-${studId}`);
+    if (totalEl) totalEl.innerText = displayOrDash(avgMark);
+    if (gradeEl) gradeEl.innerText = displayOrDash(gradeInfo.grade);
+    if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeInfo.descriptor);
+    if (pointsEl) pointsEl.innerText = displayOrDash(gradeInfo.points);
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
     ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
@@ -3234,11 +3272,11 @@ async function handleAddTeacher(event) {
     event.preventDefault();
     if (!getPermissions(currentUser.role).canManageTeachers) return; // RBAC guard: Administrator only
     const newTeacher = {
-        id: document.getElementById('teach-id').value.trim().toUpperCase(),
-        name: document.getElementById('teach-name').value.trim(),
-        username: document.getElementById('teach-username').value.trim(),
-        password: document.getElementById('teach-password').value,
-        subject: document.getElementById('teach-subject').value.toUpperCase()
+        id: getInputValue('teach-id').trim().toUpperCase(),
+        name: getInputValue('teach-name').trim(),
+        username: getInputValue('teach-username').trim(),
+        password: getInputValue('teach-password'),
+        subject: getInputValue('teach-subject').toUpperCase()
     };
     if (newTeacher.id === '' || newTeacher.name === '' || newTeacher.username === '') {
         alert('Please fill in Teacher ID, Full Name, and Username.');
@@ -3297,18 +3335,18 @@ async function saveOwnTeacherProfile(event) {
     if (currentUser.role !== 'Teacher') return; // RBAC guard: teachers edit only their own profile
     const me = teachersList.find(t => t.username.toLowerCase() === currentUser.username.toLowerCase());
     if (!me) return;
-    const newUsername = document.getElementById('my-teach-username').value.trim();
+    const newUsername = getInputValue('my-teach-username').trim();
     const duplicateUsername = teachersList.some(t => t !== me && t.username.toLowerCase() === newUsername.toLowerCase());
     if (duplicateUsername) {
         alert('That username is already taken. Please choose another.');
         return;
     }
     const updates = {
-        name: document.getElementById('my-teach-name').value,
+        name: getInputValue('my-teach-name'),
         username: newUsername,
-        subject: document.getElementById('my-teach-subject').value.toUpperCase()
+        subject: getInputValue('my-teach-subject').toUpperCase()
     };
-    const newPassword = document.getElementById('my-teach-password').value.trim();
+    const newPassword = getInputValue('my-teach-password').trim();
     if (newPassword !== "") updates.password = newPassword;
 
     try {
