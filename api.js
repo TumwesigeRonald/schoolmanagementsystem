@@ -91,7 +91,10 @@ const ENDPOINTS = {
     REPORT_CARD: (studentId) => `/reports/${encodeURIComponent(studentId)}`,
 
     // --- Admin: login/user activity log ---
-    ACTIVITY_LOG: "/activity-log"
+    ACTIVITY_LOG: "/activity-log",
+
+    // --- Admin Notice Board / school bulletin ---
+    NOTICES: "/notices"
 };
 
 /* ---------------------------------------------------------
@@ -552,6 +555,41 @@ const ActivityLogAPI = {
         return remoteFirst(
             () => apiRequest(ENDPOINTS.ACTIVITY_LOG),
             () => []
+        );
+    }
+};
+
+/* ---------------------------------------------------------
+   13. ADMIN NOTICE BOARD DATA-ACCESS LAYER
+   Notices live server-side in the `notices` table (see
+   lcs-backend/routes/notices.routes.js) so deletes/posts persist
+   across reloads and devices instead of only in one browser's
+   localStorage. The offline/local fallback below (used only when
+   the backend truly isn't reachable) operates on the in-memory
+   noticesList directly — there is no hardcoded/demo seed data to
+   fall back to, so a deleted notice can never "come back".
+   --------------------------------------------------------- */
+const NoticesAPI = {
+    async list() {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.NOTICES),
+            () => noticesList
+        );
+    },
+    async create(notice) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.NOTICES, { method: "POST", body: notice }),
+            () => {
+                const created = { id: noticeIdCounter++, ...notice };
+                noticesList.push(created);
+                return created;
+            }
+        );
+    },
+    async remove(noticeId) {
+        return remoteFirst(
+            () => apiRequest(`${ENDPOINTS.NOTICES}?id=${encodeURIComponent(noticeId)}`, { method: "DELETE" }),
+            () => { noticesList = noticesList.filter(n => n.id !== noticeId); return true; }
         );
     }
 };

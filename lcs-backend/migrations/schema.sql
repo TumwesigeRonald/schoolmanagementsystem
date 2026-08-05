@@ -155,6 +155,23 @@ CREATE TABLE IF NOT EXISTS activity_log (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- -------------------------------------------------------------
+-- notices — Administrative Notice Board / school bulletin shown
+-- on the Dashboard widget. Previously this list lived only in the
+-- browser's localStorage (see script.js), which meant deletes
+-- didn't survive a reload (an empty array fell back to hardcoded
+-- demo notices) and never synced across devices/users. Now the
+-- backend is the single source of truth: posting/deleting a
+-- notice goes through routes/notices.routes.js and this table.
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notices (
+  id           SERIAL PRIMARY KEY,
+  title        TEXT NOT NULL,
+  message      TEXT NOT NULL,
+  author       TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_scores_student      ON scores(student_id);
 CREATE INDEX IF NOT EXISTS idx_scores_subject      ON scores(subject);
 CREATE INDEX IF NOT EXISTS idx_scores_class        ON scores(class_level);
@@ -165,3 +182,4 @@ CREATE INDEX IF NOT EXISTS idx_students_class      ON students(class);
 CREATE INDEX IF NOT EXISTS idx_users_student       ON users(student_id);
 CREATE INDEX IF NOT EXISTS idx_users_teacher       ON users(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notices_created       ON notices(created_at DESC);

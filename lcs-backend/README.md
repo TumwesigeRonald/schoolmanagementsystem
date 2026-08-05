@@ -153,6 +153,10 @@ All routes are prefixed with `/api`. Protected routes require
 | GET | `/resources` | any | |
 | POST | `/resources/upload` | Admin, Teacher | multipart `file` + `title` |
 | DELETE | `/resources/:id` | Admin, or uploader | |
+| GET | `/activity-log?limit=` | Admin | returns `[]` (200) instead of erroring if the table doesn't exist yet |
+| GET | `/notices` | any | Admin Notice Board / school bulletin |
+| POST | `/notices` | Admin | `{ title, message }` |
+| DELETE | `/notices?id=` | Admin | deletes one notice from the database |
 
 ## 7. Design notes / deviations from the original spec
 

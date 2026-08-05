@@ -58,30 +58,16 @@ let dashboardClassChartInstance = null;
 let performersLevelView = 'O-Level'; // toggle state for the Best & Worst Performers panel
 /* ---------------------------------------------------------
    1e. ADMIN NOTICE BOARD / SCHOOL BULLETIN (Dashboard widget)
-   Client-side only, exactly like reportRemarksStorage above — a
-   pure additive productivity feature with its own localStorage
-   key, its own RBAC flag (canManageNotices), and no connection to
-   marksStorage, the scores schema, or any existing API route.
+   Backed by the `notices` table via NoticesAPI (see api.js +
+   lcs-backend/routes/notices.routes.js), the same remote-first/
+   local-fallback pattern used by resourcesList etc. below.
+   Deliberately starts empty with no hardcoded/demo notices and no
+   localStorage persistence: the backend is the single source of
+   truth, so a deleted notice can never silently reappear on reload
+   the way a stale localStorage fallback previously did.
    --------------------------------------------------------- */
-let noticesList = [
-    { id: 1, title: "Welcome Back, Term Starts Monday", message: "All staff are requested to be at school by 7:30am on the first day of term for the assembly and class allocation briefing.", author: "Head Teacher", date: new Date().toISOString().slice(0, 10) },
-    { id: 2, title: "Mid-Term Reports Deadline", message: "Class teachers should have all scores entered into the system at least 3 days before report cards are generated.", author: "Administration", date: new Date().toISOString().slice(0, 10) }
-];
-let noticeIdCounter = 3;
-try {
-    const storedNotices = localStorage.getItem('lcs_notices');
-    if (storedNotices) {
-        const parsed = JSON.parse(storedNotices);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-            noticesList = parsed;
-            noticeIdCounter = Math.max(...parsed.map(n => n.id)) + 1;
-        }
-    }
-} catch (e) { /* localStorage unavailable — falls back to the seeded demo notices above */ }
-function persistNotices() {
-    try { localStorage.setItem('lcs_notices', JSON.stringify(noticesList)); }
-    catch (e) { /* best-effort only, same as reportRemarksStorage persistence */ }
-}
+let noticesList = [];
+let noticeIdCounter = 1;
 /* ---------------------------------------------------------
    1c. TERM / CALENDAR SETTINGS (persisted in memory)
    Holds the currently selected term, year, and the upcoming
@@ -248,6 +234,12 @@ async function refreshTermSettings() {
         if (remote) termSettings = remote;
     } catch (e) { /* keep existing local settings */ }
 }
+async function refreshNoticesList() {
+    try {
+        const remote = await NoticesAPI.list();
+        if (Array.isArray(remote)) noticesList = remote;
+    } catch (e) { /* keep existing local list */ }
+}
 async function refreshScoresList() {
     // marksStorage is keyed by recordKey ("SUBJECT_studentId"), same
     // convention the backend uses for scores.record_key — just re-key the
@@ -311,7 +303,8 @@ async function syncAllRemoteData() {
         refreshResourcesList(),
         refreshTermSettings(),
         refreshScoresList(),
-        refreshAttendanceList()
+        refreshAttendanceList(),
+        refreshNoticesList()
     ]);
 }
 /* ---------------------------------------------------------
@@ -814,19 +807,30 @@ function toggleNoticeForm() {
     const formContainer = document.getElementById('notice-form-container');
     if (formContainer) formContainer.classList.toggle('hidden');
 }
-function handleAddNotice(event) {
+async function handleAddNotice(event) {
     event.preventDefault();
     if (!getPermissions(currentUser.role).canManageNotices) return; // RBAC guard
     const title = getInputValue('notice-title').trim();
     const message = getInputValue('notice-message').trim();
     if (!title || !message) return;
-    noticesList.push({
-        id: noticeIdCounter++,
-        title, message,
-        author: currentUser.name || currentUser.username,
-        date: new Date().toISOString().slice(0, 10)
-    });
-    persistNotices();
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
+        await NoticesAPI.create({
+            title, message,
+            author: currentUser.name || currentUser.username,
+            date: new Date().toISOString().slice(0, 10)
+        });
+    } catch (err) {
+        alert(err.message || 'Could not post the notice. Please try again.');
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+    }
+    // Only reflect the new notice in the UI once the backend has confirmed
+    // it was saved — re-pull the authoritative list rather than guessing
+    // at its shape/id locally.
+    await refreshNoticesList();
+    if (submitBtn) submitBtn.disabled = false;
     const titleEl = document.getElementById('notice-title');
     const messageEl = document.getElementById('notice-message');
     if (titleEl) titleEl.value = '';
@@ -834,10 +838,20 @@ function handleAddNotice(event) {
     toggleNoticeForm();
     renderNoticeBoardList();
 }
-function deleteNotice(id) {
+async function deleteNotice(id) {
     if (!getPermissions(currentUser.role).canManageNotices) return; // RBAC guard
-    noticesList = noticesList.filter(n => n.id !== id);
-    persistNotices();
+    if (!confirm('Delete this notice? This cannot be undone.')) return;
+    try {
+        // Sends an explicit DELETE request to remove the notice from the
+        // database directly (see NoticesAPI.remove in api.js).
+        await NoticesAPI.remove(id);
+    } catch (err) {
+        alert(err.message || 'Could not delete this notice. Please try again.');
+        return;
+    }
+    // Local state only updates after the backend confirms the delete, so
+    // the notice stays gone permanently instead of reappearing on reload.
+    await refreshNoticesList();
     renderNoticeBoardList();
 }
 // Quick-action shortcut: jumps to the Students tab and opens the same
