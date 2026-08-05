@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db');
 const { authenticate } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
+const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 const HASH_ROUNDS = 10;
@@ -40,6 +41,10 @@ router.post('/login', asyncHandler(async (req, res) => {
   const token = jwt.sign(publicUser, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '12h'
   });
+
+  // Fire-and-forget: logActivity() catches its own errors, so this never
+  // delays or fails the login response itself.
+  logActivity(publicUser.username, 'LOGIN', req.ip);
 
   return res.json({ token, user: publicUser });
 }));

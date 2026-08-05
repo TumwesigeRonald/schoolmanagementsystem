@@ -434,7 +434,8 @@ function renderSidebarNav() {
         { id: 'performers', label: 'Best & Worst Performers', icon: 'fa-ranking-star' },
         { id: 'attendance', label: 'Attendance', icon: 'fa-calendar-check' },
         { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open' },
-        { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' }
+        { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' },
+        { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
     // styles.css), so unselected items use a light slate (#e2e8f0) instead of
@@ -485,7 +486,7 @@ function switchTab(tabName) {
     if (!permissions.tabs.includes(tabName)) {
         tabName = permissions.defaultTab;
     }
-    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers'];
+    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'activitylog'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
@@ -512,6 +513,7 @@ function switchTab(tabName) {
         case 'attendance': titleText = "Attendance Registry"; break;
         case 'resources': titleText = "Educational Resources"; break;
         case 'teachers': titleText = currentUser.role === 'Teacher' ? "My Teacher Profile" : "Teacher Accounts & Credentials"; break;
+        case 'activitylog': titleText = "Admin Activity Log"; break;
     }
     if (titleElem) titleElem.innerText = titleText;
     const contentElem = document.getElementById('tab-content');
@@ -565,6 +567,10 @@ function switchTab(tabName) {
         case 'teachers':
             contentElem.innerHTML = renderTeachersModule();
             loadTeacherData();
+            break;
+        case 'activitylog':
+            contentElem.innerHTML = renderActivityLogModule();
+            loadActivityLogData();
             break;
     }
     updateDashboardStats();
@@ -1368,7 +1374,7 @@ function renderScoresModule() {
                 <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
             <div class="overflow-auto max-h-[65vh] bg-white border border-slate-200 rounded-2xl shadow-xs">
-                <table class="w-full text-left border-collapse">
+                <table class="w-full text-left score-table">
                     <thead id="score-table-head"></thead>
                     <tbody id="score-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
                 </table>
@@ -3362,6 +3368,74 @@ async function saveOwnTeacherProfile(event) {
         msg.innerText = "Profile updated successfully.";
         msg.classList.remove('hidden');
     }
+}
+/* ---------------------------------------------------------
+   9b. ADMIN ACTIVITY LOG
+   Read-only view of login events recorded server-side (see
+   lib/activityLog.js + routes/activity-log.routes.js in the
+   backend), fetched fresh every time this tab is opened rather
+   than pre-synced with the other lists — Administrator-only,
+   gated both by ROLE_PERMISSIONS.tabs (api.js) and the backend's
+   own requireRole('Administrator') check.
+   --------------------------------------------------------- */
+function renderActivityLogModule() {
+    return `
+        <div class="space-y-6">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <p class="text-xs font-semibold text-slate-500">A record of every successful login to this system, most recent first.</p>
+                <button onclick="loadActivityLogData()" class="w-full md:w-auto bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-rotate-right mr-1.5"></i>Refresh</button>
+            </div>
+            <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
+                            <th class="p-4">Username / ID</th>
+                            <th class="p-4">Action Type</th>
+                            <th class="p-4">IP Address</th>
+                            <th class="p-4">Timestamp</th>
+                        </tr>
+                    </thead>
+                    <tbody id="activity-log-table-body" class="divide-y divide-slate-100 text-xs text-slate-700">
+                        <tr><td colspan="4" class="p-6 text-center text-slate-400 text-xs font-medium">Loading activity log&hellip;</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+async function loadActivityLogData() {
+    const tbody = document.getElementById('activity-log-table-body');
+    if (!tbody) return;
+    let entries;
+    try {
+        entries = await ActivityLogAPI.list();
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-rose-500 text-xs font-semibold">${escapeHTML(err.message || 'Could not load the activity log. Please try again.')}</td></tr>`;
+        return;
+    }
+    if (!Array.isArray(entries) || entries.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="p-6 text-center text-slate-400 text-xs font-medium">No login activity has been recorded yet.</td></tr>`;
+        return;
+    }
+    // Backend already returns rows ORDER BY created_at DESC — sort again
+    // here defensively so the view stays reverse-chronological even if
+    // that ever changes server-side.
+    const sorted = entries.slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    tbody.innerHTML = sorted.map(entry => `
+            <tr class="hover:bg-slate-50 transition-colors">
+                <td class="p-4 font-bold text-slate-900">${escapeHTML(entry.username || '-')}</td>
+                <td class="p-4 text-slate-600 font-semibold">${escapeHTML(entry.actionType || '-')}</td>
+                <td class="p-4 font-mono text-xs text-slate-500">${escapeHTML(entry.ipAddress || '-')}</td>
+                <td class="p-4 text-slate-600 font-semibold">${formatActivityLogTimestamp(entry.createdAt)}</td>
+            </tr>
+        `).join('');
+}
+function formatActivityLogTimestamp(dateStr) {
+    const d = new Date(dateStr);
+    if (isNaN(d)) return dateStr || '-';
+    const datePart = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const timePart = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return `${datePart} at ${timePart}`;
 }
 /* ---------------------------------------------------------
    10. INITIAL PAGE LOAD

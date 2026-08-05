@@ -88,7 +88,10 @@ const ENDPOINTS = {
     TERM_SETTINGS: "/settings/term",
 
     // --- Report cards (optional server-side PDF generation) ---
-    REPORT_CARD: (studentId) => `/reports/${encodeURIComponent(studentId)}`
+    REPORT_CARD: (studentId) => `/reports/${encodeURIComponent(studentId)}`,
+
+    // --- Admin: login/user activity log ---
+    ACTIVITY_LOG: "/activity-log"
 };
 
 /* ---------------------------------------------------------
@@ -201,7 +204,7 @@ const ROLES = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: {
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "activitylog"],
         defaultTab: "dashboard",
         canManageStudents: true,
         canManageScores: true,
@@ -534,6 +537,21 @@ const TermAPI = {
         return remoteFirst(
             () => apiRequest(ENDPOINTS.TERM_SETTINGS, { method: "PUT", body: settings }),
             () => { Object.assign(termSettings, settings); return termSettings; }
+        );
+    }
+};
+
+/* ---------------------------------------------------------
+   12. ADMIN ACTIVITY LOG DATA-ACCESS LAYER
+   Login-event history lives entirely server-side (activity_log
+   table) — there's no local/offline demo data for it, so the
+   fallback below just returns an empty list rather than fake rows.
+   --------------------------------------------------------- */
+const ActivityLogAPI = {
+    async list() {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.ACTIVITY_LOG),
+            () => []
         );
     }
 };

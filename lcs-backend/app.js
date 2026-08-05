@@ -12,8 +12,15 @@ const attendanceRoutes = require('./routes/attendance.routes');
 const termRoutes = require('./routes/term.routes');
 const resourcesRoutes = require('./routes/resources.routes');
 const uploadRoutes = require('./routes/upload.routes'); // <-- Added upload routes
+const activityLogRoutes = require('./routes/activity-log.routes');
 
 const app = express();
+
+// Trust the platform's reverse proxy (Vercel/Render both sit behind one) so
+// req.ip reflects the real client address from X-Forwarded-For instead of
+// the proxy's own internal address — needed for accurate IP capture in the
+// Activity Log (see routes/auth.routes.js + lib/activityLog.js).
+app.set('trust proxy', 1);
 
 // --- Core middleware ---
 const corsOrigin = process.env.CORS_ORIGIN || '*';
@@ -71,6 +78,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/settings/term', termRoutes);
 app.use('/api/resources', resourcesRoutes);
 app.use('/api/upload', uploadRoutes); // <-- Mounted upload endpoint here
+app.use('/api/activity-log', activityLogRoutes);
 
 // --- 404 for unmatched /api routes ---
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));

@@ -138,6 +138,23 @@ CREATE TABLE IF NOT EXISTS resources (
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS file_url  TEXT;
 ALTER TABLE resources ADD COLUMN IF NOT EXISTS file_size INTEGER;
 
+-- -------------------------------------------------------------
+-- activity_log — records login events (and any other tracked admin
+-- actions later) for the Admin dashboard's Activity Log view.
+-- Written by routes/auth.routes.js on every successful login via
+-- lib/activityLog.js. Deliberately does NOT reference users/students/
+-- teachers with a foreign key: a login event should still be kept
+-- (and stay attributable to the username that logged in) even if that
+-- account is later renamed or removed.
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS activity_log (
+  id           SERIAL PRIMARY KEY,
+  username     TEXT NOT NULL,
+  action_type  TEXT NOT NULL,        -- e.g. "LOGIN"
+  ip_address   TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_scores_student      ON scores(student_id);
 CREATE INDEX IF NOT EXISTS idx_scores_subject      ON scores(subject);
 CREATE INDEX IF NOT EXISTS idx_scores_class        ON scores(class_level);
@@ -147,3 +164,4 @@ CREATE INDEX IF NOT EXISTS idx_attendance_class    ON attendance(class_level);
 CREATE INDEX IF NOT EXISTS idx_students_class      ON students(class);
 CREATE INDEX IF NOT EXISTS idx_users_student       ON users(student_id);
 CREATE INDEX IF NOT EXISTS idx_users_teacher       ON users(teacher_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);

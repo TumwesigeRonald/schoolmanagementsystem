@@ -859,6 +859,36 @@ input, select, textarea {
 }
 
 /* ---------------------------------------------------------
+   MARKS ENTRY TABLE — SCROLL/STICKY DRIFT FIX
+   This table used Tailwind's `border-collapse` utility, which puts the
+   table in the "collapsing borders" model. That model doesn't compose
+   cleanly with `position: sticky` cells: the browser paints collapsed
+   borders on a shared table-wide border grid rather than on each cell's
+   own box, so during vertical scrolling the sticky "Full Name" column
+   (and the sticky header row) can visibly drift a pixel or two out of
+   alignment with the score-entry cells scrolling underneath them.
+   Switching to the "separate borders" model (border-collapse: separate;
+   border-spacing: 0) makes every border belong to its own cell, which
+   scrolls/repaints in lockstep with that cell — no more drift. Border-
+   spacing of 0 keeps cells visually flush, same as before.
+   NOTE: in the separate-borders model, only borders declared directly on
+   <td>/<th> are painted — borders declared on the <tr> (like the header's
+   existing `border-b`) or via the tbody's `divide-y` utility are ignored.
+   The two rules just below restore those exact borders at the cell level
+   so the table looks identical to before; only the drift is gone.
+   --------------------------------------------------------- */
+.score-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+#score-table-head th {
+    border-bottom: 1px solid #e2e8f0; /* replaces the header <tr>'s border-b border-slate-200 */
+}
+#score-table-body tr:not(:first-child) td {
+    border-top: 1px solid #f1f5f9; /* replaces tbody's divide-y divide-slate-100 row dividers */
+}
+
+/* ---------------------------------------------------------
    MARKS ENTRY TABLE — FROZEN FULL NAME COLUMN
    The "Student ID" column has been removed from this table entirely
    (see buildOLevelHeader/buildALevelRow etc. in script.js) to free up
