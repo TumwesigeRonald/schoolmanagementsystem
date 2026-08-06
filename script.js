@@ -428,6 +428,7 @@ function renderSidebarNav() {
         { id: 'attendance', label: 'Attendance', icon: 'fa-calendar-check' },
         { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open' },
         { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' },
+        { id: 'subjectmarksstatus', label: 'Subject Marks Status', icon: 'fa-list-check' },
         { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
@@ -479,7 +480,7 @@ function switchTab(tabName) {
     if (!permissions.tabs.includes(tabName)) {
         tabName = permissions.defaultTab;
     }
-    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'activitylog'];
+    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
@@ -506,6 +507,7 @@ function switchTab(tabName) {
         case 'attendance': titleText = "Attendance Registry"; break;
         case 'resources': titleText = "Educational Resources"; break;
         case 'teachers': titleText = currentUser.role === 'Teacher' ? "My Teacher Profile" : "Teacher Accounts & Credentials"; break;
+        case 'subjectmarksstatus': titleText = "Subject Marks Status"; break;
         case 'activitylog': titleText = "Admin Activity Log"; break;
     }
     if (titleElem) titleElem.innerText = titleText;
@@ -560,6 +562,10 @@ function switchTab(tabName) {
         case 'teachers':
             contentElem.innerHTML = renderTeachersModule();
             loadTeacherData();
+            break;
+        case 'subjectmarksstatus':
+            contentElem.innerHTML = renderSubjectMarksStatusModule();
+            loadSubjectMarksStatusData();
             break;
         case 'activitylog':
             contentElem.innerHTML = renderActivityLogModule();
@@ -3302,6 +3308,7 @@ function loadTeacherData() {
                 <td class="p-4 text-slate-600 font-semibold">${escapeHTML(teacher.subject || '-')}</td>
                 <td class="p-4 font-mono text-xs text-slate-500" title="Passwords are never shown in plain text once stored securely on the server.">${teacher.password ? teacher.password : '••••••••'}</td>
                 <td class="p-4 text-center space-x-2">
+                    <button onclick="openEditTeacherModal(${index})" class="text-indigo-600 hover:text-indigo-700 text-[11px] font-extrabold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
                     <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>
                     <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
                 </td>
@@ -3374,6 +3381,74 @@ async function resetTeacherPassword(index) {
     await refreshTeachersList();
     loadTeacherData();
 }
+// ---------------------------------------------------------
+// Edit Teacher Credentials (Administrator only). Reuses the
+// existing #modal-root + closeModal() pattern (see openStudentProfileModal)
+// and TeachersAPI.update(), which already powers saveOwnTeacherProfile()
+// above — no new API surface needed.
+function openEditTeacherModal(index) {
+    if (!getPermissions(currentUser.role).canManageTeachers) return; // RBAC guard: Administrator only
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    const teacher = teachersList[index];
+    if (!teacher) return;
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                <div class="flex items-center justify-between p-5 border-b border-slate-200">
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-indigo-600"></i>Edit Teacher</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
+                </div>
+                <form onsubmit="submitEditTeacher(event, '${teacher.id}')" class="p-5 space-y-4">
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Full Name</label>
+                        <input type="text" id="edit-teach-name" value="${escapeHTML(teacher.name)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Username</label>
+                        <input type="text" id="edit-teach-username" value="${escapeHTML(teacher.username)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Password</label>
+                        <input type="text" id="edit-teach-password" placeholder="Leave blank to keep current password" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2">
+                        <button type="button" onclick="closeModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
+                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+async function submitEditTeacher(event, teacherId) {
+    event.preventDefault();
+    if (!getPermissions(currentUser.role).canManageTeachers) return; // RBAC guard: Administrator only
+    const teacher = teachersList.find(t => t.id === teacherId);
+    if (!teacher) return;
+    const newName = getInputValue('edit-teach-name').trim();
+    const newUsername = getInputValue('edit-teach-username').trim();
+    if (newName === '' || newUsername === '') {
+        alert('Please fill in Full Name and Username.');
+        return;
+    }
+    if (teachersList.some(t => t !== teacher && t.username.toLowerCase() === newUsername.toLowerCase())) {
+        alert('That username is already taken. Please choose another.');
+        return;
+    }
+    const updates = { name: newName, username: newUsername };
+    const newPassword = getInputValue('edit-teach-password').trim();
+    if (newPassword !== "") updates.password = newPassword;
+    try {
+        await TeachersAPI.update(teacher.id, updates);
+    } catch (err) {
+        alert(err.message || 'Could not update this teacher. Please try again.');
+        return;
+    }
+    await refreshTeachersList();
+    closeModal();
+    loadTeacherData();
+}
 async function saveOwnTeacherProfile(event) {
     event.preventDefault();
     if (currentUser.role !== 'Teacher') return; // RBAC guard: teachers edit only their own profile
@@ -3410,6 +3485,86 @@ async function saveOwnTeacherProfile(event) {
         msg.innerText = "Profile updated successfully.";
         msg.classList.remove('hidden');
     }
+}
+/* ---------------------------------------------------------
+   9a2. SUBJECT MARKS STATUS (Administrator only)
+   Read-only oversight view: for every O-Level subject (S.1-S.4)
+   and A-Level subject (S.5-S.6), shows how many students in each
+   class have had marks recorded ("touched" in marksStorage) versus
+   the total enrolled in that class. Purely derived from the same
+   studentsList / marksStorage / oLevelSubjects / aLevelSubjects
+   already used by the Scores and Report Cards modules — no new
+   state, storage key, or API endpoint is introduced.
+   --------------------------------------------------------- */
+const O_LEVEL_STATUS_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4'];
+const A_LEVEL_STATUS_CLASSES = ['S.5', 'S.6'];
+function computeSubjectMarksStatusRow(subject, classLevels) {
+    const cells = classLevels.map(cls => {
+        const studentsInClass = studentsList.filter(s => s.class === cls);
+        const total = studentsInClass.length;
+        const recorded = studentsInClass.filter(s => {
+            const m = marksStorage[`${subject}_${s.id}`];
+            return m && m.touched;
+        }).length;
+        let status, badgeClass;
+        if (total === 0) { status = 'No Students'; badgeClass = 'bg-slate-100 text-slate-400 border-slate-200'; }
+        else if (recorded === 0) { status = 'Not Started'; badgeClass = 'bg-rose-50 text-rose-600 border-rose-200'; }
+        else if (recorded < total) { status = 'In Progress'; badgeClass = 'bg-amber-50 text-amber-700 border-amber-200'; }
+        else { status = 'Complete'; badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200'; }
+        return { cls, recorded, total, status, badgeClass };
+    });
+    return { subject, cells };
+}
+function renderSubjectMarksStatusTable(title, subjects, classLevels) {
+    const rows = subjects.map(subj => computeSubjectMarksStatusRow(subj, classLevels));
+    return `
+        <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
+            <div class="p-4 border-b border-slate-200">
+                <h4 class="text-xs font-extrabold text-teal-700 uppercase tracking-wider">${escapeHTML(title)}</h4>
+            </div>
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
+                        <th class="p-4">Subject</th>
+                        ${classLevels.map(cls => `<th class="p-4 text-center">${escapeHTML(cls)}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-xs text-slate-700">
+                    ${rows.map(row => `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="p-4 font-bold text-slate-900">${escapeHTML(row.subject)}</td>
+                            ${row.cells.map(cell => `
+                                <td class="p-4 text-center">
+                                    <span class="inline-block font-extrabold px-2.5 py-1 rounded-lg text-[10px] border ${cell.badgeClass}" title="${cell.recorded} of ${cell.total} students recorded">
+                                        ${cell.status}${cell.total > 0 ? ` (${cell.recorded}/${cell.total})` : ''}
+                                    </span>
+                                </td>
+                            `).join('')}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+function renderSubjectMarksStatusModule() {
+    return `
+        <div class="space-y-6">
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <p class="text-xs font-semibold text-slate-500">Shows which subjects have had marks recorded for every class, across both O-Level (S.1-S.4) and A-Level (S.5-S.6).</p>
+            </div>
+            <div id="subject-marks-status-content" class="space-y-6">
+                <p class="text-center text-slate-400 text-xs font-medium py-6">Loading subject marks status&hellip;</p>
+            </div>
+        </div>
+    `;
+}
+function loadSubjectMarksStatusData() {
+    const container = document.getElementById('subject-marks-status-content');
+    if (!container) return;
+    container.innerHTML =
+        renderSubjectMarksStatusTable('O-Level Subjects (S.1 - S.4)', oLevelSubjects, O_LEVEL_STATUS_CLASSES) +
+        renderSubjectMarksStatusTable('A-Level Subjects (S.5 - S.6)', aLevelSubjects, A_LEVEL_STATUS_CLASSES);
 }
 /* ---------------------------------------------------------
    9b. ADMIN ACTIVITY LOG

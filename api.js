@@ -207,7 +207,7 @@ const ROLES = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: {
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "activitylog"],
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog"],
         defaultTab: "dashboard",
         canManageStudents: true,
         canManageScores: true,
