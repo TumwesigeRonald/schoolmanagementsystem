@@ -39,4 +39,21 @@ router.get('/', authenticate, requireRole('Administrator'), asyncHandler(async (
   }
 }));
 
+// DELETE /api/activity-log — Administrator-only. Clears every recorded
+// login event so the log doesn't grow unbounded. Same 42P01 fallback as
+// GET above: on a fresh/not-yet-migrated database there's nothing to
+// clear, so that's treated as a successful no-op rather than an error.
+router.delete('/', authenticate, requireRole('Administrator'), asyncHandler(async (req, res) => {
+  try {
+    await db.query('DELETE FROM activity_log');
+    return res.status(200).json({ message: 'Activity log cleared.' });
+  } catch (err) {
+    if (err.code === '42P01') {
+      return res.status(200).json({ message: 'Activity log cleared.' });
+    }
+    console.error('[activity-log] clear failed:', err);
+    return res.status(500).json({ message: 'Could not clear the activity log.' });
+  }
+}));
+
 module.exports = router;

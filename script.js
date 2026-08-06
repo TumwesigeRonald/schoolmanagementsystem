@@ -3425,7 +3425,10 @@ function renderActivityLogModule() {
         <div class="space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                 <p class="text-xs font-semibold text-slate-500">A record of every successful login to this system, most recent first.</p>
-                <button onclick="loadActivityLogData()" class="w-full md:w-auto bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-rotate-right mr-1.5"></i>Refresh</button>
+                <div class="w-full md:w-auto flex flex-col sm:flex-row gap-2">
+                    <button onclick="loadActivityLogData()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-rotate-right mr-1.5"></i>Refresh</button>
+                    <button onclick="clearActivityLog()" class="w-full sm:w-auto bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl border border-rose-200 transition"><i class="fa-solid fa-trash mr-1.5"></i>Clear Logs</button>
+                </div>
             </div>
             <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
                 <table class="w-full text-left border-collapse">
@@ -3444,6 +3447,21 @@ function renderActivityLogModule() {
             </div>
         </div>
     `;
+}
+// Clears every recorded login event server-side (see ActivityLogAPI.clear
+// in api.js / DELETE /api/activity-log in the backend), then reloads the
+// now-empty table. Gated to Administrator the same way the tab itself is
+// (ROLE_PERMISSIONS.tabs in api.js + the backend's requireRole check), so
+// this button is only ever reachable by an admin in the first place.
+async function clearActivityLog() {
+    if (!confirm('Clear the entire activity log? This cannot be undone.')) return;
+    try {
+        await ActivityLogAPI.clear();
+    } catch (err) {
+        alert(err.message || 'Could not clear the activity log. Please try again.');
+        return;
+    }
+    await loadActivityLogData();
 }
 async function loadActivityLogData() {
     const tbody = document.getElementById('activity-log-table-body');

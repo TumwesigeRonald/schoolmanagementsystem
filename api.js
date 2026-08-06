@@ -565,6 +565,12 @@ const ActivityLogAPI = {
             () => apiRequest(ENDPOINTS.ACTIVITY_LOG),
             () => []
         );
+    },
+    // No local-fallback here on purpose, same reasoning as ScoresAPI.save:
+    // the activity log lives entirely server-side, so a network failure
+    // must reach the caller rather than silently "succeeding" locally.
+    async clear() {
+        return apiRequest(ENDPOINTS.ACTIVITY_LOG, { method: "DELETE" });
     }
 };
 
