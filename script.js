@@ -571,6 +571,16 @@ function switchTab(tabName) {
 /* ---------------------------------------------------------
    3. DASHBOARD STATISTICS CALCULATION
    --------------------------------------------------------- */
+// A record being `touched` only means a teacher opened/edited that
+// subject at some point — it stays true even after every individual
+// score field on it has since been cleared or deleted. "Marks Recorded"
+// must only count records that still hold at least one real score value,
+// so this checks the actual score fields instead of the touched flag.
+function hasRecordedScore(marks) {
+    return ['ao1', 'ao2', 'eot', 'p1', 'p2'].some(
+        field => marks[field] !== null && marks[field] !== undefined && marks[field] !== ''
+    );
+}
 function updateDashboardStats() {
     const metricsGrid = document.querySelector('.metrics-grid');
     if (metricsGrid) {
@@ -580,7 +590,7 @@ function updateDashboardStats() {
     }
     const totalStudents = studentsList.length;
     const uniqueClasses = [...new Set(studentsList.map(s => s.class))].length;
-    const totalMarksRecorded = Object.values(marksStorage).filter(m => m && m.touched).length;
+    const totalMarksRecorded = Object.values(marksStorage).filter(m => m && hasRecordedScore(m)).length;
     const totalSubjects = oLevelSubjects.length + aLevelSubjects.length;
     
     const elStudents = document.getElementById('stat-students-count');
@@ -607,7 +617,7 @@ function computeDashboardSummary() {
     const girls = studentsList.filter(s => s.gender === 'Female').length;
     const uniqueClasses = [...new Set(studentsList.map(s => s.class))].length;
     const totalSubjects = oLevelSubjects.length + aLevelSubjects.length;
-    const totalMarksRecorded = Object.values(marksStorage).filter(m => m && m.touched).length;
+    const totalMarksRecorded = Object.values(marksStorage).filter(m => m && hasRecordedScore(m)).length;
     return { totalStudents, boys, girls, uniqueClasses, totalSubjects, totalMarksRecorded };
 }
 // Combines the O-Level and A-Level performer lists (same criteria and
