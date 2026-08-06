@@ -434,8 +434,17 @@ const ScoresAPI = {
         // would mean the mark quietly vanishes on refresh with zero indication
         // anything was wrong — which is exactly the bug this used to cause.
         // Every failure, network or server-side, must reach the caller.
+        const body = { subject, studentId, classLevel, ...marksRecord };
+        // A cleared score field is kept as '' in local state (see
+        // updateMarks/updateALevelMarks) so it renders as a clean blank
+        // instead of any stale value. The scores table's mark columns are
+        // NUMERIC and can't store '', so only in this outgoing request body,
+        // translate that empty marker to a real SQL NULL for those columns.
+        ['ao1', 'ao2', 'eot', 'p1', 'p2'].forEach(field => {
+            if (body[field] === '') body[field] = null;
+        });
         try {
-            return await apiRequest(ENDPOINTS.SCORES, { method: "POST", body: { subject, studentId, classLevel, ...marksRecord } });
+            return await apiRequest(ENDPOINTS.SCORES, { method: "POST", body });
         } catch (err) {
             marksStorage[recordKey] = marksRecord; // keep it visible in this tab, but the caller must be told it isn't actually persisted
             throw err;

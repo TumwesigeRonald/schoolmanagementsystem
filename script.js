@@ -1492,8 +1492,8 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
             <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p1 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" value="${marks.p2 || ''}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p1, '')}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p2, '')}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(avgMark, '')}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade, '')}</td>
             <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor, '')}</td>
@@ -1527,15 +1527,17 @@ function buildOLevelRow(student, recordKey) {
     `;
 }
 const O_LEVEL_FIELD_LIMITS = { ao1: [0, 3], ao2: [0, 3], eot: [0, 80] };
-// A cleared/deleted/blank input must become a true null "no mark" state,
-// NOT a numeric 0 — a 0 here used to silently become a real (and wrong)
-// contributor to averages/grades. Only an actual invalid (non-numeric,
-// non-blank) entry falls back to null too, since there's nothing valid to
-// clamp. A real entered number is still clamped to [min, max] as before.
+// A cleared/deleted/blank input must become a true empty "no mark" state
+// ('') — NOT a numeric 0 (a 0 here used to silently become a real, wrong
+// contributor to averages/grades) and NOT null (which used to linger as a
+// stale value in state/DB instead of a clean empty state). Only an actual
+// invalid (non-numeric, non-blank) entry falls back to '' too, since
+// there's nothing valid to clamp. A real entered number is still clamped
+// to [min, max] as before.
 function clampValue(rawValue, min, max) {
-    if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+    if (rawValue === null || rawValue === undefined || rawValue === '') return '';
     const val = Number(rawValue);
-    if (isNaN(val)) return null;
+    if (isNaN(val)) return '';
     return Math.min(max, Math.max(min, val));
 }
 /* ---------------------------------------------------------
@@ -1565,7 +1567,7 @@ function computeALevelAvgMark(marks) {
 // Final mark yet — return null rather than treating the missing E.O.T
 // as 0 (which used to silently produce a real, wrong Final score).
 function computeOLevelFinalTotal(marks, faScore) {
-    if (marks.eot === null || marks.eot === undefined) return null;
+    if (marks.eot === null || marks.eot === undefined || marks.eot === '') return null;
     return Math.round(Number(faScore) + Number(marks.eot));
 }
 /* ---------------------------------------------------------
@@ -1704,7 +1706,7 @@ function updateMarks(studId, type, value, inputEl) {
     const cleanValue = clampValue(value, min, max);
     marksStorage[recordKey][type] = cleanValue;
     marksStorage[recordKey].touched = true;
-    if (inputEl) inputEl.value = cleanValue === null ? '' : cleanValue;
+    if (inputEl) inputEl.value = cleanValue;
     
     const marks = marksStorage[recordKey];
     const avScore = calculateAOAverage(marks.ao1, marks.ao2).toFixed(1);
@@ -1740,10 +1742,13 @@ function updateALevelMarks(studId, type, value, inputEl) {
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
     const recordKey = `${selectedSubject}_${studId}`;
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: null, p2: null };
-    const cleanValue = clampValue(value, 0, 100);
+    // A-Level papers are whole-number marks only (e.g. 90, 98) — round any
+    // clamped value so decimals never enter storage/display for this table.
+    const clamped = clampValue(value, 0, 100);
+    const cleanValue = clamped === '' ? '' : Math.round(clamped);
     marksStorage[recordKey][type] = cleanValue;
     marksStorage[recordKey].touched = true;
-    if (inputEl) inputEl.value = cleanValue === null ? '' : cleanValue;
+    if (inputEl) inputEl.value = cleanValue;
     
     const marks = marksStorage[recordKey];
     const avgMark = computeALevelAvgMark(marks);
