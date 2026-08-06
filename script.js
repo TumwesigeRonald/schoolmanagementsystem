@@ -2014,9 +2014,13 @@ async function generateReportCards() {
 /* ---------------------------------------------------------
    6c. REPORT CARD SHARED HELPERS
    A subject only counts as "recorded" when marksStorage[key].touched
-   is true — i.e. the teacher actually entered a mark or remark for it.
-   This is what makes a subject automatically appear on (or stay off)
-   a student's report card the moment real data is entered.
+   is true — i.e. the teacher actually entered a mark or remark for it —
+   AND it still has a valid computed score (avgMark / finalTotal). The
+   second condition is what makes a subject disappear again once every
+   mark for it has been cleared/deleted, instead of lingering as an
+   empty/dashed row. This is what makes a subject automatically appear on
+   (or stay off) a student's report card the moment real data is entered
+   or removed.
    --------------------------------------------------------- */
 function getALevelSubjectRecords(student) {
     return aLevelSubjects
@@ -2031,7 +2035,12 @@ function getALevelSubjectRecords(student) {
             const avgMark = computeALevelAvgMark(marks);
             const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
             return { subj, isSubsidiary, marks, avgMark, gradeInfo };
-        });
+        })
+        // A subject that was touched at some point but has since had all its
+        // papers cleared/deleted has no valid mark anymore (avgMark is null)
+        // — drop it entirely instead of surfacing an empty/dashed row on the
+        // profile view, performance summary, or report card.
+        .filter(record => record.avgMark !== null);
 }
 function getOLevelSubjectRecords(student) {
     return oLevelSubjects
@@ -2047,7 +2056,11 @@ function getOLevelSubjectRecords(student) {
             const finalTotal = computeOLevelFinalTotal(marks, faScore);
             const gradeData = computeOfficialGrade(finalTotal);
             return { subj, marks, avScore, faScore, finalTotal, gradeData };
-        });
+        })
+        // Same reasoning as A-Level above: a cleared/deleted E.O.T mark means
+        // finalTotal is null, so the subject no longer has a valid score and
+        // must be filtered out rather than shown with empty dashes.
+        .filter(record => record.finalTotal !== null);
 }
 // Groups attendanceStorage (keyed "date_studentId") by studentId in a
 // single O(total attendance rows) pass. Pass the result into
