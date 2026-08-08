@@ -556,7 +556,6 @@ function switchTab(tabName) {
         case 'scores':
             contentElem.innerHTML = renderScoresModule();
             updateSubjectDropdown();
-            loadScoreSheetData();
             break;
         case 'reports':
             contentElem.innerHTML = renderReportsModule();
@@ -1423,14 +1422,18 @@ function renderScoresModule() {
                     <div class="flex items-end gap-2">
                         <div>
                             <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Subject</label>
-                            <select id="score-subject-select" onchange="loadScoreSheetData()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
+                            <select id="score-subject-select" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
                         </div>
+                        <button onclick="loadScoreSheetData()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl transition shadow-xs"><i class="fa-solid fa-download mr-1.5"></i>Load Subject</button>
                         <button onclick="loadNextSubject()" class="bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-forward mr-1.5"></i>Next Subject</button>
                     </div>
                 </div>
                 <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
-            <div class="overflow-auto max-h-[65vh] bg-white border border-slate-200 rounded-2xl shadow-xs">
+            <div id="score-table-empty-state" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">
+                Select a class and subject, then click "Load Subject" to view the marks entry table.
+            </div>
+            <div id="score-table-wrapper" class="overflow-auto max-h-[65vh] bg-white border border-slate-200 rounded-2xl shadow-xs hidden">
                 <table class="w-full text-left score-table">
                     <thead id="score-table-head"></thead>
                     <tbody id="score-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
@@ -1441,7 +1444,16 @@ function renderScoresModule() {
 }
 function onClassLevelChange() {
     updateSubjectDropdown();
-    loadScoreSheetData();
+    hideScoreSheetTable();
+}
+// Resets the marks entry table back to its default hidden state, showing
+// the empty-state placeholder instead. Used whenever the current selection
+// is no longer guaranteed to match what's displayed (e.g. class changed).
+function hideScoreSheetTable() {
+    const wrapper = document.getElementById('score-table-wrapper');
+    const emptyState = document.getElementById('score-table-empty-state');
+    if (wrapper) wrapper.classList.add('hidden');
+    if (emptyState) emptyState.classList.remove('hidden');
 }
 function updateSubjectDropdown() {
     const classSelect = document.getElementById('score-class-select');
@@ -1471,6 +1483,13 @@ function loadScoreSheetData() {
     if (subjectSelect && subjectSelect.options.length === 0) {
         updateSubjectDropdown();
     }
+    
+    // Marks entry table/rows only appear once a subject is chosen and this
+    // is explicitly triggered (via "Load Subject" or "Next Subject").
+    const wrapper = document.getElementById('score-table-wrapper');
+    const emptyState = document.getElementById('score-table-empty-state');
+    if (wrapper) wrapper.classList.remove('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
     
     const selectedSubject = subjectSelect ? subjectSelect.value : (isALevel ? aLevelSubjects[0] : oLevelSubjects[0]);
     const isSubsidiary = subsidiarySubjects.includes(selectedSubject.toUpperCase());
