@@ -1422,7 +1422,6 @@ function renderScoresModule() {
                             <select id="score-subject-select" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
                         </div>
                         <button onclick="loadScoreSheetData()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl transition shadow-xs"><i class="fa-solid fa-download mr-1.5"></i>Load Subject</button>
-                        <button onclick="loadNextSubject()" class="bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-forward mr-1.5"></i>Next Subject</button>
                     </div>
                 </div>
                 <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
