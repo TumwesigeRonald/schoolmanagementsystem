@@ -3606,7 +3606,7 @@ function computeSubjectMarksStatusRow(subject, classLevels) {
         let status, badgeClass;
         if (total === 0) { status = 'No Students'; badgeClass = 'bg-slate-100 text-slate-400 border-slate-200'; }
         else if (recorded === 0) { status = 'Not Started'; badgeClass = 'bg-rose-50 text-rose-600 border-rose-200'; }
-        else if (recorded < total) { status = 'In Progress'; badgeClass = 'bg-amber-50 text-amber-700 border-amber-200'; }
+        else if (recorded < total) { status = 'In Progress'; badgeClass = 'bg-green-50 text-green-700 border-green-200'; }
         else { status = 'Complete'; badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200'; }
         return { cls, recorded, total, status, badgeClass };
     });
