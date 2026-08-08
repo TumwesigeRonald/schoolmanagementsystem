@@ -45,12 +45,34 @@ async function uploadResourceFile(buffer, originalName) {
   const safeName = originalName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
   const pathname = `lcs-portal-resources/${Date.now()}-${safeName}`;
 
-  const blob = await blobPut(pathname, buffer, {
-    access: 'public',
-    addRandomSuffix: true,
-    token: process.env.BLOB_READ_WRITE_TOKEN
-  });
-  return { fileUrl: blob.url, fileData: null };
+  try {
+    const blob = await blobPut(pathname, buffer, {
+      access: 'public',
+      addRandomSuffix: true,
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+    return { fileUrl: blob.url, fileData: null };
+  } catch (err) {
+    // BLOB_READ_WRITE_TOKEN is set but the call to Vercel Blob still failed —
+    // almost always a stale/invalid token (store disconnected/recreated in
+    // the Vercel dashboard since the token was captured, token copied from a
+    // different project, wrong environment, or quota exceeded). Previously
+    // this exception propagated straight up and the whole upload was
+    // rejected with a generic "Could not store the uploaded file" error,
+    // even though nothing is actually wrong with the file itself.
+    //
+    // Log the *real* reason (visible in `vercel logs` / the Vercel dashboard
+    // function logs) so it can be diagnosed, then fall back to the same
+    // base64-in-Postgres path used when no token is configured at all, so
+    // the upload still succeeds for the user instead of failing outright.
+    console.error(
+      `[storage] Vercel Blob upload failed for "${originalName}" even though BLOB_READ_WRITE_TOKEN is set — ` +
+      'check that a Blob store is still connected to this project and the token matches it (Vercel dashboard -> Storage). ' +
+      'Falling back to base64-in-Postgres for this upload:',
+      err
+    );
+    return { fileUrl: null, fileData: buffer.toString('base64') };
+  }
 }
 
 module.exports = { uploadResourceFile, hasBlobConfig };
