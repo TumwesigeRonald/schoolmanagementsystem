@@ -3490,8 +3490,9 @@ async function saveOwnTeacherProfile(event) {
    9a2. SUBJECT MARKS STATUS (Administrator only)
    Read-only oversight view: for every O-Level subject (S.1-S.4)
    and A-Level subject (S.5-S.6), shows how many students in each
-   class have had marks recorded ("touched" in marksStorage) versus
-   the total enrolled in that class. Purely derived from the same
+   class have had marks recorded (hasRecordedScore() on their
+   marksStorage entry) versus the total enrolled in that class.
+   Purely derived from the same
    studentsList / marksStorage / oLevelSubjects / aLevelSubjects
    already used by the Scores and Report Cards modules — no new
    state, storage key, or API endpoint is introduced.
@@ -3504,7 +3505,13 @@ function computeSubjectMarksStatusRow(subject, classLevels) {
         const total = studentsInClass.length;
         const recorded = studentsInClass.filter(s => {
             const m = marksStorage[`${subject}_${s.id}`];
-            return m && m.touched;
+            // Use hasRecordedScore (real ao1/ao2/eot/p1/p2 field check) instead
+            // of the stale `touched` flag: `touched` is set true the first time
+            // a teacher opens/edits a subject and never gets reset, so it stays
+            // true even after every mark for that subject has been deleted —
+            // which was making deleted subjects still show as "In Progress"
+            // instead of dropping back to "Not Started (0/total)".
+            return m && hasRecordedScore(m);
         }).length;
         let status, badgeClass;
         if (total === 0) { status = 'No Students'; badgeClass = 'bg-slate-100 text-slate-400 border-slate-200'; }
