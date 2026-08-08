@@ -1551,6 +1551,10 @@ function buildOLevelRow(student, recordKey) {
     const marks = marksStorage[recordKey] || { ao1: null, ao2: null, eot: null };
     const avScore = calculateAOAverage(marks.ao1, marks.ao2).toFixed(1);
     const faScore = ((avScore / 3.0) * 20).toFixed(1);
+    // Display-only: F.A (20) is shown as a whole number in the Marks Entry
+    // table. `faScore` itself stays a decimal string since it still feeds
+    // computeOLevelFinalTotal() below — only the rendered text is rounded.
+    const faScoreDisplay = Math.round(Number(faScore));
     const finalTotal = computeOLevelFinalTotal(marks, faScore);
     const gradeData = computeOfficialGrade(finalTotal);
     
@@ -1560,7 +1564,7 @@ function buildOLevelRow(student, recordKey) {
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
-            <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScore}</td>
+            <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScoreDisplay}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal, '')}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade, '')}</td>
@@ -1754,6 +1758,10 @@ function updateMarks(studId, type, value, inputEl) {
     const marks = marksStorage[recordKey];
     const avScore = calculateAOAverage(marks.ao1, marks.ao2).toFixed(1);
     const faScore = ((avScore / 3.0) * 20).toFixed(1);
+    // Display-only: F.A (20) is shown as a whole number in the Marks Entry
+    // table. `faScore` itself stays a decimal string since it still feeds
+    // computeOLevelFinalTotal() below — only the rendered text is rounded.
+    const faScoreDisplay = Math.round(Number(faScore));
     const finalTotal = computeOLevelFinalTotal(marks, faScore);
     const gradeData = computeOfficialGrade(finalTotal);
     
@@ -1769,7 +1777,7 @@ function updateMarks(studId, type, value, inputEl) {
     const gradeEl = document.getElementById(`grade-${studId}`);
     const descriptorEl = document.getElementById(`descriptor-${studId}`);
     if (avEl) avEl.innerText = avScore;
-    if (faEl) faEl.innerText = faScore;
+    if (faEl) faEl.innerText = faScoreDisplay;
     if (totalEl) totalEl.innerText = displayOrDash(finalTotal, '');
     if (gradeEl) gradeEl.innerText = displayOrDash(gradeData.grade, '');
     if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeData.descriptor, '');
@@ -2402,7 +2410,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-num">${formatAOScoreDisplay(r.marks.ao1, '-')}</td>
             <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '-')}</td>
             <td class="rc-num">${r.avScore.toFixed(1)}</td>
-            <td class="rc-num">${r.faScore.toFixed(1)}</td>
+            <td class="rc-num">${Math.round(r.faScore)}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
             <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
             <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
