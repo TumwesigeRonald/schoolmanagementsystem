@@ -139,7 +139,21 @@ function formatWholeScoreDisplay(raw, emptyValue) {
     return String(Math.round(n));
 }
 /* ---------------------------------------------------------
-   1b-iii. HTML ESCAPE HELPER (for any free-text user input we
+   1b-iii. A-LEVEL SUBJECT DISPLAY NAME FORMATTER
+   Purely cosmetic: strips a trailing "(SUBSIDIARY)" tag (e.g.
+   "ICT (SUBSIDIARY)" -> "ICT") for on-screen display in the
+   A-Level report card only. It never touches the canonical
+   subject string itself, which stays exactly as-is everywhere
+   else (aLevelSubjects, subsidiarySubjects, marksStorage keys,
+   grading logic) so nothing about how a subject is looked up,
+   matched, or graded changes. "SUBSIDIARY MATHEMATICS" is left
+   alone since it has no "(SUBSIDIARY)" suffix to strip.
+   --------------------------------------------------------- */
+function formatALevelSubjectDisplayName(subj) {
+    return subj.replace(/\s*\(SUBSIDIARY\)/i, '');
+}
+/* ---------------------------------------------------------
+   1b-iv. HTML ESCAPE HELPER (for any free-text user input we
    render back into the DOM, e.g. report card remarks)
    --------------------------------------------------------- */
 function escapeHTML(str) {
@@ -2153,7 +2167,7 @@ function buildSubjectBars(records, isALevel) {
         const width = score === null ? 0 : Math.max(2, Math.min(100, score));
         return `
         <div class="rc-bar-row">
-            <span class="rc-bar-label">${r.subj}</span>
+            <span class="rc-bar-label">${isALevel ? formatALevelSubjectDisplayName(r.subj) : r.subj}</span>
             <span class="rc-bar-track"><span class="rc-bar-fill" style="width:${width}%;background:${color};"></span></span>
             <span class="rc-bar-score" style="color:${color};">${displayOrDash(score)}</span>
         </div>`;
@@ -2183,9 +2197,9 @@ function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex 
             <div class="rc-summary-grid">
                 <div class="rc-summary-card">
                     <h4>Term Snapshot</h4>
-                    <div class="rc-summary-row"><span>Average Score</span><span>${avgScore !== null ? avgScore.toFixed(1) + '%' : 'N/A'}</span></div>
+                    <div class="rc-summary-row"><span>Average Score</span><span>${avgScore !== null ? (isALevel ? Math.round(avgScore) : avgScore.toFixed(1)) + '%' : 'N/A'}</span></div>
                     <div class="rc-summary-row"><span>Attendance</span><span>${attendance.total > 0 ? `${attendance.present}/${attendance.total} days (${attendance.pct}%)` : 'Not yet recorded'}</span></div>
-                    <div class="rc-summary-row"><span>Best Subject</span><span>${bestSubject ? bestSubject.subj : 'N/A'}</span></div>
+                    <div class="rc-summary-row"><span>Best Subject</span><span>${bestSubject ? (isALevel ? formatALevelSubjectDisplayName(bestSubject.subj) : bestSubject.subj) : 'N/A'}</span></div>
                 </div>
                 <div class="rc-summary-card">
                     <h4>Subject Performance Overview</h4>
@@ -2207,9 +2221,9 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
 
     const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
         <tr>
-            <td class="rc-subj">${r.subj}${r.isSubsidiary ? ' <span class="rc-sub-tag">SUB</span>' : ''}</td>
-            <td class="rc-num">${r.marks.p1 ?? '-'}</td>
-            <td class="rc-num">${r.marks.p2 ?? '-'}</td>
+            <td class="rc-subj">${formatALevelSubjectDisplayName(r.subj)}${r.isSubsidiary ? ' <span class="rc-sub-tag">SUB</span>' : ''}</td>
+            <td class="rc-num">${formatWholeScoreDisplay(r.marks.p1, '-')}</td>
+            <td class="rc-num">${formatWholeScoreDisplay(r.marks.p2, '-')}</td>
             <td class="rc-num">${displayOrDash(r.avgMark)}</td>
             <td class="rc-grade">${displayOrDash(r.gradeInfo.grade)}</td>
             <td class="rc-grade">${r.gradeInfo.grade === null ? '-' : `${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})`}</td>
