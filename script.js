@@ -24,12 +24,7 @@ function closeMobileSidebar() {
 /* ---------------------------------------------------------
    1. GLOBAL STATE & DATA
    --------------------------------------------------------- */
-let studentsList = [
-    { id: "LCS/001", name: "Namubiru Grace", class: "S.4", gender: "Female" },
-    { id: "LCS/002", name: "Kigozi John", class: "S.4", gender: "Male" },
-    { id: "LCS/003", name: "Akwero Patricia", class: "S.3", gender: "Female" },
-    { id: "LCS/004", name: "TUMWESIGE RONALD", class: "S.1", gender: "Male" }
-];
+let studentsList = [];
 let marksStorage = {}; 
 let attendanceStorage = {};
 let resourcesList = [];
@@ -49,7 +44,7 @@ const aLevelSubjects = [
     "GENERAL PAPER", "SUBSIDIARY MATHEMATICS", "ICT (SUBSIDIARY)", 
     "MATHEMATICS", "PHYSICS", "CHEMISTRY", "BIOLOGY", "AGRICULTURE", 
     "ECONOMICS", "ENTREPRENEURSHIP", "GEOGRAPHY", "HISTORY", 
-    "LITERATURE IN ENGLISH", "CRE", "ART", "FRENCH", "LUGANDA"
+    "LITERATURE IN ENGLISH", "CRE", "ART", "LUGANDA"
 ];
 const subsidiarySubjects = ["GENERAL PAPER", "SUBSIDIARY MATHEMATICS", "ICT (SUBSIDIARY)"];
 let performanceChartInstance = null;
@@ -213,11 +208,13 @@ function buildCommentRow(label, studentId, term, year, field, editable) {
 }
 /* ---------------------------------------------------------
    1d. REMOTE DATA SYNC
-   studentsList/teachersList/resourcesList/termSettings start out
-   as hardcoded demo data (above) purely so the UI has something
-   to render before the first successful API call. Once the
-   backend is reachable, these helpers pull the real Neon-backed
-   state and keep the in-memory copies in sync with it — every
+   studentsList starts empty (no hardcoded demo rows) and is
+   populated entirely from the backend below; teachersList/
+   resourcesList/termSettings still seed with placeholder data
+   purely so the UI has something to render before the first
+   successful API call. Once the backend is reachable, these
+   helpers pull the real Neon-backed state and keep the in-memory
+   copies in sync with it — every
    create/update/delete below re-syncs from the server afterwards
    rather than only mutating the local array, so a page refresh
    (or a second device) sees the same data the database has.
