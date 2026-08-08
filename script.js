@@ -1749,6 +1749,7 @@ async function saveMarksEntry(buttonEl) {
     if (buttonEl) { buttonEl.disabled = false; buttonEl.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry'; }
     if (remaining === 0) {
         alert('Marks successfully saved to system register!');
+        hideScoreSheetTable(); // fully saved: collapse the table back to its default hidden state
     } else {
         alert(`${remaining} row(s) could NOT be saved to the server — they're highlighted in red. Check your connection/session and try again before leaving this page.`);
     }
