@@ -220,7 +220,7 @@ const ROLE_PERMISSIONS = {
         canManageNotices: true      // post/delete school bulletin notices
     },
     [ROLES.TEACHER]: {
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers"],
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus"],
         defaultTab: "dashboard",
         canManageStudents: false,   // view-only: cannot add/delete learners
         canManageScores: true,      // core duty: add/update learner scores
@@ -233,8 +233,8 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false     // can read the bulletin, not post to it
     },
     [ROLES.STUDENT]: {
-        tabs: ["reports", "resources"],
-        defaultTab: "reports",
+        tabs: ["dashboard", "reports", "resources"],
+        defaultTab: "dashboard",
         canManageStudents: false,
         canManageScores: false,
         canManageAttendance: false,

@@ -402,7 +402,7 @@ async function applySessionUser(user) {
         const greetings = {
             [ROLES.ADMIN]: `Full administrative access &mdash; classes, students, subjects, term dates, user roles, and system-wide records.`,
             [ROLES.TEACHER]: `You have view access across the system, with permission to add and update learner scores.`,
-            [ROLES.STUDENT]: `This view is limited to your own report card and shared learning resources.`
+            [ROLES.STUDENT]: `This view is limited to your own dashboard summary, report card, and shared learning resources.`
         };
         banner.innerHTML = `Welcome back, ${currentUser.name || currentUser.username}<span>${greetings[currentUser.role] || ''}</span>`;
         banner.classList.add('visible');
@@ -543,7 +543,11 @@ function switchTab(tabName) {
     switch (tabName) {
         case 'dashboard':
             contentElem.innerHTML = renderDashboardModule();
-            initDashboardModule();
+            if (currentUser.role === ROLES.STUDENT) {
+                initOwnDashboardModule();
+            } else {
+                initDashboardModule();
+            }
             break;
         case 'students':
             contentElem.innerHTML = renderStudentsModule();
@@ -652,6 +656,11 @@ function computeDashboardPerformersPreview(maxRows) {
     return { best, worst };
 }
 function renderDashboardModule() {
+    // A Student's Dashboard tab is their own personal summary (attendance,
+    // absences, subjects recorded, performance summary, system summary) —
+    // never the school-wide overview below, which is Administrator/Teacher
+    // only. Mirrors the same role branch already used by renderReportsModule.
+    if (currentUser.role === ROLES.STUDENT) return renderOwnDashboardModule();
     const s = computeDashboardSummary();
     const { best, worst } = computeDashboardPerformersPreview(5);
     const canManageStudents = getPermissions(currentUser.role).canManageStudents;
@@ -1088,9 +1097,13 @@ async function openStudentProfileModal(studentId) {
 // from current in-memory state. Split out from openStudentProfileModal so
 // removeStudentSubject() below can refresh the list immediately after a
 // subject is deleted without re-fetching attendance or re-opening the modal.
-function renderStudentProfileBody(student) {
-    const body = document.getElementById('student-profile-body');
-    if (!body) return; // modal was closed while loading
+// containerId defaults to the admin/teacher modal's body element, but can be
+// pointed at another container (e.g. the Student role's own dashboard
+// summary) so this same attendance/performance rendering logic isn't
+// duplicated elsewhere.
+function renderStudentProfileBody(student, containerId = 'student-profile-body') {
+    const body = document.getElementById(containerId);
+    if (!body) return; // modal was closed (or container not on page) while loading
     const isALevel = (student.class === 'S.5' || student.class === 'S.6');
     const subjectRecords = isALevel ? getALevelSubjectRecords(student) : getOLevelSubjectRecords(student);
     const attendance = getAttendanceSummary(student);
@@ -1959,6 +1972,45 @@ function updateTermSetting(key, value) {
     if (!getPermissions(currentUser.role).canManageTerm) return; // RBAC guard: Administrator only
     termSettings[key] = value;
     TermAPI.save(termSettings).catch(() => {});
+}
+/* ---------------------------------------------------------
+   3c. STUDENT SELF-SERVICE DASHBOARD SUMMARY
+   A Student's Dashboard tab is their personal summary view —
+   attendance, absences, subjects recorded, performance summary,
+   and system summary — reusing the exact same rendering logic
+   (renderStudentProfileBody) as the modal popup an Administrator/
+   Teacher sees when they click "View" on a student record, just
+   auto-loaded for the logged-in student's own record and printed
+   inline on the page instead of in a modal. No new calculations,
+   storage keys, or API endpoints are introduced.
+   --------------------------------------------------------- */
+function renderOwnDashboardModule() {
+    const student = studentsList.find(s => s.id.toLowerCase() === (currentUser.studentId || currentUser.username).toLowerCase());
+    if (!student) {
+        return `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">
+            No student record is linked to the username "${currentUser.username}". Ask your Administrator to check your account.
+        </div>`;
+    }
+    return `
+        <div class="space-y-6">
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
+                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
+            </div>
+            <div id="own-dashboard-summary-body" class="space-y-5 text-center text-slate-400 text-xs font-semibold py-10">
+                <i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Loading attendance &amp; performance summary&hellip;
+            </div>
+        </div>
+    `;
+}
+// Fetches this student's full attendance history (same on-demand call the
+// admin/teacher profile modal and report card engine already use) and then
+// renders the shared profile body into the dashboard's own container id.
+async function initOwnDashboardModule() {
+    const student = studentsList.find(s => s.id.toLowerCase() === (currentUser.studentId || currentUser.username).toLowerCase());
+    if (!student) return;
+    await refreshAttendanceForStudent(student.id);
+    renderStudentProfileBody(student, 'own-dashboard-summary-body');
 }
 /* ---------------------------------------------------------
    6a2. STUDENT SELF-SERVICE REPORT VIEW
@@ -3501,7 +3553,7 @@ async function saveOwnTeacherProfile(event) {
     }
 }
 /* ---------------------------------------------------------
-   9a2. SUBJECT MARKS STATUS (Administrator only)
+   9a2. SUBJECT MARKS STATUS (Administrator & Teacher)
    Read-only oversight view: for every O-Level subject (S.1-S.4)
    and A-Level subject (S.5-S.6), shows how many students in each
    class have had marks recorded (hasRecordedScore() on their
