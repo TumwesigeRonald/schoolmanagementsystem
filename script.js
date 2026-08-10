@@ -951,6 +951,13 @@ function renderStudentsModule() {
                         <option value="S.5">S.5</option>
                         <option value="S.6">S.6</option>
                     </select>
+                    <div class="mt-3">
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Search Students</label>
+                        <div class="relative w-full md:w-64">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] pointer-events-none"></i>
+                            <input type="text" id="student-search" oninput="loadStudentData()" placeholder="Search by ID or name..." autocomplete="off" class="w-full p-2.5 pl-8 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                        </div>
+                    </div>
                 </div>
                 ${canManage ? `
                 <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
@@ -1019,15 +1026,29 @@ function renderStudentsModule() {
 function loadStudentData() {
     const tbody = document.getElementById('student-table-body');
     const filterSelect = document.getElementById('class-filter');
+    const searchInput = document.getElementById('student-search');
     if (!tbody) return;
     const canManage = getPermissions(currentUser.role).canManageStudents;
     const selectedClass = filterSelect ? filterSelect.value : 'ALL';
+    // Real-time search: partial, case-insensitive match against Student ID or Full Name.
+    // Purely additive — narrows whatever the class filter already produced, so the
+    // existing class-filter logic below is untouched.
+    const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : '';
     tbody.innerHTML = "";
-    const filteredStudents = (selectedClass === 'ALL') ? studentsList : studentsList.filter(s => s.class === selectedClass);
-    
+    let filteredStudents = (selectedClass === 'ALL') ? studentsList : studentsList.filter(s => s.class === selectedClass);
+    if (searchTerm) {
+        filteredStudents = filteredStudents.filter(s =>
+            (s.id && s.id.toLowerCase().includes(searchTerm)) ||
+            (s.name && s.name.toLowerCase().includes(searchTerm))
+        );
+    }
+
     updateDashboardStats();
     if (filteredStudents.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium">No student records found for ${selectedClass}.</td></tr>`;
+        const contextMsg = searchTerm
+            ? `No student records match "${escapeHTML(searchInput.value.trim())}"${selectedClass !== 'ALL' ? ` in ${selectedClass}` : ''}.`
+            : `No student records found for ${selectedClass}.`;
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium">${contextMsg}</td></tr>`;
         return;
     }
     // Build every row as a string first and write the table once. Using
