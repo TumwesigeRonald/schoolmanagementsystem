@@ -1444,6 +1444,13 @@ function renderScoresModule() {
                         </div>
                         <button onclick="loadScoreSheetData()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl transition shadow-xs"><i class="fa-solid fa-download mr-1.5"></i>Load Subject</button>
                     </div>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Search Students</label>
+                        <div class="relative w-full md:w-64">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] pointer-events-none"></i>
+                            <input type="text" id="score-search" oninput="filterScoreSheetTable()" placeholder="Search by ID or name..." autocomplete="off" class="w-full p-2.5 pl-8 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                        </div>
+                    </div>
                 </div>
                 <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
@@ -1528,6 +1535,45 @@ function loadScoreSheetData() {
         const recordKey = `${selectedSubject}_${student.id}`;
         return isALevel ? buildALevelRow(student, recordKey, isSubsidiary) : buildOLevelRow(student, recordKey);
     }).join('');
+    // Re-apply any existing search term so it stays in effect across a
+    // reload (e.g. clicking "Load Subject" or switching subjects while a
+    // search is active). Purely visual — does not touch marksStorage,
+    // inputs, or the save flow below.
+    filterScoreSheetTable();
+}
+// Real-time search: partial, case-insensitive match against Student ID or
+// Full Name. This only toggles row visibility on the table already built by
+// loadScoreSheetData() above — it never re-fetches or rebuilds row data, so
+// existing table loading, inputs, and save functionality are untouched.
+function filterScoreSheetTable() {
+    const searchInput = document.getElementById('score-search');
+    const tbody = document.getElementById('score-table-body');
+    if (!searchInput || !tbody) return;
+    const searchTerm = searchInput.value.trim().toLowerCase();
+    const rows = tbody.querySelectorAll('tr[data-student-id]');
+    let visibleCount = 0;
+    rows.forEach(row => {
+        const studId = (row.dataset.studentId || '').toLowerCase();
+        const studName = (row.dataset.studentName || '').toLowerCase();
+        const matches = !searchTerm || studId.includes(searchTerm) || studName.includes(searchTerm);
+        row.style.display = matches ? '' : 'none';
+        if (matches) visibleCount++;
+    });
+    let noMatchRow = document.getElementById('score-no-match-row');
+    if (searchTerm && visibleCount === 0 && rows.length > 0) {
+        if (!noMatchRow) {
+            const classSelect = document.getElementById('score-class-select');
+            const isALevel = classSelect && (classSelect.value === 'S.5' || classSelect.value === 'S.6');
+            noMatchRow = document.createElement('tr');
+            noMatchRow.id = 'score-no-match-row';
+            noMatchRow.innerHTML = `<td colspan="${isALevel ? 8 : 10}" class="p-6 text-center text-slate-400 text-xs font-medium">No students match "${escapeHTML(searchInput.value.trim())}".</td>`;
+            tbody.appendChild(noMatchRow);
+        } else {
+            noMatchRow.style.display = '';
+        }
+    } else if (noMatchRow) {
+        noMatchRow.style.display = 'none';
+    }
 }
 function buildALevelHeader() {
     return `
@@ -1569,7 +1615,7 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     const gradeInfo = computeALevelGrade(avgMark, isSubsidiary);
     
     return `
-        <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
+        <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}" data-student-name="${escapeHTML(student.name)}">
             <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}</td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p1, '')}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p2, '')}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
@@ -1595,7 +1641,7 @@ function buildOLevelRow(student, recordKey) {
     const gradeData = computeOfficialGrade(finalTotal);
     
     return `
-        <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}">
+        <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}" data-student-name="${escapeHTML(student.name)}">
             <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}</td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
