@@ -1958,7 +1958,12 @@ function computeALevelGrade(score, isSubsidiary) {
    6b. REPORT CARD ENGINE (A-Level)
    --------------------------------------------------------- */
 function renderReportsModule() {
-    if (currentUser.role === 'Student') return renderOwnReportModule();
+    // Students keep the "My Report Card" nav tab (see renderSidebarNav),
+    // but per current policy they are not permitted to view report card
+    // content directly through the portal. Show a restriction notice
+    // instead of the actual report (renderOwnReportModule) — admin and
+    // teacher access below is completely untouched.
+    if (currentUser.role === 'Student') return renderStudentReportRestrictedModule();
     // Pull defaults from the persisted term settings (not a fresh blank state)
     // so the upcoming term dates the school already set are always shown,
     // even after switching tabs or regenerating report cards.
@@ -2108,6 +2113,20 @@ async function initOwnDashboardModule() {
    A Student's Reports tab is locked to their own record only —
    no class picker, no access to any other learner's data.
    --------------------------------------------------------- */
+// STUDENT-ONLY ACCESS RESTRICTION: the "My Report Card" tab stays visible
+// in the student sidebar (renderSidebarNav / switchTab already list it for
+// the Student role), but clicking it now shows this notice instead of the
+// actual report. This does not affect Admin/Teacher, who still go through
+// the normal branch below in renderReportsModule, and it does not touch
+// the Student's Dashboard or Learning Resources tabs/logic in any way.
+function renderStudentReportRestrictedModule() {
+    return `
+        <div class="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+            <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-lock"></i></div>
+            <p class="text-sm font-bold text-slate-600 max-w-lg mx-auto leading-relaxed">Access Restricted: Your current student login does not guarantee permissions to view report cards directly through the portal. Please contact your administrator or class teacher for assistance.</p>
+        </div>
+    `;
+}
 function renderOwnReportModule() {
     const student = studentsList.find(s => s.id.toLowerCase() === (currentUser.studentId || currentUser.username).toLowerCase());
     if (!student) {
