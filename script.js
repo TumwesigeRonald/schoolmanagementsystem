@@ -1065,6 +1065,7 @@ function loadStudentData() {
                 <td class="p-4 text-slate-600 font-semibold">${escapeHTML(student.gender)}</td>
                 <td class="p-4 text-center space-x-2 whitespace-nowrap">
                     <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
+                    ${canManage ? `<button onclick="openEditStudentModal('${student.id}')" class="text-indigo-600 hover:text-indigo-700 text-[11px] font-extrabold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>` : ''}
                     ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
                 </td>
             </tr>
@@ -1411,6 +1412,90 @@ async function deleteStudent(studentId) {
         return;
     }
     await refreshStudentsList();
+    loadStudentData();
+    updateDashboardStats();
+}
+// ---------------------------------------------------------
+// Edit Student (Administrator only). Mirrors openEditTeacherModal /
+// submitEditTeacher — reuses the existing #modal-root + closeModal()
+// pattern and StudentsAPI.update(). Also frontend-gated by
+// canManageStudents so non-admins never see the button or reach this code;
+// the backend PUT /api/students/:id route is the real enforcement point.
+function openEditStudentModal(studentId) {
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard: Administrator only
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    const student = studentsList.find(s => s.id === studentId);
+    if (!student) return;
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                <div class="flex items-center justify-between p-5 border-b border-slate-200">
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-indigo-600"></i>Edit Student</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
+                </div>
+                <form onsubmit="submitEditStudent(event, '${student.id}')" class="p-5 space-y-4">
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Student ID</label>
+                        <input type="text" id="edit-stud-id" value="${escapeHTML(student.id)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                        <p class="mt-1 text-[10px] font-semibold text-amber-600">Changing this resets the student's login username &amp; password to the new ID.</p>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Full Name</label>
+                        <input type="text" id="edit-stud-name" value="${escapeHTML(student.name)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Class Level</label>
+                        <select id="edit-stud-class" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                            ${['S.1','S.2','S.3','S.4','S.5','S.6'].map(c => `<option value="${c}" ${student.class === c ? 'selected' : ''}>${c}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Gender</label>
+                        <select id="edit-stud-gender" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                            <option value="Male" ${student.gender === 'Male' ? 'selected' : ''}>Male</option>
+                            <option value="Female" ${student.gender === 'Female' ? 'selected' : ''}>Female</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end space-x-2 pt-2">
+                        <button type="button" onclick="closeModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
+                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+}
+async function submitEditStudent(event, originalId) {
+    event.preventDefault();
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard: Administrator only
+    const student = studentsList.find(s => s.id === originalId);
+    if (!student) return;
+    const updates = {
+        id: getInputValue('edit-stud-id').trim().toUpperCase(),
+        name: getInputValue('edit-stud-name').trim(),
+        class: getInputValue('edit-stud-class'),
+        gender: getInputValue('edit-stud-gender')
+    };
+    if (updates.id === '' || updates.name === '') {
+        alert('Please provide both a Student ID and a Full Name.');
+        return;
+    }
+    if (updates.id !== originalId.toUpperCase() && studentsList.some(s => s.id.toUpperCase() === updates.id)) {
+        alert(`Student ID "${updates.id}" is already registered. Please use a unique ID.`);
+        return;
+    }
+    if (updates.id !== originalId.toUpperCase() && !confirm(`Changing the Student ID to "${updates.id}" will reset this student's login username and password to "${updates.id}". Continue?`)) {
+        return;
+    }
+    try {
+        await StudentsAPI.update(originalId, updates);
+    } catch (err) {
+        alert(err.message || 'Could not update this student. Please try again.');
+        return;
+    }
+    await refreshStudentsList();
+    closeModal();
     loadStudentData();
     updateDashboardStats();
 }

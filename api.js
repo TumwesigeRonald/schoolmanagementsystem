@@ -360,6 +360,16 @@ const StudentsAPI = {
             () => { studentsList.push(student); return student; }
         );
     },
+    async update(studentId, updates) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.STUDENT_BY_ID(studentId), { method: "PUT", body: updates }),
+            () => {
+                const s = studentsList.find(s => s.id === studentId);
+                if (s) Object.assign(s, updates);
+                return s;
+            }
+        );
+    },
     async remove(studentId) {
         return remoteFirst(
             () => apiRequest(ENDPOINTS.STUDENT_BY_ID(studentId), { method: "DELETE" }),
