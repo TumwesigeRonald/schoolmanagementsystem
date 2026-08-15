@@ -440,7 +440,10 @@ function renderSidebarNav() {
         { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open' },
         { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' },
         { id: 'subjectmarksstatus', label: 'Subject Marks Status', icon: 'fa-list-check' },
-        { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left' }
+        { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left' },
+        // New nav entry only — Class Score Summaries feature (class-summaries.js).
+        // Gated by ROLE_PERMISSIONS in api.js exactly like every other item here.
+        { id: 'classsummaries', label: 'Class Score Summaries', icon: 'fa-table-list' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
     // styles.css), so unselected items use a light slate (#e2e8f0) instead of
@@ -491,7 +494,7 @@ function switchTab(tabName) {
     if (!permissions.tabs.includes(tabName)) {
         tabName = permissions.defaultTab;
     }
-    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog'];
+    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
@@ -520,6 +523,7 @@ function switchTab(tabName) {
         case 'teachers': titleText = currentUser.role === 'Teacher' ? "My Teacher Profile" : "Teacher Accounts & Credentials"; break;
         case 'subjectmarksstatus': titleText = "Subject Marks Status"; break;
         case 'activitylog': titleText = "Admin Activity Log"; break;
+        case 'classsummaries': titleText = "Class Score Summaries"; break;
     }
     if (titleElem) titleElem.innerText = titleText;
     const contentElem = document.getElementById('tab-content');
@@ -584,6 +588,12 @@ function switchTab(tabName) {
         case 'activitylog':
             contentElem.innerHTML = renderActivityLogModule();
             loadActivityLogData();
+            break;
+        case 'classsummaries':
+            // renderClassSummariesModule/initClassSummariesModule live in the
+            // separate class-summaries.js file — isolated feature module.
+            contentElem.innerHTML = renderClassSummariesModule();
+            initClassSummariesModule();
             break;
     }
     updateDashboardStats();

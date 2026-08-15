@@ -207,7 +207,10 @@ const ROLES = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: {
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog"],
+        // "classsummaries" appended here only — new tab id for the Class
+        // Score Summaries feature (see class-summaries.js). No other id
+        // in this array was touched.
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "classsummaries"],
         defaultTab: "dashboard",
         canManageStudents: true,
         canManageScores: true,
@@ -220,7 +223,8 @@ const ROLE_PERMISSIONS = {
         canManageNotices: true      // post/delete school bulletin notices
     },
     [ROLES.TEACHER]: {
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus"],
+        // "classsummaries" appended here only — same new tab id as above.
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "classsummaries"],
         defaultTab: "dashboard",
         canManageStudents: false,   // view-only: cannot add/delete learners
         canManageScores: true,      // core duty: add/update learner scores
