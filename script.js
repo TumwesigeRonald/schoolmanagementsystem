@@ -1552,6 +1552,14 @@ function renderScoresModule() {
             <div id="score-table-empty-state" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">
                 Select a class and subject, then click "Load Subject" to view the marks entry table.
             </div>
+            <div id="bulk-initials-bar" class="hidden flex flex-wrap items-end gap-3 bg-white border border-slate-200 p-4 rounded-2xl shadow-xs">
+                <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Teacher's Initial (applies to whole class/subject)</label>
+                    <input type="text" id="bulk-initials-input" maxlength="4" placeholder="e.g. JN" class="w-32 p-2.5 text-center bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold uppercase text-slate-800">
+                </div>
+                <button onclick="applyBulkInitials()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-signature mr-1.5"></i>Apply to All</button>
+                <p class="text-[11px] text-slate-400 w-full md:w-auto md:ml-2">Fills in "TR's Initial" for every student already showing marks for this class &amp; subject. You can still override any single row below.</p>
+            </div>
             <div id="score-table-wrapper" class="overflow-auto max-h-[65vh] bg-white border border-slate-200 rounded-2xl shadow-xs hidden">
                 <table class="w-full text-left score-table">
                     <thead id="score-table-head"></thead>
@@ -1571,8 +1579,10 @@ function onClassLevelChange() {
 function hideScoreSheetTable() {
     const wrapper = document.getElementById('score-table-wrapper');
     const emptyState = document.getElementById('score-table-empty-state');
+    const bulkBar = document.getElementById('bulk-initials-bar');
     if (wrapper) wrapper.classList.add('hidden');
     if (emptyState) emptyState.classList.remove('hidden');
+    if (bulkBar) bulkBar.classList.add('hidden');
 }
 function updateSubjectDropdown() {
     const classSelect = document.getElementById('score-class-select');
@@ -1607,8 +1617,19 @@ function loadScoreSheetData() {
     // is explicitly triggered (via "Load Subject" or "Next Subject").
     const wrapper = document.getElementById('score-table-wrapper');
     const emptyState = document.getElementById('score-table-empty-state');
+    const bulkBar = document.getElementById('bulk-initials-bar');
     if (wrapper) wrapper.classList.remove('hidden');
     if (emptyState) emptyState.classList.add('hidden');
+    if (bulkBar && getPermissions(currentUser.role).canManageScores) bulkBar.classList.remove('hidden');
+    // Prefill (only if still blank, so we never clobber something the teacher
+    // already typed this session) from the logged-in teacher's own saved
+    // initials — a convenience default, not a requirement; it can always be
+    // overwritten before clicking "Apply to All".
+    const bulkInput = document.getElementById('bulk-initials-input');
+    if (bulkInput && !bulkInput.value && currentUser.role === 'Teacher') {
+        const me = teachersList.find(t => t.username.toLowerCase() === currentUser.username.toLowerCase());
+        if (me && me.initials) bulkInput.value = me.initials;
+    }
     
     const selectedSubject = subjectSelect ? subjectSelect.value : (isALevel ? aLevelSubjects[0] : oLevelSubjects[0]);
     const isSubsidiary = subsidiarySubjects.includes(selectedSubject.toUpperCase());
@@ -2025,6 +2046,56 @@ function updateALevelRemarks(studId, value) {
     ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value)
         .then(() => markRowSaveState(recordKey, true))
         .catch(err => handleScoreSaveError(err, recordKey));
+}
+// Stamps one initials value onto every row currently loaded for the selected
+// class+subject, in a single request, instead of a teacher clicking into
+// each student's "TR's Initial" cell one by one.
+async function applyBulkInitials() {
+    if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
+    const classLevel = document.getElementById('score-class-select')?.value;
+    const subjectSelect = document.getElementById('score-subject-select');
+    const subject = subjectSelect ? subjectSelect.value : null;
+    const input = document.getElementById('bulk-initials-input');
+    const initials = (input?.value || '').trim().toUpperCase().slice(0, 4);
+
+    if (!classLevel || !subject) return;
+    if (!initials) {
+        alert('Enter an initial before applying it to the class.');
+        return;
+    }
+
+    let result;
+    try {
+        result = await ScoresAPI.applyBulkInitials(classLevel, subject, initials);
+    } catch (err) {
+        showToast(err.message || "Couldn't apply initials to the class. Please try again.", 'error');
+        return;
+    }
+
+    const updated = result?.updated || [];
+    if (input) input.value = initials;
+
+    // Only rows the server actually updated get touched here — students with
+    // no scores row yet for this subject are intentionally left alone (see
+    // the bulk-initials endpoint's comments) rather than guessed at locally.
+    updated.forEach(({ recordKey }) => {
+        if (marksStorage[recordKey]) marksStorage[recordKey].remarks = initials;
+        const studId = studentIdFromRecordKey(recordKey);
+        const row = document.querySelector(`tr[data-student-id="${CSS.escape(studId)}"]`);
+        const remarkInput = row ? row.querySelector('td:last-child input[type="text"]') : null;
+        if (remarkInput) remarkInput.value = initials;
+        markRowSaveState(recordKey, true);
+    });
+
+    const classStudentCount = studentsList.filter(s => s.class === classLevel).length;
+    const skipped = classStudentCount - updated.length;
+    showToast(
+        skipped > 0
+            ? `Applied "${initials}" to ${updated.length} student${updated.length === 1 ? '' : 's'}. ${skipped} student${skipped === 1 ? '' : 's'} have no marks recorded for ${subject} yet, so ${skipped === 1 ? 'it was' : 'they were'} skipped.`
+            : `Applied "${initials}" to all ${updated.length} student${updated.length === 1 ? '' : 's'} in ${classLevel} for ${subject}.`,
+        'success'
+    );
+    updateDashboardStats();
 }
 /* ---------------------------------------------------------
    6. GRADING LOGIC
@@ -2593,7 +2664,14 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     // A subject still awaiting a valid Final mark contributes nothing here —
     // it must never be silently counted as a 0.
     const totalScore = subjectRecords.reduce((sum, r) => sum + (r.finalTotal ?? 0), 0);
-    return (totalScore / denominator) * 3;
+    // Round to 1 decimal place here (at the source) rather than only at display
+    // time. The identifier boundary check (getOverallIdentifier) and the
+    // Best/Worst performer cutoffs both compare against this same value, so if
+    // it were left as a raw float (e.g. 1.4975 due to floating-point division),
+    // it could display as "1.5" via toFixed(1) while still failing a `>= 1.5`
+    // check and being misclassified as BASIC. Rounding once here keeps every
+    // consumer of this score in sync.
+    return Math.round(((totalScore / denominator) * 3) * 10) / 10;
 }
 function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
     const subjectRecords = getOLevelSubjectRecords(student);
@@ -3555,6 +3633,11 @@ function renderTeachersModule() {
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Subject</label>
                     <input type="text" id="my-teach-subject" value="${escapeHTML(me.subject || '')}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
                 </div>
+                <div>
+                    <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Initials</label>
+                    <input type="text" id="my-teach-initials" maxlength="4" value="${escapeHTML(me.initials || '')}" placeholder="e.g. JN" class="w-32 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold uppercase text-slate-700">
+                    <p class="text-[11px] text-slate-400 mt-1">Used to prefill the "TR's Initial" bulk-apply box on the Score Sheets screen — you can still type a different value there per class/subject.</p>
+                </div>
                 <div id="teacher-profile-msg" class="hidden text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"></div>
                 <div class="flex justify-end pt-2">
                     <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
@@ -3734,7 +3817,8 @@ async function saveOwnTeacherProfile(event) {
     const updates = {
         name: getInputValue('my-teach-name'),
         username: newUsername,
-        subject: getInputValue('my-teach-subject').toUpperCase()
+        subject: getInputValue('my-teach-subject').toUpperCase(),
+        initials: getInputValue('my-teach-initials').toUpperCase()
     };
     const newPassword = getInputValue('my-teach-password').trim();
     if (newPassword !== "") updates.password = newPassword;

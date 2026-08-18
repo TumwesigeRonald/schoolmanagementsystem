@@ -43,8 +43,17 @@ CREATE TABLE IF NOT EXISTS teachers (
   name        TEXT NOT NULL,
   username    TEXT NOT NULL UNIQUE,
   subject     TEXT,
+  initials    TEXT,                    -- e.g. "JN" — a teacher's standing initials,
+                                        -- used only to prefill the bulk "TR's Initial"
+                                        -- box on the marks-entry screen. NOT a live
+                                        -- link: once stamped onto a scores row it's a
+                                        -- frozen copy, so editing this later never
+                                        -- rewrites initials already printed on past
+                                        -- report cards.
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Safe to re-run against a database created before this column existed.
+ALTER TABLE teachers ADD COLUMN IF NOT EXISTS initials TEXT;
 
 -- -------------------------------------------------------------
 -- users — single authentication table for every role.

@@ -10,13 +10,13 @@ const HASH_ROUNDS = 10;
 // GET /api/teachers — Admin and Teacher can both see the staff list
 // (frontend shows the "teachers" tab to both; Teachers just can't edit others).
 router.get('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
-  const { rows } = await db.query('SELECT id, name, username, subject FROM teachers ORDER BY id');
+  const { rows } = await db.query('SELECT id, name, username, subject, initials FROM teachers ORDER BY id');
   res.json(rows);
 }));
 
 // POST /api/teachers — Admin only. Creates the teacher record + login.
 router.post('/', authenticate, requireRole('Administrator'), asyncHandler(async (req, res) => {
-  const { id, name, username, password, subject } = req.body || {};
+  const { id, name, username, password, subject, initials } = req.body || {};
   if (!id || !name || !username || !password) {
     return res.status(400).json({ message: 'id, name, username and password are required.' });
   }
@@ -37,8 +37,8 @@ router.post('/', authenticate, requireRole('Administrator'), asyncHandler(async 
     }
 
     await client.query(
-      'INSERT INTO teachers (id, name, username, subject) VALUES ($1,$2,$3,$4)',
-      [id, name, username, subject || null]
+      'INSERT INTO teachers (id, name, username, subject, initials) VALUES ($1,$2,$3,$4,$5)',
+      [id, name, username, subject || null, initials ? initials.trim().toUpperCase().slice(0, 4) : null]
     );
     const passwordHash = await bcrypt.hash(password, HASH_ROUNDS);
     await client.query(
@@ -47,7 +47,7 @@ router.post('/', authenticate, requireRole('Administrator'), asyncHandler(async 
     );
 
     await client.query('COMMIT');
-    res.status(201).json({ id, name, username, subject: subject || null });
+    res.status(201).json({ id, name, username, subject: subject || null, initials: initials ? initials.trim().toUpperCase().slice(0, 4) : null });
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
@@ -66,18 +66,23 @@ router.put('/:id', authenticate, asyncHandler(async (req, res) => {
     return res.status(403).json({ message: 'You can only edit your own profile.' });
   }
 
-  const { name, username, subject } = req.body || {};
+  const { name, username, subject, initials } = req.body || {};
   const fields = [];
   const values = [];
   let i = 1;
   if (name !== undefined) { fields.push(`name = $${i++}`); values.push(name); }
   if (subject !== undefined) { fields.push(`subject = $${i++}`); values.push(subject); }
   if (username !== undefined) { fields.push(`username = $${i++}`); values.push(username); }
+  // Self-service: a teacher sets their own standing initials here. This is
+  // only ever used to prefill the bulk "TR's Initial" box on the marks-entry
+  // screen — changing it never touches any already-saved scores.remarks
+  // value, so past report cards are unaffected.
+  if (initials !== undefined) { fields.push(`initials = $${i++}`); values.push(initials ? initials.trim().toUpperCase().slice(0, 4) : null); }
   if (!fields.length) return res.status(400).json({ message: 'Nothing to update.' });
 
   values.push(id);
   const { rows, rowCount } = await db.query(
-    `UPDATE teachers SET ${fields.join(', ')} WHERE id = $${i} RETURNING id, name, username, subject`,
+    `UPDATE teachers SET ${fields.join(', ')} WHERE id = $${i} RETURNING id, name, username, subject, initials`,
     values
   );
   if (!rowCount) return res.status(404).json({ message: 'Teacher not found.' });

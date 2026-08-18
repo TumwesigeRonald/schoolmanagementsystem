@@ -72,6 +72,7 @@ const ENDPOINTS = {
     SCORES: "/scores",
     SCORES_BY_CLASS_SUBJECT: (cls, subject) => `/scores?class=${encodeURIComponent(cls)}&subject=${encodeURIComponent(subject)}`,
     SCORE_BY_RECORD_KEY: (recordKey) => `/scores/${encodeURIComponent(recordKey)}`,
+    SCORES_BULK_INITIALS: "/scores/bulk-initials",
 
     // --- Attendance ---
     ATTENDANCE: "/attendance",
@@ -470,6 +471,14 @@ const ScoresAPI = {
     // reasoning as save() — the caller must know if this didn't persist.
     async remove(recordKey) {
         return apiRequest(ENDPOINTS.SCORE_BY_RECORD_KEY(recordKey), { method: "DELETE" });
+    },
+    // Stamps one initials value onto every existing scores row for a
+    // class+subject in a single request, instead of one save() call per
+    // student. Same no-silent-fallback reasoning as save() above — a bulk
+    // action failing silently would be worse than a single-row one, since it
+    // could look like an entire class got updated when nothing was saved.
+    async applyBulkInitials(classLevel, subject, initials) {
+        return apiRequest(ENDPOINTS.SCORES_BULK_INITIALS, { method: "POST", body: { classLevel, subject, initials } });
     }
 };
 

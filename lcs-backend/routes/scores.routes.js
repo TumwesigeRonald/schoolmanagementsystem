@@ -95,6 +95,52 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
   res.json(rows[0]);
 }));
 
+// POST /api/scores/bulk-initials — Admin or Teacher only.
+// Body: { classLevel, subject, initials }
+// Stamps the same "TR's Initial" value onto every EXISTING scores row for a
+// given class+subject in a single statement, so a teacher no longer has to
+// retype their initials once per student.
+//
+// Deliberately an UPDATE, never an INSERT: this must only touch students who
+// already have a scores row for this subject (i.e. at least one mark has
+// been entered for them at some point). It must never fabricate a phantom
+// scores row for a student with no marks at all — same principle the rest
+// of this file already follows for ao1/ao2/eot/p1/p2 (a subject with no real
+// data must never silently appear as "recorded").
+//
+// The value is written directly into each row's `remarks` column — the same
+// column the single-row POST above and the report-card renderer both already
+// use — rather than being resolved from a separate "who currently teaches
+// this class/subject" table. That's intentional: report cards are historical
+// documents, so the initials on a Term 1 report must keep reflecting whoever
+// actually marked it then, even if the subject is reassigned to a different
+// teacher later. Freezing the value onto each row at write time (instead of
+// looking it up live at render time) guarantees past report cards never
+// silently change.
+router.post('/bulk-initials', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
+  const { classLevel, subject, initials } = req.body || {};
+  if (!classLevel || !subject || !initials) {
+    return res.status(400).json({ message: 'classLevel, subject and initials are required.' });
+  }
+
+  // Mirror the same normalization the single-row per-student initials input
+  // already applies client-side (script.js: maxlength="4", uppercase) —
+  // enforced here too since a client-side constraint alone can't be trusted.
+  const normalizedInitials = String(initials).trim().toUpperCase().slice(0, 4);
+  if (!normalizedInitials) {
+    return res.status(400).json({ message: 'initials cannot be blank.' });
+  }
+
+  const { rows } = await db.query(
+    `UPDATE scores SET remarks = $1, updated_at = now()
+     WHERE class_level = $2 AND subject = $3
+     RETURNING record_key AS "recordKey", student_id AS "studentId"`,
+    [normalizedInitials, classLevel, subject]
+  );
+
+  res.json({ initials: normalizedInitials, updated: rows });
+}));
+
 // DELETE /api/scores/:recordKey — Admin or Teacher only.
 // Fully removes one subject<->student association: deletes the scores row
 // outright (not a soft-clear/touched=false toggle), so the subject and its
