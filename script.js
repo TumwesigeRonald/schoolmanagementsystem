@@ -2420,6 +2420,30 @@ function getOLevelSubjectRecords(student) {
         // must be filtered out rather than shown with empty dashes.
         .filter(record => record.finalTotal !== null);
 }
+// Report-card-only variant of getOLevelSubjectRecords() above. The O-Level
+// report card must always list all 15 O-Level subjects for the learner's
+// class, even when a subject has no marks touched/recorded at all — so
+// unlike getOLevelSubjectRecords() (still used as-is by the profile modal,
+// performance summary, and Best/Worst Performers panel, none of which this
+// function replaces), this does NOT filter out untouched or ungraded
+// subjects. A subject with no marksStorage entry falls back to an empty
+// placeholder ({ao1:null, ao2:null, eot:null, remarks:''}) instead of being
+// skipped. Every downstream consumer (formatAOScoreDisplay,
+// formatWholeScoreDisplay, displayOrDash, computeOfficialGrade,
+// buildSubjectBars, buildPerformanceRemark, buildSummarySection) already
+// treats null/undefined marks as "not yet recorded" and renders a dash
+// rather than erroring, so no other rendering logic needs to change.
+function getOLevelSubjectRecordsForReportCard(student) {
+    return oLevelSubjects.map(subj => {
+        const recordKey = `${subj}_${student.id}`;
+        const marks = marksStorage[recordKey] || { ao1: null, ao2: null, eot: null, remarks: '' };
+        const avScore = calculateAOAverage(marks.ao1, marks.ao2);
+        const faScore = (avScore / 3.0) * 20;
+        const finalTotal = computeOLevelFinalTotal(marks, faScore);
+        const gradeData = computeOfficialGrade(finalTotal);
+        return { subj, marks, avScore, faScore, finalTotal, gradeData };
+    });
+}
 // Groups attendanceStorage (keyed "date_studentId") by studentId in a
 // single O(total attendance rows) pass. Pass the result into
 // getAttendanceSummary() as `index` when computing summaries for many
@@ -2674,7 +2698,7 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     return Math.round(((totalScore / denominator) * 3) * 10) / 10;
 }
 function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
-    const subjectRecords = getOLevelSubjectRecords(student);
+    const subjectRecords = getOLevelSubjectRecordsForReportCard(student);
 
     const overallAvg = calculateOLevelOverallAchievement(student.class, subjectRecords);
     const overallIdentifier = getOverallIdentifier(overallAvg);
