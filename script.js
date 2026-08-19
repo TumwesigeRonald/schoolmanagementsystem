@@ -2428,20 +2428,25 @@ function getOLevelSubjectRecords(student) {
 // function replaces), this does NOT filter out untouched or ungraded
 // subjects. A subject with no marksStorage entry falls back to an empty
 // placeholder ({ao1:null, ao2:null, eot:null, remarks:''}) instead of being
-// skipped. Every downstream consumer (formatAOScoreDisplay,
+// skipped, and is flagged with hasMarks:false so buildOLevelReportPage can
+// render every cell for that row as a true blank (see hasMarks usage there)
+// rather than the numeric/dash placeholders the formatters normally fall
+// back to. Every downstream consumer (formatAOScoreDisplay,
 // formatWholeScoreDisplay, displayOrDash, computeOfficialGrade,
 // buildSubjectBars, buildPerformanceRemark, buildSummarySection) already
-// treats null/undefined marks as "not yet recorded" and renders a dash
-// rather than erroring, so no other rendering logic needs to change.
+// treats null/undefined marks as "not yet recorded", so no other rendering
+// logic needs to change.
 function getOLevelSubjectRecordsForReportCard(student) {
     return oLevelSubjects.map(subj => {
         const recordKey = `${subj}_${student.id}`;
-        const marks = marksStorage[recordKey] || { ao1: null, ao2: null, eot: null, remarks: '' };
+        const stored = marksStorage[recordKey];
+        const hasMarks = !!(stored && stored.touched);
+        const marks = stored || { ao1: null, ao2: null, eot: null, remarks: '' };
         const avScore = calculateAOAverage(marks.ao1, marks.ao2);
         const faScore = (avScore / 3.0) * 20;
         const finalTotal = computeOLevelFinalTotal(marks, faScore);
         const gradeData = computeOfficialGrade(finalTotal);
-        return { subj, marks, avScore, faScore, finalTotal, gradeData };
+        return { subj, marks, avScore, faScore, finalTotal, gradeData, hasMarks };
     });
 }
 // Groups attendanceStorage (keyed "date_studentId") by studentId in a
@@ -2521,7 +2526,7 @@ function buildSubjectBars(records, isALevel) {
         <div class="rc-bar-row">
             <span class="rc-bar-label">${isALevel ? formatALevelSubjectDisplayName(r.subj) : r.subj}</span>
             <span class="rc-bar-track"><span class="rc-bar-fill" style="width:${width}%;background:${color};"></span></span>
-            <span class="rc-bar-score" style="color:${color};">${displayOrDash(score)}</span>
+            <span class="rc-bar-score" style="color:${color};">${score === null ? '' : score}</span>
         </div>`;
     }).join('')}</div>`;
 }
@@ -2703,18 +2708,23 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
     const overallAvg = calculateOLevelOverallAchievement(student.class, subjectRecords);
     const overallIdentifier = getOverallIdentifier(overallAvg);
 
+    // A subject with no marks touched at all (r.hasMarks === false) renders as a
+    // fully blank row — every cell but the subject name is an empty string, not
+    // the usual "-" fallback or "Not yet graded" descriptor text — per the
+    // school's request that untouched subjects look completely empty on the
+    // printed report card.
     const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
         <tr>
             <td class="rc-subj">${r.subj}</td>
-            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao1, '-')}</td>
-            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '-')}</td>
-            <td class="rc-num">${r.avScore.toFixed(1)}</td>
-            <td class="rc-num">${Math.round(r.faScore)}</td>
-            <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
-            <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
-            <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
-            <td class="rc-descriptor">${getCompetencyDescriptor(r.gradeData.grade)}</td>
-            <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
+            <td class="rc-num">${r.hasMarks ? formatAOScoreDisplay(r.marks.ao1, '-') : ''}</td>
+            <td class="rc-num">${r.hasMarks ? formatAOScoreDisplay(r.marks.ao2, '-') : ''}</td>
+            <td class="rc-num">${r.hasMarks ? r.avScore.toFixed(1) : ''}</td>
+            <td class="rc-num">${r.hasMarks ? Math.round(r.faScore) : ''}</td>
+            <td class="rc-num">${r.hasMarks ? formatWholeScoreDisplay(r.marks.eot, '-') : ''}</td>
+            <td class="rc-final">${r.hasMarks ? displayOrDash(r.finalTotal) : ''}</td>
+            <td class="rc-grade">${r.hasMarks ? displayOrDash(r.gradeData.grade) : ''}</td>
+            <td class="rc-descriptor">${r.hasMarks ? getCompetencyDescriptor(r.gradeData.grade) : ''}</td>
+            <td class="rc-num">${r.hasMarks ? escapeHTML(r.marks.remarks || '') : ''}</td>
         </tr>
     `).join('') : `<tr><td colspan="10" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
 
