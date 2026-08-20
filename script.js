@@ -77,12 +77,15 @@ let termSettings = {
 };
 /* ---------------------------------------------------------
    1c2. REPORT CARD REMARKS (Class Teacher's / Headteacher's
-   comments) — client-side only, keyed by student+term+year.
-   Kept separate from marksStorage/backend on purpose: this is a
-   pure productivity add-on and must never touch the existing
-   scores schema, calculations, or API routes. Persisted to
-   localStorage only, so it survives a refresh but is NOT synced
-   across devices — best-effort, never blocks report generation.
+   comments) — keyed by student+term+year.
+   This in-memory object is now hydrated from the backend
+   (report_card_remarks table, via RemarksAPI — see
+   refreshReportRemarksForStudent / migrateLocalReportRemarksToServer
+   below) so a comment typed on one device is visible on every other
+   device/browser. localStorage is kept ONLY as a best-effort offline
+   cache/fallback — it is no longer the source of truth, and any data
+   still sitting in it from before this change gets auto-rescued to
+   the server once, at next login (see migrateLocalReportRemarksToServer).
    --------------------------------------------------------- */
 let reportRemarksStorage = {};
 try {
@@ -177,6 +180,11 @@ function persistReportRemarks() {
     try { localStorage.setItem('lcs_report_remarks', JSON.stringify(reportRemarksStorage)); }
     catch (e) { /* best-effort only */ }
 }
+// Debounce so every keystroke in the contenteditable comment box doesn't
+// fire its own network request — one save goes out ~800ms after typing
+// pauses, keyed per remark-row so typing in one field never cancels a
+// pending save for another.
+const reportRemarkSaveTimers = {};
 function saveReportRemark(el) {
     if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
     const key = el.dataset.remarkKey;
@@ -184,7 +192,16 @@ function saveReportRemark(el) {
     if (!key || !field) return;
     if (!reportRemarksStorage[key]) reportRemarksStorage[key] = {};
     reportRemarksStorage[key][field] = el.innerText.trim();
-    persistReportRemarks();
+    persistReportRemarks(); // best-effort offline cache only — see note above
+
+    clearTimeout(reportRemarkSaveTimers[key]);
+    reportRemarkSaveTimers[key] = setTimeout(() => {
+        const parts = key.split('_');
+        if (parts.length !== 3) return; // defensive: unexpected key shape, skip remote save
+        const [studentId, term, year] = parts;
+        RemarksAPI.save(studentId, term, year, { [field]: reportRemarksStorage[key][field] })
+            .catch(() => { /* offline/unreachable — localStorage copy above still holds the latest text; will be rescued at next login */ });
+    }, 800);
 }
 // Builds one "LABEL: ______" footer row. When editable, the line is a
 // contenteditable div the admin/teacher can type straight into before
@@ -306,6 +323,73 @@ async function refreshAttendanceForStudent(studentId) {
         }
     } catch (e) { /* keep existing local attendanceStorage for this student */ }
 }
+// Pulls one student's report-card remarks (every term/year on file) from
+// the backend and merges them into reportRemarksStorage, same on-demand,
+// merge-not-replace pattern as refreshAttendanceForStudent above. Called
+// right before that student's report card is rendered — see
+// generateReportCards (admin/teacher) and applySessionUser (student).
+async function refreshReportRemarksForStudent(studentId) {
+    try {
+        const remote = await RemarksAPI.listForStudent(studentId);
+        if (Array.isArray(remote)) {
+            remote.forEach(row => {
+                const key = getReportRemarkKey(row.studentId, row.term, row.year);
+                reportRemarksStorage[key] = {
+                    classTeacherComment: row.classTeacherComment || '',
+                    headteacherComment: row.headteacherComment || ''
+                };
+            });
+        }
+    } catch (e) { /* keep existing local reportRemarksStorage for this student */ }
+}
+// ONE-TIME RESCUE MIGRATION: pushes any comments still sitting in this
+// browser's localStorage (from before comments were synced to the backend)
+// up to the server, then marks itself done so it doesn't resubmit on every
+// future login. Only Admin/Teacher accounts can ever have local comments to
+// rescue (students can never type into these fields — see the `editable`
+// guard on buildCommentRow), so this only runs for those roles. Best-effort
+// and non-blocking: a failure here must never stop login or report
+// rendering, and unmigrated entries simply get retried at the next login.
+async function migrateLocalReportRemarksToServer() {
+    if (getPermissions(currentUser.role).canViewAllReports !== true) return;
+    try {
+        if (localStorage.getItem('lcs_report_remarks_migrated') === 'true') return;
+    } catch (e) { return; } // no localStorage access — nothing to rescue
+
+    let localRemarks = {};
+    try {
+        const raw = localStorage.getItem('lcs_report_remarks');
+        if (raw) localRemarks = JSON.parse(raw);
+    } catch (e) { return; }
+
+    const keys = Object.keys(localRemarks);
+    if (keys.length === 0) {
+        try { localStorage.setItem('lcs_report_remarks_migrated', 'true'); } catch (e) { /* ignore */ }
+        return;
+    }
+
+    let allSucceeded = true;
+    await Promise.all(keys.map(async (key) => {
+        const entry = localRemarks[key];
+        const parts = key.split('_');
+        if (parts.length !== 3 || !entry) return; // defensive: skip anything not in the expected shape
+        const [studentId, term, year] = parts;
+        const classTeacherComment = entry.classTeacherComment || '';
+        const headteacherComment = entry.headteacherComment || '';
+        if (!classTeacherComment && !headteacherComment) return; // nothing to rescue for this key
+
+        try {
+            await RemarksAPI.save(studentId, term, year, { classTeacherComment, headteacherComment });
+            reportRemarksStorage[key] = { classTeacherComment, headteacherComment };
+        } catch (e) {
+            allSucceeded = false; // network/server issue — leave localStorage copy intact, retry next login
+        }
+    }));
+
+    if (allSucceeded) {
+        try { localStorage.setItem('lcs_report_remarks_migrated', 'true'); } catch (e) { /* ignore */ }
+    }
+}
 async function syncAllRemoteData() {
     // Run in parallel — independent endpoints, no ordering dependency.
     await Promise.all([
@@ -384,6 +468,20 @@ async function applySessionUser(user) {
     // rendering anything below, so the dashboard reflects real data
     // instead of the hardcoded demo lists.
     await syncAllRemoteData();
+
+    // Report card remarks (Class Teacher's / Headteacher's comments):
+    // rescue any comments still sitting only in this device's localStorage
+    // (from before report_card_remarks existed) and push them to the
+    // server — see migrateLocalReportRemarksToServer for why this only
+    // applies to Admin/Teacher (Students never write remarks, so a
+    // Student login has nothing local worth rescuing). For a Student,
+    // instead just pull their own remarks from the server so "My Report
+    // Card" reflects whatever a teacher already saved on another device.
+    if (getPermissions(currentUser.role).canViewAllReports) {
+        await migrateLocalReportRemarksToServer();
+    } else if (currentUser.studentId) {
+        await refreshReportRemarksForStudent(currentUser.studentId);
+    }
 
     const userBadge = document.getElementById('user-badge');
     if (userBadge) userBadge.innerText = `Logged in: ${currentUser.username}`;
@@ -2359,6 +2457,14 @@ async function generateReportCards() {
     previewArea.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">Loading attendance history for ${selectedClass}&hellip;</div>`;
     await Promise.all(classStudents.map(s => refreshAttendanceForStudent(s.id)));
 
+    // Same on-demand pull for report card remarks (Class Teacher's /
+    // Headteacher's comments) as attendance above: the login-time
+    // migration only pushes local data, it doesn't pull every student's
+    // saved remarks, so fetch this class's roster here — right before
+    // rendering — so a comment saved from a different device/browser
+    // shows up instead of appearing blank.
+    await Promise.all(classStudents.map(s => refreshReportRemarksForStudent(s.id)));
+
     // Build the date->status lookup once for the whole class instead of
     // letting every student's report card re-scan the entire attendanceStorage
     // object for its own rows (see buildAttendanceIndexByStudent for why).
@@ -2419,35 +2525,6 @@ function getOLevelSubjectRecords(student) {
         // finalTotal is null, so the subject no longer has a valid score and
         // must be filtered out rather than shown with empty dashes.
         .filter(record => record.finalTotal !== null);
-}
-// Report-card-only variant of getOLevelSubjectRecords() above. The O-Level
-// report card must always list all 15 O-Level subjects for the learner's
-// class, even when a subject has no marks touched/recorded at all — so
-// unlike getOLevelSubjectRecords() (still used as-is by the profile modal,
-// performance summary, and Best/Worst Performers panel, none of which this
-// function replaces), this does NOT filter out untouched or ungraded
-// subjects. A subject with no marksStorage entry falls back to an empty
-// placeholder ({ao1:null, ao2:null, eot:null, remarks:''}) instead of being
-// skipped, and is flagged with hasMarks:false so buildOLevelReportPage can
-// render every cell for that row as a true blank (see hasMarks usage there)
-// rather than the numeric/dash placeholders the formatters normally fall
-// back to. Every downstream consumer (formatAOScoreDisplay,
-// formatWholeScoreDisplay, displayOrDash, computeOfficialGrade,
-// buildSubjectBars, buildPerformanceRemark, buildSummarySection) already
-// treats null/undefined marks as "not yet recorded", so no other rendering
-// logic needs to change.
-function getOLevelSubjectRecordsForReportCard(student) {
-    return oLevelSubjects.map(subj => {
-        const recordKey = `${subj}_${student.id}`;
-        const stored = marksStorage[recordKey];
-        const hasMarks = !!(stored && stored.touched);
-        const marks = stored || { ao1: null, ao2: null, eot: null, remarks: '' };
-        const avScore = calculateAOAverage(marks.ao1, marks.ao2);
-        const faScore = (avScore / 3.0) * 20;
-        const finalTotal = computeOLevelFinalTotal(marks, faScore);
-        const gradeData = computeOfficialGrade(finalTotal);
-        return { subj, marks, avScore, faScore, finalTotal, gradeData, hasMarks };
-    });
 }
 // Groups attendanceStorage (keyed "date_studentId") by studentId in a
 // single O(total attendance rows) pass. Pass the result into
@@ -2526,7 +2603,7 @@ function buildSubjectBars(records, isALevel) {
         <div class="rc-bar-row">
             <span class="rc-bar-label">${isALevel ? formatALevelSubjectDisplayName(r.subj) : r.subj}</span>
             <span class="rc-bar-track"><span class="rc-bar-fill" style="width:${width}%;background:${color};"></span></span>
-            <span class="rc-bar-score" style="color:${color};">${score === null ? '' : score}</span>
+            <span class="rc-bar-score" style="color:${color};">${displayOrDash(score)}</span>
         </div>`;
     }).join('')}</div>`;
 }
@@ -2703,28 +2780,23 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     return Math.round(((totalScore / denominator) * 3) * 10) / 10;
 }
 function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
-    const subjectRecords = getOLevelSubjectRecordsForReportCard(student);
+    const subjectRecords = getOLevelSubjectRecords(student);
 
     const overallAvg = calculateOLevelOverallAchievement(student.class, subjectRecords);
     const overallIdentifier = getOverallIdentifier(overallAvg);
 
-    // A subject with no marks touched at all (r.hasMarks === false) renders as a
-    // fully blank row — every cell but the subject name is an empty string, not
-    // the usual "-" fallback or "Not yet graded" descriptor text — per the
-    // school's request that untouched subjects look completely empty on the
-    // printed report card.
     const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
         <tr>
             <td class="rc-subj">${r.subj}</td>
-            <td class="rc-num">${r.hasMarks ? formatAOScoreDisplay(r.marks.ao1, '-') : ''}</td>
-            <td class="rc-num">${r.hasMarks ? formatAOScoreDisplay(r.marks.ao2, '-') : ''}</td>
-            <td class="rc-num">${r.hasMarks ? r.avScore.toFixed(1) : ''}</td>
-            <td class="rc-num">${r.hasMarks ? Math.round(r.faScore) : ''}</td>
-            <td class="rc-num">${r.hasMarks ? formatWholeScoreDisplay(r.marks.eot, '-') : ''}</td>
-            <td class="rc-final">${r.hasMarks ? displayOrDash(r.finalTotal) : ''}</td>
-            <td class="rc-grade">${r.hasMarks ? displayOrDash(r.gradeData.grade) : ''}</td>
-            <td class="rc-descriptor">${r.hasMarks ? getCompetencyDescriptor(r.gradeData.grade) : ''}</td>
-            <td class="rc-num">${r.hasMarks ? escapeHTML(r.marks.remarks || '') : ''}</td>
+            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao1, '-')}</td>
+            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '-')}</td>
+            <td class="rc-num">${r.avScore.toFixed(1)}</td>
+            <td class="rc-num">${Math.round(r.faScore)}</td>
+            <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
+            <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
+            <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
+            <td class="rc-descriptor">${getCompetencyDescriptor(r.gradeData.grade)}</td>
+            <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
         </tr>
     `).join('') : `<tr><td colspan="10" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
 

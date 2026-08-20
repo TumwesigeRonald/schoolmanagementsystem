@@ -14,6 +14,7 @@ const resourcesRoutes = require('./routes/resources.routes');
 const uploadRoutes = require('./routes/upload.routes'); // <-- Added upload routes
 const activityLogRoutes = require('./routes/activity-log.routes');
 const noticesRoutes = require('./routes/notices.routes');
+const remarksRoutes = require('./routes/remarks.routes');
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/api/resources', resourcesRoutes);
 app.use('/api/upload', uploadRoutes); // <-- Mounted upload endpoint here
 app.use('/api/activity-log', activityLogRoutes);
 app.use('/api/notices', noticesRoutes);
+app.use('/api/remarks', remarksRoutes);
 
 // --- 404 for unmatched /api routes ---
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));

@@ -181,6 +181,38 @@ CREATE TABLE IF NOT EXISTS notices (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- -------------------------------------------------------------
+-- report_card_remarks — Class Teacher's / Headteacher's comment
+-- fields shown on the report card footer, one row per
+-- (student, term, year). Previously these lived ONLY in each
+-- browser's localStorage (see script.js's old reportRemarksStorage),
+-- which meant a comment typed on one phone/device was invisible
+-- everywhere else. Now the backend is the single source of truth.
+--
+-- Deliberately its OWN table rather than columns on `scores`:
+-- a comment is per (student, term, year), not per subject, and
+-- `scores` has no term/year column at all (one row per
+-- subject+student, overwritten term to term) — putting the
+-- comment there would mean picking one arbitrary subject row to
+-- carry it, and losing it the moment that subject is unlinked via
+-- DELETE /api/scores/:recordKey. This table survives subject
+-- changes and keeps every term's comment distinct.
+--
+-- record_key mirrors the frontend's existing localStorage key
+-- exactly: `${studentId}_${term}_${year}` — same convention as
+-- scores.record_key / attendance.record_key.
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS report_card_remarks (
+  id                     SERIAL PRIMARY KEY,
+  record_key             TEXT NOT NULL UNIQUE,
+  student_id             TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  term                   TEXT NOT NULL,
+  year                   INTEGER NOT NULL,
+  class_teacher_comment  TEXT,
+  headteacher_comment    TEXT,
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_scores_student      ON scores(student_id);
 CREATE INDEX IF NOT EXISTS idx_scores_subject      ON scores(subject);
 CREATE INDEX IF NOT EXISTS idx_scores_class        ON scores(class_level);
@@ -192,3 +224,4 @@ CREATE INDEX IF NOT EXISTS idx_users_student       ON users(student_id);
 CREATE INDEX IF NOT EXISTS idx_users_teacher       ON users(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notices_created       ON notices(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_report_remarks_student ON report_card_remarks(student_id);

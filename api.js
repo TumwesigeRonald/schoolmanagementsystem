@@ -95,7 +95,11 @@ const ENDPOINTS = {
     ACTIVITY_LOG: "/activity-log",
 
     // --- Admin Notice Board / school bulletin ---
-    NOTICES: "/notices"
+    NOTICES: "/notices",
+
+    // --- Report card remarks (Class Teacher's / Headteacher's comments) ---
+    REMARKS: "/remarks",
+    REMARKS_BY_STUDENT: (studentId) => `/remarks?studentId=${encodeURIComponent(studentId)}`
 };
 
 /* ---------------------------------------------------------
@@ -629,5 +633,28 @@ const NoticesAPI = {
             () => apiRequest(`${ENDPOINTS.NOTICES}?id=${encodeURIComponent(noticeId)}`, { method: "DELETE" }),
             () => { noticesList = noticesList.filter(n => n.id !== noticeId); return true; }
         );
+    }
+};
+
+/* ---------------------------------------------------------
+   14. REPORT CARD REMARKS DATA-ACCESS LAYER
+   Class Teacher's / Headteacher's comment fields. No local-storage
+   fallback here on purpose (same reasoning as ScoresAPI.save): a
+   comment failing to reach the server must be visible to the caller,
+   not silently "succeed" via a local store that only this tab/device
+   can see — that's the exact bug this migration exists to fix.
+   --------------------------------------------------------- */
+const RemarksAPI = {
+    // Every remark row on file for one student (used by the login-time
+    // rescue migration and by report-card rendering to hydrate every
+    // term/year at once, mirroring how AttendanceAPI.listForStudent works).
+    async listForStudent(studentId) {
+        return apiRequest(ENDPOINTS.REMARKS_BY_STUDENT(studentId));
+    },
+    async save(studentId, term, year, fields) {
+        return apiRequest(ENDPOINTS.REMARKS, {
+            method: "POST",
+            body: { studentId, term, year, ...fields }
+        });
     }
 };
