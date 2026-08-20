@@ -1273,7 +1273,6 @@ function renderStudentProfileBody(student, containerId = 'student-profile-body')
                 <p class="text-[10px] text-slate-500">${isALevel ? 'A-Level' : 'O-Level'} scale</p>
             </div>
         </div>
-        ${buildModalOverallMetricBox(student, subjectRecords, isALevel)}
         <div>
             <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Performance Summary</h4>
             <table class="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
@@ -1285,7 +1284,9 @@ function renderStudentProfileBody(student, containerId = 'student-profile-body')
             <h4 class="text-[11px] font-extrabold text-teal-700 uppercase tracking-wider mb-1">System Summary</h4>
             <p class="text-xs text-teal-900">${performanceRemark}</p>
         </div>
+        ${buildModalOverallMetricBox(student, subjectRecords, isALevel)}
         ${buildModalCommentsSection(student)}
+        ${buildModalSaveSection(student)}
     `;
 }
 /* ---------------------------------------------------------
@@ -1405,6 +1406,64 @@ function saveModalRemark(el) {
         RemarksAPI.save(studentId, term, year, { [field]: reportRemarksStorage[key][field] })
             .catch(() => { /* offline/unreachable — localStorage copy above still holds the latest text; will be rescued at next login */ });
     }, 800);
+}
+/* ---------------------------------------------------------
+   4b-iii. MODAL EXPLICIT SAVE BUTTON
+   saveModalRemark() above already autosaves 800ms after typing
+   pauses, but teachers/the headteacher asked for a visible, explicit
+   "Save" action so it's clear their comments were actually written
+   to the record (rather than trusting a silent background save).
+   Pressing it flushes both comment fields immediately — cancelling
+   any pending debounce timers and sending both classTeacherComment
+   and headteacherComment together — and calls the exact same
+   RemarksAPI.save()/report_card_remarks table the report card's own
+   comment boxes and the autosave path use, so a click here IS what
+   the generated report card will show; no separate storage or sync
+   step exists. Only rendered for roles that can edit (canViewAllReports)
+   — a read-only viewer (e.g. Student) never sees it, matching
+   buildModalCommentsSection's own edit gate.
+   --------------------------------------------------------- */
+function buildModalSaveSection(student) {
+    if (!getPermissions(currentUser.role).canViewAllReports) return '';
+    return `
+        <div class="flex items-center justify-end gap-3 pt-1">
+            <span id="modal-save-status" class="text-[11px] font-bold text-slate-400"></span>
+            <button type="button" onclick="saveModalRemarksNow('${student.id}', this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-sm transition-colors">
+                <i class="fa-solid fa-floppy-disk mr-1.5"></i>Save
+            </button>
+        </div>`;
+}
+async function saveModalRemarksNow(studentId, buttonEl) {
+    if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
+    const term = termSettings.term;
+    const year = termSettings.year;
+    const key = getReportRemarkKey(studentId, term, year);
+    const container = buttonEl ? buttonEl.closest('#student-profile-body, #own-dashboard-summary-body') : document;
+    const classTeacherEl = container ? container.querySelector(`textarea[data-remark-key="${key}"][data-remark-field="classTeacherComment"]`) : null;
+    const headteacherEl = container ? container.querySelector(`textarea[data-remark-key="${key}"][data-remark-field="headteacherComment"]`) : null;
+    const classTeacherComment = classTeacherEl ? classTeacherEl.value.trim() : (getReportRemark(studentId, term, year, 'classTeacherComment') || '');
+    const headteacherComment = headteacherEl ? headteacherEl.value.trim() : (getReportRemark(studentId, term, year, 'headteacherComment') || '');
+
+    // Cancel any pending autosave debounce for this row — this explicit
+    // save supersedes it so the same text isn't sent to the server twice.
+    clearTimeout(modalRemarkSaveTimers[key]);
+
+    reportRemarksStorage[key] = { classTeacherComment, headteacherComment };
+    persistReportRemarks(); // best-effort offline cache only, same as saveModalRemark
+
+    const statusEl = document.getElementById('modal-save-status');
+    if (buttonEl) buttonEl.disabled = true;
+    if (statusEl) statusEl.textContent = 'Saving…';
+    try {
+        await RemarksAPI.save(studentId, term, year, { classTeacherComment, headteacherComment });
+        if (statusEl) statusEl.textContent = 'Saved';
+        showToast('Comments saved — the report card for this student will reflect them.', 'success', 4000);
+    } catch (err) {
+        if (statusEl) statusEl.textContent = '';
+        showToast(err.message || 'Could not save comments. Please check your connection and try again.', 'error');
+    } finally {
+        if (buttonEl) buttonEl.disabled = false;
+    }
 }
 // Manually unlinks one subject from one student: deletes that subject's
 // scores row outright (server-side, via ScoresAPI.remove) rather than
