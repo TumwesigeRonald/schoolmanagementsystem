@@ -1216,7 +1216,17 @@ async function openStudentProfileModal(studentId) {
     // Attendance history needs this student's full record, not just the
     // recent rolling window already loaded — same on-demand fetch the
     // report card engine already uses (refreshAttendanceForStudent).
-    await refreshAttendanceForStudent(student.id);
+    // Report card remarks (Class Teacher's / Headteacher's comments) get
+    // the same on-demand pull, for the same reason: this student may not
+    // be part of the currently-open class roster, so reportRemarksStorage
+    // might not have their comments yet. This merges every term/year on
+    // file for them into reportRemarksStorage (see refreshReportRemarksForStudent),
+    // so whichever term/year the modal displays always reflects what's on
+    // the server.
+    await Promise.all([
+        refreshAttendanceForStudent(student.id),
+        refreshReportRemarksForStudent(student.id)
+    ]);
     renderStudentProfileBody(student);
 }
 // Re-render just the profile modal's body (attendance + performance summary)
@@ -1263,6 +1273,7 @@ function renderStudentProfileBody(student, containerId = 'student-profile-body')
                 <p class="text-[10px] text-slate-500">${isALevel ? 'A-Level' : 'O-Level'} scale</p>
             </div>
         </div>
+        ${buildModalOverallMetricBox(student, subjectRecords, isALevel)}
         <div>
             <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Performance Summary</h4>
             <table class="w-full text-xs border border-slate-200 rounded-lg overflow-hidden">
@@ -1274,7 +1285,126 @@ function renderStudentProfileBody(student, containerId = 'student-profile-body')
             <h4 class="text-[11px] font-extrabold text-teal-700 uppercase tracking-wider mb-1">System Summary</h4>
             <p class="text-xs text-teal-900">${performanceRemark}</p>
         </div>
+        ${buildModalCommentsSection(student)}
     `;
+}
+/* ---------------------------------------------------------
+   4b-i. MODAL OVERALL ACHIEVEMENT / TOTAL POINTS BOX
+   Surfaces the same tier-evaluation metric the report card
+   footer already shows ("Overall Achievement" for O-Level via
+   calculateOLevelOverallAchievement/getOverallIdentifier, "Total
+   Points" for A-Level via the same points sum buildALevelReportPage
+   uses) directly in the Student Summary Modal, so a teacher or the
+   headteacher can gauge a learner's overall performance tier without
+   opening the full report card. Reuses those exact existing
+   functions — no grading scale, denominator, or points table is
+   redefined here.
+   Empty-state guard: calculateOLevelOverallAchievement() returns 0
+   (and getOverallIdentifier(0) reads "BASIC") when no subject has a
+   valid mark yet, and an empty A-Level points sum is likewise 0 —
+   both would misleadingly look like a real failing result rather
+   than "nothing entered yet". This box only computes/shows a value
+   once at least one subject has a valid recorded mark; otherwise it
+   shows an explicit "Not yet available" empty state.
+   --------------------------------------------------------- */
+function buildModalOverallMetricBox(student, subjectRecords, isALevel) {
+    const hasGradedRecords = subjectRecords.length > 0;
+    if (isALevel) {
+        const totalPoints = hasGradedRecords
+            ? subjectRecords.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0)
+            : null;
+        return `
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
+            <p class="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">Total Points</p>
+            <p class="text-2xl font-extrabold text-indigo-900">${hasGradedRecords ? totalPoints : 'Not yet available'}</p>
+            <p class="text-[10px] text-indigo-700">${hasGradedRecords ? 'Sum of subject grade points this term' : 'No graded subjects recorded yet'}</p>
+        </div>`;
+    }
+    const overallAvg = hasGradedRecords ? calculateOLevelOverallAchievement(student.class, subjectRecords) : null;
+    const overallIdentifier = overallAvg !== null ? getOverallIdentifier(overallAvg) : null;
+    return `
+        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
+            <p class="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">Overall Achievement</p>
+            <p class="text-2xl font-extrabold text-indigo-900">${hasGradedRecords ? `${overallAvg.toFixed(1)} &mdash; ${overallIdentifier}` : 'Not yet available'}</p>
+            <p class="text-[10px] text-indigo-700">${hasGradedRecords ? 'Weighted against ' + (O_LEVEL_TIER_SUBJECT_COUNTS[student.class] || 12) + '-subject tier load' : 'No graded subjects recorded yet'}</p>
+        </div>`;
+}
+/* ---------------------------------------------------------
+   4b-ii. MODAL COMMENT INPUT FIELDS
+   Class Teacher's / Headteacher's comment fields, directly in the
+   Student Summary Modal. Backed by the exact same reportRemarksStorage
+   cache and RemarksAPI.save()/report_card_remarks table the report
+   card footer's comment boxes already use (see buildCommentRow and
+   saveReportRemark above) — so a comment saved here IS the comment
+   that appears on the generated report card for this student/term/
+   year, with no separate storage or sync step needed. Scoped to the
+   term/year currently selected in Term Settings (termSettings),
+   matching every other term-scoped view in the app (report card
+   preview/generation, term badge).
+   Editable only for roles with canViewAllReports (Administrator/
+   Teacher — the same gate the report card's own comment boxes use;
+   this app has no separate "Headteacher" login role, so a
+   headteacher signs in as an Administrator). For a Student viewing
+   their own summary, the fields render read-only, exactly like the
+   read-only comment lines on their own report card view.
+   --------------------------------------------------------- */
+function buildModalCommentsSection(student) {
+    const editable = getPermissions(currentUser.role).canViewAllReports;
+    const term = termSettings.term;
+    const year = termSettings.year;
+    const key = getReportRemarkKey(student.id, term, year);
+    const classTeacherValue = getReportRemark(student.id, term, year, 'classTeacherComment');
+    const headteacherValue = getReportRemark(student.id, term, year, 'headteacherComment');
+
+    const fieldHtml = (label, field, value) => editable
+        ? `<div>
+                <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">${label}</label>
+                <textarea rows="2" data-remark-key="${key}" data-remark-field="${field}" oninput="saveModalRemark(this)" placeholder="No comment yet &mdash; type to add one&hellip;" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 resize-none">${value ? escapeHTML(value) : ''}</textarea>
+           </div>`
+        : `<div>
+                <p class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">${label}</p>
+                <p class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 min-h-[2.5rem]">${value ? escapeHTML(value) : 'No comment recorded yet.'}</p>
+           </div>`;
+
+    return `
+        <div>
+            <div class="flex items-center justify-between mb-2">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Report Card Comments</h4>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">${escapeHTML(term)}, ${escapeHTML(String(year))}</span>
+            </div>
+            <div class="space-y-3">
+                ${fieldHtml("Class Teacher's Comment", 'classTeacherComment', classTeacherValue)}
+                ${fieldHtml("Headteacher's Comment", 'headteacherComment', headteacherValue)}
+            </div>
+        </div>`;
+}
+// Debounced save for the modal's comment textareas — mirrors
+// saveReportRemark() above exactly (same reportRemarksStorage cache,
+// same localStorage best-effort backup, same RemarksAPI.save() call,
+// same 800ms-after-typing-pauses debounce keyed per remark row), but
+// reads el.value instead of el.innerText since this is a plain
+// <textarea> rather than a contenteditable div. Kept as its own
+// function rather than reusing saveReportRemark directly so the
+// report card's existing contenteditable comment boxes are never
+// touched by this change.
+const modalRemarkSaveTimers = {};
+function saveModalRemark(el) {
+    if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
+    const key = el.dataset.remarkKey;
+    const field = el.dataset.remarkField;
+    if (!key || !field) return;
+    if (!reportRemarksStorage[key]) reportRemarksStorage[key] = {};
+    reportRemarksStorage[key][field] = el.value.trim();
+    persistReportRemarks(); // best-effort offline cache only — same as saveReportRemark
+
+    clearTimeout(modalRemarkSaveTimers[key]);
+    modalRemarkSaveTimers[key] = setTimeout(() => {
+        const parts = key.split('_');
+        if (parts.length !== 3) return; // defensive: unexpected key shape, skip remote save
+        const [studentId, term, year] = parts;
+        RemarksAPI.save(studentId, term, year, { [field]: reportRemarksStorage[key][field] })
+            .catch(() => { /* offline/unreachable — localStorage copy above still holds the latest text; will be rescued at next login */ });
+    }, 800);
 }
 // Manually unlinks one subject from one student: deletes that subject's
 // scores row outright (server-side, via ScoresAPI.remove) rather than
