@@ -2971,20 +2971,47 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
 function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
     const subjectRecords = getOLevelSubjectRecords(student);
 
+    // overallAvg/overallIdentifier (and buildSummarySection below) intentionally
+    // keep using the untouched `subjectRecords` — i.e. only subjects that
+    // actually have a graded/touched entry. Padding the table with the full
+    // master subject list (below) is a display-only concern and must never
+    // feed into these calculations, or an ungraded subject would start
+    // silently dragging the Overall Achievement average down.
     const overallAvg = calculateOLevelOverallAchievement(student.class, subjectRecords);
     const overallIdentifier = getOverallIdentifier(overallAvg);
 
-    const rows = subjectRecords.length > 0 ? subjectRecords.map(r => `
+    // O-Level classes (S.1 - S.4) always print the complete 15-subject master
+    // curriculum on the report card, even for subjects the student has no
+    // marks/teacher entries for yet — those simply render as blank rows so
+    // the card reads as a full record rather than only whatever happens to
+    // be graded so far. Any class that isn't in the O-Level tier (this
+    // function is only ever invoked for non-A-Level classes today, but this
+    // guards against a future/non-standard class value landing here) falls
+    // back to the original "only what's actually offered/graded" behaviour,
+    // matching A-Level and leaving that path untouched.
+    const isOLevelClass = O_LEVEL_STATUS_CLASSES.includes(student.class);
+    const displayRecords = isOLevelClass
+        ? oLevelSubjects.map(subj => subjectRecords.find(r => r.subj === subj) || {
+            subj,
+            marks: {},
+            avScore: null,
+            faScore: null,
+            finalTotal: null,
+            gradeData: {}
+        })
+        : subjectRecords;
+
+    const rows = displayRecords.length > 0 ? displayRecords.map(r => `
         <tr>
             <td class="rc-subj">${r.subj}</td>
             <td class="rc-num">${formatAOScoreDisplay(r.marks.ao1, '-')}</td>
             <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '-')}</td>
-            <td class="rc-num">${r.avScore.toFixed(1)}</td>
-            <td class="rc-num">${Math.round(r.faScore)}</td>
+            <td class="rc-num">${r.avScore !== null && r.avScore !== undefined ? r.avScore.toFixed(1) : '-'}</td>
+            <td class="rc-num">${r.faScore !== null && r.faScore !== undefined ? Math.round(r.faScore) : '-'}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
             <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
             <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
-            <td class="rc-descriptor">${getCompetencyDescriptor(r.gradeData.grade)}</td>
+            <td class="rc-descriptor">${r.gradeData.grade ? getCompetencyDescriptor(r.gradeData.grade) : ''}</td>
             <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
         </tr>
     `).join('') : `<tr><td colspan="10" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
