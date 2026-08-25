@@ -3001,16 +3001,29 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
         })
         : subjectRecords;
 
+    // Blank-cell rule (display only): any of these seven fields with no
+    // recorded value renders as a completely empty cell rather than a "-".
+    // formatAOScoreDisplay/formatWholeScoreDisplay already collapse a raw
+    // 0 (i.e. "touched but no real value entered") to the emptyValue we pass
+    // in, so passing '' here — instead of the '-' used elsewhere in the app
+    // (e.g. the A-Level table above) — is enough to satisfy "zero-with-no-
+    // data" too. This is purely cosmetic: the underlying r.avScore/r.faScore/
+    // r.finalTotal/r.gradeData.grade values themselves are untouched, so
+    // calculateOLevelOverallAchievement (which sums r.finalTotal via
+    // `?? 0` and only over subjectRecords, never displayRecords) and
+    // getOLevelSubjectRecords' own null-filtering keep working exactly as
+    // before — nothing here changes what is calculated, only how a missing
+    // value is shown.
     const rows = displayRecords.length > 0 ? displayRecords.map(r => `
         <tr>
             <td class="rc-subj">${r.subj}</td>
-            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao1, '-')}</td>
-            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '-')}</td>
-            <td class="rc-num">${r.avScore !== null && r.avScore !== undefined ? r.avScore.toFixed(1) : '-'}</td>
-            <td class="rc-num">${r.faScore !== null && r.faScore !== undefined ? Math.round(r.faScore) : '-'}</td>
-            <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '-')}</td>
-            <td class="rc-final">${displayOrDash(r.finalTotal)}</td>
-            <td class="rc-grade">${displayOrDash(r.gradeData.grade)}</td>
+            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao1, '')}</td>
+            <td class="rc-num">${formatAOScoreDisplay(r.marks.ao2, '')}</td>
+            <td class="rc-num">${r.avScore !== null && r.avScore !== undefined && r.avScore !== 0 ? r.avScore.toFixed(1) : ''}</td>
+            <td class="rc-num">${r.faScore !== null && r.faScore !== undefined && r.faScore !== 0 ? Math.round(r.faScore) : ''}</td>
+            <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '')}</td>
+            <td class="rc-final">${r.finalTotal !== null && r.finalTotal !== undefined && r.finalTotal !== 0 ? r.finalTotal : ''}</td>
+            <td class="rc-grade">${r.gradeData.grade || ''}</td>
             <td class="rc-descriptor">${r.gradeData.grade ? getCompetencyDescriptor(r.gradeData.grade) : ''}</td>
             <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
         </tr>
