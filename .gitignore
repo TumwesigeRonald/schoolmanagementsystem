@@ -3,3 +3,4 @@ lcs-backend/node_modules/
 .env
 lcs-backend/.env
 .DS_Store
+lcs-backend/.env
