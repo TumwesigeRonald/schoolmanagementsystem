@@ -56,6 +56,54 @@ CREATE TABLE IF NOT EXISTS teachers (
 ALTER TABLE teachers ADD COLUMN IF NOT EXISTS initials TEXT;
 
 -- -------------------------------------------------------------
+-- ai_toolbox_items — AI Teacher Toolbox (Lesson Plan / Scheme of
+-- Work / Activity of Integration & CAI / Record of Work).
+-- One shared table for all four tools: rigid columns for what
+-- teachers actually filter/sort by, JSONB for the tool-specific
+-- body, since each tool's output shape genuinely differs.
+-- See lcs-backend/config/aiTools/ for what each tool_type's
+-- input_params/content actually contain.
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS ai_toolbox_items (
+  id            BIGSERIAL PRIMARY KEY,
+  teacher_id    TEXT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE,
+
+  tool_type     TEXT NOT NULL CHECK (tool_type IN (
+                  'lesson_plan',
+                  'scheme_of_work',
+                  'activity_of_integration',
+                  'record_of_work'
+                )),
+
+  title         TEXT NOT NULL,
+  class         TEXT,
+  subject       TEXT,
+  term          TEXT,
+  year          INTEGER,
+  topic         TEXT,
+
+  status        TEXT NOT NULL DEFAULT 'draft'
+                  CHECK (status IN ('draft', 'final', 'archived')),
+
+  input_params  JSONB NOT NULL DEFAULT '{}'::jsonb,
+  content       JSONB NOT NULL,
+
+  model_used    TEXT,
+
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_ai_toolbox_teacher
+  ON ai_toolbox_items (teacher_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_toolbox_teacher_tool
+  ON ai_toolbox_items (teacher_id, tool_type);
+CREATE INDEX IF NOT EXISTS idx_ai_toolbox_class_subject_term_year
+  ON ai_toolbox_items (class, subject, term, year);
+CREATE INDEX IF NOT EXISTS idx_ai_toolbox_content_gin
+  ON ai_toolbox_items USING GIN (content);
+
+-- -------------------------------------------------------------
 -- users — single authentication table for every role.
 -- - Admin rows:   student_id and teacher_id both NULL
 -- - Teacher rows: teacher_id -> teachers.id

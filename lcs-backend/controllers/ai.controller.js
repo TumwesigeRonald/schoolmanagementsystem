@@ -1,0 +1,193 @@
+/**
+ * controllers/ai.controller.js — one generic controller for every tool
+ * in the Teacher Toolbox. Tool-specific logic lives entirely in
+ * config/aiTools/*, so this file never grows when a new tool is added.
+ */
+const db = require('../db');
+const TOOLS = require('../config/aiTools');
+const { ai } = require('../lib/geminiClient');
+
+const GEMINI_MODEL = 'gemini-3.6-flash';
+
+// POST /api/ai/generate
+// Body: { toolType, params: {...}, save?: boolean (default true) }
+async function generate(req, res) {
+  const { toolType, params, save = true } = req.body || {};
+
+  const tool = TOOLS[toolType];
+  if (!tool) {
+    return res.status(400).json({
+      message: `Unknown tool_type "${toolType}". Valid values: ${Object.keys(TOOLS).join(', ')}`
+    });
+  }
+
+  const missing = tool.requiredParams.filter((key) => !params?.[key]);
+  if (missing.length) {
+    return res.status(400).json({ message: `Missing required field(s): ${missing.join(', ')}` });
+  }
+
+  const prompt = tool.buildPrompt(params);
+
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: tool.responseSchema
+      }
+    });
+  } catch (err) {
+    console.error(`[ai.generate] Gemini call failed for tool_type=${toolType}`, err);
+    return res.status(502).json({ message: 'AI generation failed. Please try again in a moment.' });
+  }
+
+  let content;
+  try {
+    content = JSON.parse(response.text);
+  } catch (err) {
+    console.error(`[ai.generate] Could not parse Gemini output for tool_type=${toolType}`, response.text);
+    return res.status(502).json({ message: 'The AI returned an unexpected format. Please try again.' });
+  }
+
+  // save=false lets the frontend preview a generation before the teacher
+  // commits it (e.g. "Regenerate" button) without writing throwaway rows.
+  if (!save) {
+    return res.json({ toolType, content, saved: false });
+  }
+
+  const teacherId = req.user.teacherId;
+  if (!teacherId) {
+    return res.status(403).json({ message: 'Only teacher accounts can use the AI Toolbox.' });
+  }
+
+  const { class: className, subject, term, year, topic, title } = params;
+
+  const { rows } = await db.query(
+    `INSERT INTO ai_toolbox_items
+       (teacher_id, tool_type, title, class, subject, term, year, topic,
+        input_params, content, model_used, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
+     RETURNING id, teacher_id AS "teacherId", tool_type AS "toolType", title,
+               class, subject, term, year, topic, status, content,
+               created_at AS "createdAt", updated_at AS "updatedAt"`,
+    [
+      teacherId,
+      toolType,
+      title || `${tool.label} — ${topic || subject || className}`,
+      className || null,
+      subject || null,
+      term || null,
+      year ? Number(year) : null,
+      topic || null,
+      JSON.stringify(params),
+      JSON.stringify(content),
+      GEMINI_MODEL
+    ]
+  );
+
+  res.status(201).json(rows[0]);
+}
+
+// GET /api/ai/items?toolType=&class=&subject=&term=&year=&status=
+// Teachers see only their own items; Administrators can pass ?teacherId= to
+// inspect a specific teacher's toolbox (e.g. for review/support).
+async function listItems(req, res) {
+  const { toolType, class: className, subject, term, year, status } = req.query;
+  const teacherId = req.user.role === 'Administrator' && req.query.teacherId
+    ? req.query.teacherId
+    : req.user.teacherId;
+
+  const conditions = ['teacher_id = $1'];
+  const values = [teacherId];
+  let i = 2;
+  if (toolType) { conditions.push(`tool_type = $${i++}`); values.push(toolType); }
+  if (className) { conditions.push(`class = $${i++}`); values.push(className); }
+  if (subject) { conditions.push(`subject = $${i++}`); values.push(subject); }
+  if (term) { conditions.push(`term = $${i++}`); values.push(term); }
+  if (year) { conditions.push(`year = $${i++}`); values.push(Number(year)); }
+  if (status) { conditions.push(`status = $${i++}`); values.push(status); }
+
+  const { rows } = await db.query(
+    `SELECT id, teacher_id AS "teacherId", tool_type AS "toolType", title,
+            class, subject, term, year, topic, status,
+            created_at AS "createdAt", updated_at AS "updatedAt"
+     FROM ai_toolbox_items
+     WHERE ${conditions.join(' AND ')}
+     ORDER BY created_at DESC`,
+    values
+  );
+  res.json(rows);
+}
+
+// GET /api/ai/items/:id — full content included (list view omits it to
+// keep the list payload light; the detail view needs the full body).
+async function getItem(req, res) {
+  const { rows } = await db.query(
+    `SELECT id, teacher_id AS "teacherId", tool_type AS "toolType", title,
+            class, subject, term, year, topic, status, input_params AS "inputParams",
+            content, created_at AS "createdAt", updated_at AS "updatedAt"
+     FROM ai_toolbox_items WHERE id = $1`,
+    [req.params.id]
+  );
+  const item = rows[0];
+  if (!item) return res.status(404).json({ message: 'Not found.' });
+
+  const isOwner = item.teacherId === req.user.teacherId;
+  if (!isOwner && req.user.role !== 'Administrator') {
+    return res.status(403).json({ message: 'You do not have permission to view this item.' });
+  }
+  res.json(item);
+}
+
+// PUT /api/ai/items/:id — teacher edits the AI output before finalising,
+// or updates status (draft -> final -> archived).
+// Body: { title?, content?, status? }
+async function updateItem(req, res) {
+  const existing = await db.query('SELECT teacher_id FROM ai_toolbox_items WHERE id = $1', [req.params.id]);
+  if (!existing.rows.length) return res.status(404).json({ message: 'Not found.' });
+
+  const isOwner = existing.rows[0].teacher_id === req.user.teacherId;
+  if (!isOwner && req.user.role !== 'Administrator') {
+    return res.status(403).json({ message: 'You do not have permission to edit this item.' });
+  }
+
+  const body = req.body || {};
+  const has = (name) => Object.prototype.hasOwnProperty.call(body, name);
+
+  const { rows } = await db.query(
+    `UPDATE ai_toolbox_items SET
+       title   = CASE WHEN $2 THEN $3 ELSE title END,
+       content = CASE WHEN $4 THEN $5::jsonb ELSE content END,
+       status  = CASE WHEN $6 THEN $7 ELSE status END,
+       updated_at = now()
+     WHERE id = $1
+     RETURNING id, teacher_id AS "teacherId", tool_type AS "toolType", title,
+               class, subject, term, year, topic, status, content,
+               created_at AS "createdAt", updated_at AS "updatedAt"`,
+    [
+      req.params.id,
+      has('title'), body.title || null,
+      has('content'), has('content') ? JSON.stringify(body.content) : null,
+      has('status'), body.status || null
+    ]
+  );
+  res.json(rows[0]);
+}
+
+// DELETE /api/ai/items/:id
+async function deleteItem(req, res) {
+  const existing = await db.query('SELECT teacher_id FROM ai_toolbox_items WHERE id = $1', [req.params.id]);
+  if (!existing.rows.length) return res.status(404).json({ message: 'Not found.' });
+
+  const isOwner = existing.rows[0].teacher_id === req.user.teacherId;
+  if (!isOwner && req.user.role !== 'Administrator') {
+    return res.status(403).json({ message: 'You do not have permission to delete this item.' });
+  }
+
+  await db.query('DELETE FROM ai_toolbox_items WHERE id = $1', [req.params.id]);
+  res.json({ message: 'Deleted.' });
+}
+
+module.exports = { generate, listItems, getItem, updateItem, deleteItem };
