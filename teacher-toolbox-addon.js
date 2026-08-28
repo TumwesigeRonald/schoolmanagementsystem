@@ -192,15 +192,27 @@ async function handleAIGenerate() {
         const response = await fetch('/api/ai/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ toolType, subject, classLevel, term, topic })
+            body: JSON.stringify({ 
+                toolType, 
+                save: true,
+                params: {
+                    subject: subject,
+                    class: classLevel,
+                    term: term,
+                    topic: topic
+                }
+            })
         });
 
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || 'Failed to generate content');
 
         previewContainer.className = 'flex-1 bg-white rounded-xl border border-slate-200 p-4 overflow-y-auto max-h-[500px]';
+        
+        const displayContent = typeof data.content === 'object' ? JSON.stringify(data.content, null, 2) : (data.content || data.result);
+
         previewContainer.innerHTML = `
-            <textarea id="ai-generated-content-editable" class="w-full h-full min-h-[380px] p-3 text-sm text-slate-700 bg-slate-50 rounded-lg border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none">${data.content || data.result}</textarea>
+            <textarea id="ai-generated-content-editable" class="w-full h-full min-h-[380px] p-3 text-sm text-slate-700 bg-slate-50 rounded-lg border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500 font-mono outline-none">${displayContent}</textarea>
         `;
         workspaceActions.classList.remove('hidden');
     } catch (err) {
