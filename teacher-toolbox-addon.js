@@ -3,40 +3,25 @@
  * Developed by Tumwesige Ronald
  */
 
-document.addEventListener("DOMContentLoaded", () => {
-    setTimeout(initTeacherToolboxModule, 800);
+// Use a MutationObserver to watch for sidebar changes and force-inject the Teacher Toolbox link
+const observer = new MutationObserver(() => {
+    injectTeacherToolbox();
 });
 
-// Also re-run when navigation or login state changes in your app
-window.addEventListener("load", () => {
-    setTimeout(initTeacherToolboxModule, 1000);
+observer.observe(document.body, {
+    childList: true,
+    subtree: true
 });
 
-function initTeacherToolboxModule() {
+document.addEventListener("DOMContentLoaded", injectTeacherToolbox);
+window.addEventListener("load", injectTeacherToolbox);
+
+function injectTeacherToolbox() {
     const sidebarNav = document.getElementById('sidebar-nav');
     if (!sidebarNav) return;
 
     // Prevent duplicate injection
     if (document.getElementById('sidebar-toolbox-link')) return;
-
-    // Check various elements where roles might be displayed in your dashboard
-    const userRoleTag = document.getElementById('user-role-tag');
-    const userBadge = document.getElementById('user-badge');
-    
-    const roleText = (userRoleTag ? userRoleTag.textContent : '') + " " + 
-                     (userBadge ? userBadge.textContent : '') + " " + 
-                     (window.currentUser ? window.currentUser.role : '');
-                     
-    const lowerRole = roleText.toLowerCase();
-
-    // Force show if it contains admin, teacher, or if we want to be safe during testing, 
-    // you can ensure it renders whenever the dashboard is active.
-    const isAuthorized = lowerRole.includes('teacher') || 
-                         lowerRole.includes('admin') || 
-                         lowerRole.includes('administrator') ||
-                         document.getElementById('dashboard-section').style.display !== 'none';
-
-    if (!isAuthorized) return;
 
     const toolboxLink = document.createElement('a');
     toolboxLink.id = 'sidebar-toolbox-link';
@@ -274,7 +259,7 @@ async function loadSavedToolItems() {
 async function deleteSavedItem(id) {
     if (!confirm('Are you sure you want to delete this record?')) return;
     try {
-        await fetch(`/api/ai/items/${id}`, { method: 'DELETE' }, { signal: AbortSignal.timeout(5000) });
+        await fetch(`/api/ai/items/${id}`, { method: 'DELETE' });
         loadSavedToolItems();
     } catch (err) {
         alert('Failed to delete item.');
