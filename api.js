@@ -148,9 +148,9 @@ const TokenStore = {
    Every real network call funnels through here so auth headers,
    timeouts, and JSON/error handling are handled once, consistently.
    --------------------------------------------------------- */
-async function apiRequest(path, { method = "GET", body = null, isFormData = false } = {}) {
+async function apiRequest(path, { method = "GET", body = null, isFormData = false, timeoutMs = API_CONFIG.TIMEOUT_MS } = {}) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const headers = {};
     const token = TokenStore.get();
     if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -670,9 +670,14 @@ const AIToolboxAPI = {
     // the same call and returns the saved row; save=false only returns a
     // preview (used by a future "regenerate before saving" flow).
     async generate(toolType, params, save = true) {
+        // Gemini generation routinely takes longer than the default
+        // API_CONFIG.TIMEOUT_MS (12s), which was aborting the request
+        // mid-flight. 60s here only — every other endpoint keeps the
+        // fast default timeout.
         return apiRequest(ENDPOINTS.AI_GENERATE, {
             method: "POST",
-            body: { toolType, params, save }
+            body: { toolType, params, save },
+            timeoutMs: 60000
         });
     },
     async list(filters = {}) {
