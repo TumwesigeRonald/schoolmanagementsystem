@@ -544,7 +544,7 @@ function renderSidebarNav() {
         { id: 'classsummaries', label: 'Class Score Summaries', icon: 'fa-table-list' },
         // New nav entry only — AI Teacher Toolbox feature (teacher-toolbox.js).
         // Gated by ROLE_PERMISSIONS in api.js (Teacher/Administrator only).
-        { id: 'aitoolbox', label: 'AI Teacher Toolbox', icon: 'fa-wand-magic-sparkles' }
+        { id: 'aitoolbox', label: 'Teacher Toolbox', icon: 'fa-wand-magic-sparkles' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
     // styles.css), so unselected items use a light slate (#e2e8f0) instead of
@@ -625,7 +625,7 @@ function switchTab(tabName) {
         case 'subjectmarksstatus': titleText = "Subject Marks Status"; break;
         case 'activitylog': titleText = "Admin Activity Log"; break;
         case 'classsummaries': titleText = "Class Score Summaries"; break;
-        case 'aitoolbox': titleText = "AI Teacher Toolbox"; break;
+        case 'aitoolbox': titleText = "Teacher Toolbox"; break;
     }
     if (titleElem) titleElem.innerText = titleText;
     const contentElem = document.getElementById('tab-content');

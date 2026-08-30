@@ -107,7 +107,7 @@ function injectTeacherToolbox() {
     link.onclick = (e) => {
         e.preventDefault();
         const pageTitle = document.getElementById('page-title');
-        if (pageTitle) pageTitle.textContent = "AI Teacher Toolbox";
+        if (pageTitle) pageTitle.textContent = "Teacher Toolbox";
         renderToolboxUI(document.getElementById('tab-content'));
         const sidebar = document.getElementById('sidebar');
         const backdrop = document.getElementById('sidebar-backdrop');
@@ -127,7 +127,7 @@ function renderToolboxUI(container) {
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-toolbox text-blue-600"></i> AI Teacher Toolbox
+                        <i class="fa-solid fa-toolbox text-blue-600"></i> Teacher Toolbox
                     </h2>
                     <p class="text-slate-500 text-sm mt-1">Generate NCDC-aligned lesson plans, schemes of work, and teaching aids instantly.</p>
                 </div>
