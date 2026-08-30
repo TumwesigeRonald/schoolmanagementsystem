@@ -243,10 +243,10 @@ async function handleAIGenerate() {
     </div>`;
 
     try {
-        const saved = await AIToolboxAPI.generate(toolType, params, true);
-        lastGenerated = { toolType, params, content: saved.content };
+        const result = await AIToolboxAPI.generate(toolType, params, true);
+        lastGenerated = { toolType, params, content: result.content };
         previewContainer.className = 'flex-1 bg-white rounded-xl border border-slate-200 p-4 overflow-y-auto max-h-[600px]';
-        previewContainer.innerHTML = renderPreviewWrapper(toolType, saved.content);
+        previewContainer.innerHTML = renderPreviewWrapper(toolType, result.content, result.savedNote);
     } catch (err) {
         previewContainer.className = 'flex-1 bg-white rounded-xl border border-slate-200 p-6 flex items-center justify-center min-h-[400px]';
         previewContainer.innerHTML = `<p class="text-red-500 text-sm">Error: ${err.message}</p>`;
@@ -257,9 +257,14 @@ async function handleAIGenerate() {
 }
 
 // Preview wrapper: adds the Export-to-Word action above whichever layout
-// renderToolContent() produces for this tool.
-function renderPreviewWrapper(toolType, content) {
+// renderToolContent() produces for this tool. `note` is shown when the
+// backend degraded to an unsaved preview (currently: Administrator
+// accounts, which have no teacher record for the item to be saved to).
+function renderPreviewWrapper(toolType, content, note) {
     return `
+        ${note ? `<div class="mb-3 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center gap-2">
+            <i class="fa-solid fa-circle-info"></i> ${escHtml(note)}
+        </div>` : ''}
         <div class="flex justify-end mb-3">
             <button onclick="exportToolboxToWord()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-2">
                 <i class="fa-solid fa-file-word"></i> Export to Word

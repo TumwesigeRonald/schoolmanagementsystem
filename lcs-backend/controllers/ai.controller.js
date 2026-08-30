@@ -59,7 +59,18 @@ async function generate(req, res) {
 
   const teacherId = req.user.teacherId;
   if (!teacherId) {
-    return res.status(403).json({ message: 'Only teacher accounts can use the AI Toolbox.' });
+    // Administrators are explicitly allowed by requireRole('Teacher',
+    // 'Administrator') above, but ai_toolbox_items.teacher_id is
+    // NOT NULL REFERENCES teachers(id) and Administrator accounts have
+    // no teachers.id row — there's nowhere to save an admin-generated
+    // item. Rather than blocking Administrators from the tool, degrade
+    // to the same unsaved-preview shape save=false already returns.
+    return res.json({
+      toolType,
+      content,
+      saved: false,
+      savedNote: 'Administrator accounts can generate and preview content, but it isn\'t saved to a teacher\'s records.'
+    });
   }
 
   const { class: className, subject, term, year, topic, title } = params;
