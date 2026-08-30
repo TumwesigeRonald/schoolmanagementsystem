@@ -131,8 +131,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="class-summaries.js"></script>
-<!-- Teacher Toolbox Addon Integration -->
-<script src="teacher-toolbox-addon.js"></script>
+<!-- AI Teacher Toolbox feature (isolated add-on, see teacher-toolbox.js).
+     Reuses the html2canvas + jsPDF tags above for its "Export to PDF"
+     button instead of loading them a second time. -->
+<script src="teacher-toolbox.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js')

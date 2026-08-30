@@ -99,7 +99,13 @@ const ENDPOINTS = {
 
     // --- Report card remarks (Class Teacher's / Headteacher's comments) ---
     REMARKS: "/remarks",
-    REMARKS_BY_STUDENT: (studentId) => `/remarks?studentId=${encodeURIComponent(studentId)}`
+    REMARKS_BY_STUDENT: (studentId) => `/remarks?studentId=${encodeURIComponent(studentId)}`,
+
+    // --- AI Teacher Toolbox (Lesson Plan / Scheme of Work / Activity of
+    // Integration & CAI / Record of Work) — see teacher-toolbox.js ---
+    AI_GENERATE: "/ai/generate",
+    AI_ITEMS: "/ai/items",
+    AI_ITEM_BY_ID: (id) => `/ai/items/${encodeURIComponent(id)}`
 };
 
 /* ---------------------------------------------------------
@@ -656,5 +662,30 @@ const RemarksAPI = {
             method: "POST",
             body: { studentId, term, year, ...fields }
         });
+    }
+};
+
+const AIToolboxAPI = {
+    // save=true (the default) persists the generated item server-side in
+    // the same call and returns the saved row; save=false only returns a
+    // preview (used by a future "regenerate before saving" flow).
+    async generate(toolType, params, save = true) {
+        return apiRequest(ENDPOINTS.AI_GENERATE, {
+            method: "POST",
+            body: { toolType, params, save }
+        });
+    },
+    async list(filters = {}) {
+        const qs = new URLSearchParams(filters).toString();
+        return apiRequest(qs ? `${ENDPOINTS.AI_ITEMS}?${qs}` : ENDPOINTS.AI_ITEMS);
+    },
+    async get(id) {
+        return apiRequest(ENDPOINTS.AI_ITEM_BY_ID(id));
+    },
+    async update(id, fields) {
+        return apiRequest(ENDPOINTS.AI_ITEM_BY_ID(id), { method: "PUT", body: fields });
+    },
+    async remove(id) {
+        return apiRequest(ENDPOINTS.AI_ITEM_BY_ID(id), { method: "DELETE" });
     }
 };

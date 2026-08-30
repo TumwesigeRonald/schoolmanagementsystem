@@ -541,7 +541,10 @@ function renderSidebarNav() {
         { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left' },
         // New nav entry only — Class Score Summaries feature (class-summaries.js).
         // Gated by ROLE_PERMISSIONS in api.js exactly like every other item here.
-        { id: 'classsummaries', label: 'Class Score Summaries', icon: 'fa-table-list' }
+        { id: 'classsummaries', label: 'Class Score Summaries', icon: 'fa-table-list' },
+        // New nav entry only — AI Teacher Toolbox feature (teacher-toolbox.js).
+        // Gated by ROLE_PERMISSIONS in api.js (Teacher/Administrator only).
+        { id: 'aitoolbox', label: 'AI Teacher Toolbox', icon: 'fa-wand-magic-sparkles' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
     // styles.css), so unselected items use a light slate (#e2e8f0) instead of
@@ -592,7 +595,7 @@ function switchTab(tabName) {
     if (!permissions.tabs.includes(tabName)) {
         tabName = permissions.defaultTab;
     }
-    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries'];
+    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
@@ -622,6 +625,7 @@ function switchTab(tabName) {
         case 'subjectmarksstatus': titleText = "Subject Marks Status"; break;
         case 'activitylog': titleText = "Admin Activity Log"; break;
         case 'classsummaries': titleText = "Class Score Summaries"; break;
+        case 'aitoolbox': titleText = "AI Teacher Toolbox"; break;
     }
     if (titleElem) titleElem.innerText = titleText;
     const contentElem = document.getElementById('tab-content');
@@ -692,6 +696,12 @@ function switchTab(tabName) {
             // separate class-summaries.js file — isolated feature module.
             contentElem.innerHTML = renderClassSummariesModule();
             initClassSummariesModule();
+            break;
+        case 'aitoolbox':
+            // renderTeacherToolboxModule/initTeacherToolboxModule live in the
+            // separate teacher-toolbox.js file — isolated feature module.
+            contentElem.innerHTML = renderTeacherToolboxModule();
+            initTeacherToolboxModule();
             break;
     }
     updateDashboardStats();
