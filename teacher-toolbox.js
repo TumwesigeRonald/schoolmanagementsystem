@@ -12,9 +12,28 @@
 // One entry per backend tool_type. `fields` drives both the form and the
 // request params — keys here must match each tool's requiredParams in
 // lcs-backend/config/aiTools/*.
+// `format` drives both the preview renderer and the Word export layout:
+//   'table'    -> structured HTML table(s), exported in LANDSCAPE
+//   'scenario' -> narrative sections (no table), exported in PORTRAIT
+// `columns` (scheme_of_work only) is the exact, fixed 10-column header the
+// backend's AI prompt (config/aiTools/schemeOfWork.js) must return rows for.
+const SCHEME_COLUMNS = [
+    "WEEK", "PERIODS", "THEME", "CHAPTER", "COMPETENCY", "LEARNING OUTCOMES",
+    "TEACHING RESOURCES", "METHODOLOGY", "REFERENCE", "REMARKS"
+];
+// Maps each fixed column header -> the camelCase key the backend must use
+// per row object (content.weeks[i][key]). Keep in sync with SCHEME_COLUMNS.
+const SCHEME_COLUMN_KEYS = {
+    WEEK: "week", PERIODS: "periods", THEME: "theme", CHAPTER: "chapter",
+    COMPETENCY: "competency", "LEARNING OUTCOMES": "learningOutcomes",
+    "TEACHING RESOURCES": "teachingResources", METHODOLOGY: "methodology",
+    REFERENCE: "reference", REMARKS: "remarks"
+};
+
 const TOOLBOX_TOOLS = {
     lesson_plan: {
         label: "NCDC Lesson Plan",
+        format: "table",
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text", placeholder: "e.g. Information and Communication Technology" },
@@ -27,6 +46,8 @@ const TOOLBOX_TOOLS = {
     },
     scheme_of_work: {
         label: "Scheme of Work",
+        format: "table",
+        columns: SCHEME_COLUMNS,
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text" },
@@ -37,6 +58,7 @@ const TOOLBOX_TOOLS = {
     },
     activity_of_integration: {
         label: "Activity of Integration & CAI",
+        format: "scenario",
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text" },
@@ -47,6 +69,7 @@ const TOOLBOX_TOOLS = {
     },
     record_of_work: {
         label: "Record of Work",
+        format: "table",
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text" },
@@ -56,6 +79,13 @@ const TOOLBOX_TOOLS = {
         ]
     }
 };
+
+// Set by handleAIGenerate; read by exportToolboxToWord so the export
+// button doesn't need to re-request the AI or re-serialize form fields.
+let lastGenerated = null;
+
+const escHtml = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const toLabel = (key) => key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
 
 const observer = new MutationObserver(injectTeacherToolbox);
 observer.observe(document.body, { childList: true, subtree: true });
@@ -110,6 +140,10 @@ function renderToolboxUI(container) {
             <div id="toolbox-view-generator" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
                     <h3 class="text-lg font-semibold text-slate-800 border-b pb-3">Tool Parameters</h3>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Teacher Name <span class="normal-case font-normal text-slate-400">(printed on the exported Word doc)</span></label>
+                        <input type="text" id="ai-teacher-name" placeholder="e.g. Tumwesige Ronald" value="${escHtml((typeof currentUser !== 'undefined' && (currentUser.fullName || currentUser.name)) || '')}" class="w-full rounded-xl border border-slate-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
                     <div>
                         <label class="block text-xs font-bold uppercase text-slate-500 mb-1">Select Tool</label>
                         <select id="ai-tool-type" onchange="renderToolboxFields()" class="w-full rounded-xl border border-slate-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
@@ -210,8 +244,9 @@ async function handleAIGenerate() {
 
     try {
         const saved = await AIToolboxAPI.generate(toolType, params, true);
+        lastGenerated = { toolType, params, content: saved.content };
         previewContainer.className = 'flex-1 bg-white rounded-xl border border-slate-200 p-4 overflow-y-auto max-h-[600px]';
-        previewContainer.innerHTML = renderToolContent(saved.content);
+        previewContainer.innerHTML = renderPreviewWrapper(toolType, saved.content);
     } catch (err) {
         previewContainer.className = 'flex-1 bg-white rounded-xl border border-slate-200 p-6 flex items-center justify-center min-h-[400px]';
         previewContainer.innerHTML = `<p class="text-red-500 text-sm">Error: ${err.message}</p>`;
@@ -221,30 +256,187 @@ async function handleAIGenerate() {
     }
 }
 
-// Generic renderer for whichever tool's JSON content came back — each
-// tool's shape differs (see config/aiTools/*), so this walks it rather
-// than hard-coding four separate templates.
-function renderToolContent(content) {
-    const esc = (s) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-    const renderValue = (val) => {
-        if (Array.isArray(val)) {
-            if (val.length && typeof val[0] === 'object') {
-                return `<div class="space-y-2 pl-4 border-l-2 border-slate-200">${val.map(renderObject).join('')}</div>`;
-            }
-            return `<ul class="list-disc list-inside text-sm text-slate-700 space-y-1">${val.map(v => `<li>${esc(v)}</li>`).join('')}</ul>`;
-        }
-        if (val && typeof val === 'object') return renderObject(val);
-        return `<p class="text-sm text-slate-700">${esc(val)}</p>`;
+// Preview wrapper: adds the Export-to-Word action above whichever layout
+// renderToolContent() produces for this tool.
+function renderPreviewWrapper(toolType, content) {
+    return `
+        <div class="flex justify-end mb-3">
+            <button onclick="exportToolboxToWord()" class="px-4 py-2 text-sm font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center gap-2">
+                <i class="fa-solid fa-file-word"></i> Export to Word
+            </button>
+        </div>
+        ${renderToolContent(toolType, content)}
+    `;
+}
+
+// Dispatches to the correct layout for this tool's `format`.
+// - 'scenario' (Activity of Integration & CAI): narrative sections, no table.
+// - 'table', scheme_of_work specifically: fixed 10-column matrix.
+// - 'table', everything else (lesson_plan, record_of_work): generic
+//   key/value + sub-array tables, since their AI schemas vary more.
+function renderToolContent(toolType, content) {
+    const tool = TOOLBOX_TOOLS[toolType];
+    if (tool.format === 'scenario') return renderScenarioContent(content);
+    if (toolType === 'scheme_of_work') return renderSchemeOfWorkTable(content);
+    return renderGenericTable(content);
+}
+
+// Scheme of Work: exact 10-column table (WEEK ... REMARKS). Web preview is
+// wrapped in a horizontally-scrolling, min-width container so the wide
+// table stays legible ("landscape" behaviour in-browser); the real
+// landscape page orientation is set on the exported .doc itself.
+function renderSchemeOfWorkTable(content) {
+    const rows = Array.isArray(content) ? content : (content.weeks || content.rows || []);
+    const head = SCHEME_COLUMNS.map(c => `<th>${c}</th>`).join('');
+    const body = rows.map(row => `<tr>${
+        SCHEME_COLUMNS.map(col => `<td>${escHtml(row[SCHEME_COLUMN_KEYS[col]] ?? '')}</td>`).join('')
+    }</tr>`).join('');
+    return `
+        <div class="overflow-x-auto -mx-2 px-2">
+            <table class="toolbox-table min-w-[1300px] w-full text-xs border-collapse">
+                <thead><tr>${head}</tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>`;
+}
+
+// Lesson Plan / Record of Work: flat fields (including array-of-strings,
+// rendered as a bullet list) become a Field/Value table; any
+// array-of-objects field (e.g. lessonPlan's "lessonFlow", recordOfWork's
+// "entries") becomes its own sub-table with columns derived from that
+// array's own keys.
+function renderGenericTable(content) {
+    const isArrayOfObjects = (v) => Array.isArray(v) && v.length && typeof v[0] === 'object';
+    const scalarEntries = Object.entries(content).filter(([, v]) => !isArrayOfObjects(v));
+    const arrayEntries = Object.entries(content).filter(([, v]) => isArrayOfObjects(v));
+
+    const scalarValueHtml = (v) => Array.isArray(v)
+        ? `<ul class="list-disc list-inside space-y-1">${v.map(item => `<li>${escHtml(item)}</li>`).join('')}</ul>`
+        : escHtml(v);
+
+    let html = '';
+    if (scalarEntries.length) {
+        html += `<table class="toolbox-table w-full text-sm border-collapse mb-4">
+            <tbody>${scalarEntries.map(([k, v]) => `
+                <tr><th class="text-left w-1/3">${toLabel(k)}</th><td>${scalarValueHtml(v)}</td></tr>
+            `).join('')}</tbody>
+        </table>`;
+    }
+    arrayEntries.forEach(([key, rows]) => {
+        const cols = Object.keys(rows[0]);
+        html += `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">${toLabel(key)}</h4>
+            <table class="toolbox-table w-full text-xs border-collapse mb-4">
+                <thead><tr>${cols.map(c => `<th>${toLabel(c)}</th>`).join('')}</tr></thead>
+                <tbody>${rows.map(r => `<tr>${cols.map(c => `<td>${escHtml(r[c] ?? '')}</td>`).join('')}</tr>`).join('')}</tbody>
+            </table>`;
+    });
+    return `<div>${html}</div>`;
+}
+
+// Activity of Integration & CAI: descriptive scenario layout, no top-level
+// table — backend content shape (config/aiTools/activityOfIntegration.js):
+// { scenario, taskInstructions: string[], integratedOutcomes: string[],
+//   rubric: [{ criterion, basic, moderate, outstanding }] }.
+function renderScenarioContent(content) {
+    const section = (title, bodyHtml) => {
+        if (!bodyHtml) return '';
+        return `<div class="scenario-section mb-4">
+            <h4 class="font-semibold text-blue-800 text-sm uppercase tracking-wide mb-1">${title}</h4>
+            <div class="text-sm text-slate-700 leading-relaxed">${bodyHtml}</div>
+        </div>`;
     };
-    const toLabel = (key) => key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
-    const renderObject = (obj) => `<div class="p-3 rounded-lg bg-slate-50 border border-slate-200">${
-        Object.entries(obj).map(([k, v]) => `
-            <div class="mb-2 last:mb-0">
-                <span class="text-xs font-bold uppercase text-slate-500">${toLabel(k)}</span>
-                ${renderValue(v)}
-            </div>`).join('')
-    }</div>`;
-    return `<div class="space-y-4">${renderObject(content)}</div>`;
+    const textOrList = (val) => {
+        if (val === undefined || val === null || val === '') return '';
+        return Array.isArray(val)
+            ? `<ul class="list-disc list-inside space-y-1">${val.map(v => `<li>${escHtml(v)}</li>`).join('')}</ul>`
+            : `<p>${escHtml(val)}</p>`;
+    };
+    const rubricTable = (rows) => {
+        if (!Array.isArray(rows) || !rows.length) return '';
+        return `<table class="toolbox-table w-full text-xs border-collapse">
+            <thead><tr><th>Criterion</th><th>Basic</th><th>Moderate</th><th>Outstanding</th></tr></thead>
+            <tbody>${rows.map(r => `<tr>
+                <td>${escHtml(r.criterion)}</td><td>${escHtml(r.basic)}</td>
+                <td>${escHtml(r.moderate)}</td><td>${escHtml(r.outstanding)}</td>
+            </tr>`).join('')}</tbody>
+        </table>`;
+    };
+    return `<div class="scenario-layout">
+        ${section('Scenario / Context', textOrList(content.scenario))}
+        ${section('Task Description', textOrList(content.taskInstructions))}
+        ${section('Competencies Assessed', textOrList(content.integratedOutcomes))}
+        ${section('Scoring / Rubric Guidelines', rubricTable(content.rubric))}
+    </div>`;
+}
+
+// Builds and downloads a .doc (MS Word HTML format) with the official
+// school header + the same table/scenario layout as the preview. Word
+// orientation is controlled purely via the @page CSS below — 'table'
+// tools open landscape (needed for the 10-column scheme), 'scenario'
+// tools open portrait.
+function exportToolboxToWord() {
+    if (!lastGenerated) return;
+    const { toolType, params, content } = lastGenerated;
+    const tool = TOOLBOX_TOOLS[toolType];
+    const orientation = tool.format === 'scenario' ? 'portrait' : 'landscape';
+    const pageSize = orientation === 'landscape' ? '842.0pt 595.0pt' : '595.0pt 842.0pt';
+    const nameInput = document.getElementById('ai-teacher-name');
+    const teacherName = (nameInput && nameInput.value.trim())
+        || (typeof currentUser !== 'undefined' && (currentUser.fullName || currentUser.name))
+        || 'Tumwesige Ronald';
+
+    const headerHtml = `
+        <div style="text-align:center; margin-bottom:16pt;">
+            <h2 style="margin:0;">LUWEERO COMMUNITY SECONDARY SCHOOL</h2>
+            <p style="margin:2pt 0 12pt; font-weight:bold; text-transform:uppercase;">${escHtml(tool.label)}</p>
+        </div>
+        <table style="width:100%; border:none; margin-bottom:14pt; font-size:11pt;">
+            <tr>
+                <td style="border:none;"><strong>Class:</strong> ${escHtml(params.class || '')}</td>
+                <td style="border:none;"><strong>Term:</strong> ${escHtml(params.term || '')}</td>
+                <td style="border:none;"><strong>Year:</strong> ${escHtml(params.year || '')}</td>
+            </tr>
+            <tr>
+                <td style="border:none;"><strong>Teacher Name:</strong> ${escHtml(teacherName)}</td>
+                <td colspan="2" style="border:none;"><strong>Subject:</strong> ${escHtml(params.subject || '')}</td>
+            </tr>
+        </table>`;
+
+    const bodyHtml = renderToolContent(toolType, content);
+
+    const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset="utf-8">
+<title>${escHtml(tool.label)}</title>
+<!--[if gte mso 9]><xml>
+<w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument>
+</xml><![endif]-->
+<style>
+@page Section1 { size: ${pageSize}; mso-page-orientation: ${orientation}; margin: 1.5cm 1.2cm; }
+div.Section1 { page: Section1; }
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+table.toolbox-table { border-collapse: collapse; width: 100%; margin-bottom: 10pt; }
+table.toolbox-table th, table.toolbox-table td { border: 1px solid #333; padding: 6pt; font-size: 10pt; vertical-align: top; }
+table.toolbox-table th { background: #dbeafe; font-weight: bold; text-align: left; }
+h4 { margin: 10pt 0 4pt; }
+</style>
+</head>
+<body>
+<div class="Section1">${headerHtml}${bodyHtml}</div>
+</body>
+</html>`;
+
+    const blob = new Blob(['\ufeff', docHtml], { type: 'application/msword' });
+    const safe = (s) => String(s || '').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    const filename = `${safe(tool.label)}_${safe(params.class)}_${safe(params.term)}.doc`;
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
 }
 
 async function loadSavedToolItems() {
