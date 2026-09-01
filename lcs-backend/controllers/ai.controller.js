@@ -40,7 +40,7 @@ async function generate(req, res) {
     });
   } catch (err) {
     console.error(`[ai.generate] Gemini call failed for tool_type=${toolType}`, err);
-    return res.status(502).json({ message: 'AI generation failed. Please try again in a moment.' });
+    return res.status(502).json({ message: 'Generation failed. Please try again in a moment.' });
   }
 
   let content;
@@ -48,7 +48,7 @@ async function generate(req, res) {
     content = JSON.parse(response.text);
   } catch (err) {
     console.error(`[ai.generate] Could not parse Gemini output for tool_type=${toolType}`, response.text);
-    return res.status(502).json({ message: 'The AI returned an unexpected format. Please try again.' });
+    return res.status(502).json({ message: 'Unable to process content. Please check your connection and retry.' });
   }
 
   // save=false lets the frontend preview a generation before the teacher

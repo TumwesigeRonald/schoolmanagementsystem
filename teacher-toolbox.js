@@ -12,9 +12,15 @@
 // One entry per backend tool_type. `fields` drives both the form and the
 // request params — keys here must match each tool's requiredParams in
 // lcs-backend/config/aiTools/*.
-// `format` drives both the preview renderer and the Word export layout:
-//   'table'    -> structured HTML table(s), exported in LANDSCAPE
-//   'scenario' -> narrative sections (no table), exported in PORTRAIT
+// `format` selects which preview/export renderer is used:
+//   'table'    -> structured HTML table(s)
+//   'scenario' -> narrative sections (no table)
+//   'lessonplan' -> curriculum-context table + 3-column operational body +
+//                   self-assessment footer (lesson_plan only)
+// `orientation` controls the exported .doc's page orientation independently
+// of `format`: Lesson Plans, Records of Work, and Activities of Integration
+// & CAI export in PORTRAIT; Scheme of Work exports in LANDSCAPE (needed to
+// comfortably fit all 10 columns).
 // `columns` (scheme_of_work only) is the exact, fixed 10-column header the
 // backend's AI prompt (config/aiTools/schemeOfWork.js) must return rows for.
 const SCHEME_COLUMNS = [
@@ -32,14 +38,18 @@ const SCHEME_COLUMN_KEYS = {
 
 const TOOLBOX_TOOLS = {
     lesson_plan: {
-        label: "NCDC Lesson Plan",
-        format: "table",
+        label: "Lesson Plan",
+        format: "lessonplan",
+        orientation: "portrait",
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text", placeholder: "e.g. Information and Communication Technology" },
             { key: "topic", label: "Topic", type: "text" },
             { key: "subtopic", label: "Sub-topic", type: "text" },
+            { key: "specificLearningOutcome", label: "Specific Learning Outcome / Focus", type: "textarea", placeholder: "The precise objective this lesson should be built around" },
             { key: "duration", label: "Lesson duration (minutes)", type: "text", placeholder: "e.g. 40" },
+            { key: "date", label: "Date", type: "text", placeholder: "e.g. 2026-09-01" },
+            { key: "numberOfLearners", label: "Number of Learners", type: "text", placeholder: "e.g. 45" },
             { key: "term", label: "Term", type: "select", options: ["Term 1", "Term 2", "Term 3"] },
             { key: "year", label: "Year", type: "text", placeholder: "e.g. 2026" }
         ]
@@ -47,18 +57,21 @@ const TOOLBOX_TOOLS = {
     scheme_of_work: {
         label: "Scheme of Work",
         format: "table",
+        orientation: "landscape",
         columns: SCHEME_COLUMNS,
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text" },
             { key: "term", label: "Term", type: "select", options: ["Term 1", "Term 2", "Term 3"] },
             { key: "year", label: "Year", type: "text", placeholder: "e.g. 2026" },
-            { key: "weeksInTerm", label: "Teaching weeks this term", type: "text", placeholder: "e.g. 13" }
+            { key: "weeksInTerm", label: "Teaching weeks this term", type: "text", placeholder: "e.g. 13" },
+            { key: "syllabusCoverage", label: "Topics / Syllabus Range to Cover", type: "textarea", placeholder: "Add multiple topics — one per line or separated by commas/semicolons, or a topic range e.g. \"Chapter 3-5: Data Representation; Algorithms; Networking Basics\"" }
         ]
     },
     activity_of_integration: {
         label: "Activity of Integration & CAI",
         format: "scenario",
+        orientation: "portrait",
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text" },
@@ -70,6 +83,7 @@ const TOOLBOX_TOOLS = {
     record_of_work: {
         label: "Record of Work",
         format: "table",
+        orientation: "portrait",
         fields: [
             { key: "class", label: "Class", type: "select", options: ["Senior One", "Senior Two", "Senior Three", "Senior Four", "Senior Five", "Senior Six"] },
             { key: "subject", label: "Subject", type: "text" },
@@ -129,7 +143,7 @@ function renderToolboxUI(container) {
                     <h2 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
                         <i class="fa-solid fa-toolbox text-blue-600"></i> Teacher Toolbox
                     </h2>
-                    <p class="text-slate-500 text-sm mt-1">Generate NCDC-aligned lesson plans, schemes of work, and teaching aids instantly.</p>
+                    <p class="text-slate-500 text-sm mt-1">Generate curriculum-aligned lesson plans, schemes of work, and teaching aids instantly.</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <button onclick="switchToolTab('generator')" id="btn-tab-generator" class="px-4 py-2 text-sm font-semibold rounded-xl bg-blue-600 text-white shadow-sm transition">Generate</button>
@@ -276,12 +290,15 @@ function renderPreviewWrapper(toolType, content, note) {
 
 // Dispatches to the correct layout for this tool's `format`.
 // - 'scenario' (Activity of Integration & CAI): narrative sections, no table.
+// - 'lessonplan' (Lesson Plan): curriculum context table + 3-column
+//   operational body + Teacher's Self Assessment footer.
 // - 'table', scheme_of_work specifically: fixed 10-column matrix.
-// - 'table', everything else (lesson_plan, record_of_work): generic
-//   key/value + sub-array tables, since their AI schemas vary more.
+// - 'table', everything else (record_of_work): generic key/value +
+//   sub-array tables, since its AI schema varies more.
 function renderToolContent(toolType, content) {
     const tool = TOOLBOX_TOOLS[toolType];
     if (tool.format === 'scenario') return renderScenarioContent(content);
+    if (tool.format === 'lessonplan') return renderLessonPlanContent(content);
     if (toolType === 'scheme_of_work') return renderSchemeOfWorkTable(content);
     return renderGenericTable(content);
 }
@@ -374,6 +391,88 @@ function renderScenarioContent(content) {
     </div>`;
 }
 
+// Lesson Plan: Curriculum Context (key/value table) + a 3-column
+// operational body (Duration of Phase | Teacher Activity | Learner
+// Activity, one row per phase, in Introduction -> Lesson Development ->
+// Evaluation -> Conclusion order) + a Teacher's Self Assessment footer —
+// backend content shape (config/aiTools/lessonPlan.js): { theme, topic,
+// competency, learningOutcomes: string[], genericSkills: string[],
+// values: string[], crossCuttingIssues: string[], keyLearningOutcome,
+// preRequisiteKnowledge, references: string[],
+// lessonPhases: { introduction, lessonDevelopment, evaluation, conclusion }
+// — each a { durationMinutes, teacherActivity, learnerActivity } object,
+// not an array — see the schema comment in that file for why the shape
+// changed. teacherSelfAssessment: string[].
+const LESSON_PHASE_ORDER = [
+    ["introduction", "Introduction"],
+    ["lessonDevelopment", "Lesson Development"],
+    ["evaluation", "Evaluation"],
+    ["conclusion", "Conclusion"]
+];
+
+function renderLessonPlanContent(content) {
+    const listOrText = (v) => Array.isArray(v)
+        ? `<ul class="list-disc list-inside space-y-1">${v.map(item => `<li>${escHtml(item)}</li>`).join('')}</ul>`
+        : escHtml(v ?? '');
+
+    const contextRows = [
+        ['Theme', content.theme],
+        ['Topic', content.topic],
+        ['Competency', content.competency],
+        ['Learning Outcomes', content.learningOutcomes],
+        ['Generic Skills', content.genericSkills],
+        ['Values', content.values],
+        ['Cross Cutting Issues', content.crossCuttingIssues],
+        ['Key Learning Outcome', content.keyLearningOutcome],
+        ['Pre-Requisite Knowledge', content.preRequisiteKnowledge],
+        ['References', content.references]
+    ].filter(([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length));
+
+    const contextTable = `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">Curriculum Context</h4>
+        <table class="toolbox-table w-full text-sm border-collapse mb-4">
+            <tbody>${contextRows.map(([label, v]) => `
+                <tr><th class="text-left w-1/3">${escHtml(label)}</th><td>${listOrText(v)}</td></tr>
+            `).join('')}</tbody>
+        </table>`;
+
+    // Current schema returns lessonPhases as a fixed-key object
+    // ({ introduction, lessonDevelopment, evaluation, conclusion }), each
+    // itself a { durationMinutes, teacherActivity, learnerActivity }
+    // object — walk LESSON_PHASE_ORDER's keys in the fixed teaching order.
+    // Older saved items (from before this fix) may still hold the previous
+    // `lessonPhases: [{ phase, ... }]` array shape, so fall back to reading
+    // that if the object keys aren't present, rather than showing nothing.
+    const src = content.lessonPhases || {};
+    const legacyArray = Array.isArray(content.lessonPhases) ? content.lessonPhases : null;
+    const orderedPhases = LESSON_PHASE_ORDER.map(([key, label]) => {
+        const fromObject = !legacyArray && src[key];
+        const fromLegacyArray = legacyArray && legacyArray.find(p => p.phase === label);
+        return { label, ...(fromObject || fromLegacyArray || null) };
+    }).filter(p => p.teacherActivity || p.learnerActivity);
+
+    const bodyTable = `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">Lesson Development</h4>
+        <table class="toolbox-table w-full text-xs border-collapse mb-4">
+            <thead><tr><th>Duration of Phase</th><th>Teacher Activity</th><th>Learner Activity</th></tr></thead>
+            <tbody>${orderedPhases.length ? orderedPhases.map(p => `<tr>
+                <td>${escHtml(p.label)}${p.durationMinutes ? ` (${escHtml(p.durationMinutes)} mins)` : ''}</td>
+                <td>${escHtml(p.teacherActivity || '')}</td>
+                <td>${escHtml(p.learnerActivity || '')}</td>
+            </tr>`).join('') : `<tr><td colspan="3" class="text-center text-slate-400 italic">
+                No lesson phases were generated for this plan. Try regenerating.
+            </td></tr>`}</tbody>
+        </table>`;
+
+    const assessment = Array.isArray(content.teacherSelfAssessment) ? content.teacherSelfAssessment : [];
+    const footer = assessment.length ? `<div class="scenario-section mb-4">
+            <h4 class="font-semibold text-blue-800 text-sm uppercase tracking-wide mb-1">Teacher's Self Assessment</h4>
+            <ul class="list-disc list-inside space-y-2 text-sm text-slate-700">${
+                assessment.map(q => `<li>${escHtml(q)} <span class="text-slate-400">____________________</span></li>`).join('')
+            }</ul>
+        </div>` : '';
+
+    return `<div>${contextTable}${bodyTable}${footer}</div>`;
+}
+
 // Builds and downloads a .doc (MS Word HTML format) with the official
 // school header + the same table/scenario layout as the preview. Word
 // orientation is controlled purely via the @page CSS below — 'table'
@@ -383,12 +482,25 @@ function exportToolboxToWord() {
     if (!lastGenerated) return;
     const { toolType, params, content } = lastGenerated;
     const tool = TOOLBOX_TOOLS[toolType];
-    const orientation = tool.format === 'scenario' ? 'portrait' : 'landscape';
+    const orientation = tool.orientation || (tool.format === 'scenario' ? 'portrait' : 'landscape');
     const pageSize = orientation === 'landscape' ? '842.0pt 595.0pt' : '595.0pt 842.0pt';
     const nameInput = document.getElementById('ai-teacher-name');
     const teacherName = (nameInput && nameInput.value.trim())
         || (typeof currentUser !== 'undefined' && (currentUser.fullName || currentUser.name))
         || 'Tumwesige Ronald';
+
+    // Lesson Plan header metadata additionally includes Title, Date,
+    // Duration, and Learners per the school's template — the rest of the
+    // tools keep the original Class/Term/Year/Teacher/Subject block.
+    const extraHeaderRows = toolType === 'lesson_plan' ? `
+            <tr>
+                <td style="border:none;"><strong>Title:</strong> ${escHtml(params.topic || tool.label)}</td>
+                <td style="border:none;"><strong>Date:</strong> ${escHtml(params.date || '')}</td>
+            </tr>
+            <tr>
+                <td style="border:none;"><strong>Duration:</strong> ${escHtml(params.duration || '')} mins</td>
+                <td style="border:none;"><strong>Learners:</strong> ${escHtml(params.numberOfLearners || '')}</td>
+            </tr>` : '';
 
     const headerHtml = `
         <div style="text-align:center; margin-bottom:16pt;">
@@ -399,12 +511,11 @@ function exportToolboxToWord() {
             <tr>
                 <td style="border:none;"><strong>Class:</strong> ${escHtml(params.class || '')}</td>
                 <td style="border:none;"><strong>Term:</strong> ${escHtml(params.term || '')}</td>
-                <td style="border:none;"><strong>Year:</strong> ${escHtml(params.year || '')}</td>
             </tr>
             <tr>
                 <td style="border:none;"><strong>Teacher Name:</strong> ${escHtml(teacherName)}</td>
-                <td colspan="2" style="border:none;"><strong>Subject:</strong> ${escHtml(params.subject || '')}</td>
-            </tr>
+                <td style="border:none;"><strong>Subject:</strong> ${escHtml(params.subject || '')} (${escHtml(params.year || '')})</td>
+            </tr>${extraHeaderRows}
         </table>`;
 
     const bodyHtml = renderToolContent(toolType, content);

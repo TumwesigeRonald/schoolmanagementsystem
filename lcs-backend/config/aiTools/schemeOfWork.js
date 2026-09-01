@@ -5,6 +5,11 @@
  * TEACHING RESOURCES, METHODOLOGY, REFERENCE, REMARKS) used across
  * Ugandan secondary schools. Column keys here MUST stay in sync with
  * SCHEME_COLUMN_KEYS in teacher-toolbox.js.
+ *
+ * syllabusCoverage accepts multiple topics (one per line, comma-separated,
+ * or a topic range) — the prompt distributes all of them across the
+ * available weeks, so the resulting table expands to cover every topic
+ * the teacher lists rather than being restricted to just one.
  */
 module.exports = {
   label: 'Scheme of Work',
@@ -12,14 +17,15 @@ module.exports = {
 
   buildPrompt(p) {
     return `You are an experienced Ugandan secondary school teacher preparing a
-termly Scheme of Work aligned with the NCDC competency-based curriculum, in
-the standard 10-column format used by Ugandan secondary schools.
+termly Scheme of Work aligned with the national competency-based curriculum
+framework, in the standard 10-column format used by Ugandan secondary
+schools.
 
 Class: ${p.class}
 Subject: ${p.subject}
 Term: ${p.term}, ${p.year}
 Number of teaching weeks this term: ${p.weeksInTerm}
-${p.syllabusCoverage ? `Syllabus topics to cover this term: ${p.syllabusCoverage}` : ''}
+${p.syllabusCoverage ? `Syllabus topics to cover this term (the teacher may have listed several topics, a multi-topic range, or a full syllabus outline — treat every item listed as something that must appear in the scheme; distribute them across the ${p.weeksInTerm} weeks in a logical teaching order, giving each topic one or more weeks as its scope requires, and covering all of them by the final week): ${p.syllabusCoverage}` : ''}
 
 Produce one row per week (week 1 through ${p.weeksInTerm}) giving: the number
 of periods that week, the theme/topic area, the chapter/unit reference, the
