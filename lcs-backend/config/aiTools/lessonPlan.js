@@ -44,13 +44,13 @@ Outcome / Focus given above. Include:
 - One overall key learning outcome for the lesson.
 - Pre-requisite knowledge learners should already have.
 - References (textbook/syllabus sections, teaching aids).
-- A lesson flow covering all four phases — "introduction", "lessonDevelopment",
-  "evaluation", "conclusion" — each with an approximate duration in minutes
-  (summing to the total lesson duration), what the teacher does, and what
-  the learners do. Every one of these four phases is REQUIRED: do not
-  leave any of them out or return an empty phase, even if a phase is brief
-  (e.g. a 3-minute Conclusion still needs a real teacherActivity and
-  learnerActivity, not a blank string).
+- A lesson flow broken into exactly four phases, in this order:
+  "Introduction", "Lesson Development", "Evaluation", "Conclusion" — each
+  with an approximate duration in minutes (summing to the total lesson
+  duration), what the teacher does, and what the learners do. All four
+  phases are REQUIRED — do not omit or leave any phase blank, even a
+  brief one (e.g. a short Conclusion still needs a real teacherActivity
+  and learnerActivity, not an empty string).
 - A short Teacher's Self Assessment section: a few reflection prompts the
   teacher can fill in after delivering the lesson (e.g. whether outcomes
   were achieved, what worked, what to adjust next time) — write these as
@@ -74,63 +74,35 @@ no commentary.`;
       keyLearningOutcome: { type: 'string' },
       preRequisiteKnowledge: { type: 'string' },
       references: { type: 'array', items: { type: 'string' } },
-      // NOTE: this used to be `lessonPhases: array of {phase, ...}`. This
-      // config passes its schema via the `responseSchema` field (the older
-      // OpenAPI-3.0-subset schema, not the newer `responseJsonSchema`
-      // field), and that subset does NOT support minItems/maxItems on
-      // arrays — so `required: [..., 'lessonPhases', ...]` above only
-      // guaranteed the *key* existed. An empty array validated fine and
-      // silently produced a headers-only table. Naming all four phases as
-      // required object properties closes that gap, since `required` on
-      // object properties IS reliably enforced. (Each phase's schema is
-      // duplicated inline rather than shared via $ref/$defs — those are
-      // only reliable under `responseJsonSchema`, and can themselves
-      // degrade output when sent through this older `responseSchema`
-      // field, which is what this controller uses.)
-      lessonPhases: {
-        type: 'object',
-        properties: {
-          introduction: {
-            type: 'object',
-            properties: {
-              durationMinutes: { type: 'number' },
-              teacherActivity: { type: 'string' },
-              learnerActivity: { type: 'string' }
+      // NOTE: this is sent to Gemini via `responseJsonSchema` (full JSON
+      // Schema — see ai.controller.js), not the older `responseSchema`
+      // (OpenAPI-3.0 subset). That distinction matters here: the older
+      // field ignores minItems/maxItems on arrays, so a naive
+      // `lessonDevelopment: { type: 'array', ... }` with only `required`
+      // on the parent object would let the model satisfy validation with
+      // an empty array — which is exactly how this table went blank
+      // before. minItems/maxItems below is what actually forces all four
+      // phases to be present; `required` alone would not.
+      lessonDevelopment: {
+        type: 'array',
+        minItems: 4,
+        maxItems: 4,
+        items: {
+          type: 'object',
+          properties: {
+            phase: {
+              type: 'string',
+              enum: ['Introduction', 'Lesson Development', 'Evaluation', 'Conclusion']
             },
-            required: ['teacherActivity', 'learnerActivity']
+            duration: { type: 'string', description: 'e.g. "10 minutes"' },
+            teacherActivity: { type: 'string' },
+            learnerActivity: { type: 'string' }
           },
-          lessonDevelopment: {
-            type: 'object',
-            properties: {
-              durationMinutes: { type: 'number' },
-              teacherActivity: { type: 'string' },
-              learnerActivity: { type: 'string' }
-            },
-            required: ['teacherActivity', 'learnerActivity']
-          },
-          evaluation: {
-            type: 'object',
-            properties: {
-              durationMinutes: { type: 'number' },
-              teacherActivity: { type: 'string' },
-              learnerActivity: { type: 'string' }
-            },
-            required: ['teacherActivity', 'learnerActivity']
-          },
-          conclusion: {
-            type: 'object',
-            properties: {
-              durationMinutes: { type: 'number' },
-              teacherActivity: { type: 'string' },
-              learnerActivity: { type: 'string' }
-            },
-            required: ['teacherActivity', 'learnerActivity']
-          }
-        },
-        required: ['introduction', 'lessonDevelopment', 'evaluation', 'conclusion']
+          required: ['phase', 'duration', 'teacherActivity', 'learnerActivity']
+        }
       },
       teacherSelfAssessment: { type: 'array', items: { type: 'string' } }
     },
-    required: ['learningOutcomes', 'lessonPhases', 'teacherSelfAssessment']
+    required: ['learningOutcomes', 'lessonDevelopment', 'teacherSelfAssessment']
   }
 };
