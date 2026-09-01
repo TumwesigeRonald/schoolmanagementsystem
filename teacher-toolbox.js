@@ -3,10 +3,13 @@
  * + config/aiTools/* for the four tools this drives: lesson_plan,
  * scheme_of_work, activity_of_integration, record_of_work).
  *
- * Only touches the DOM by injecting a sidebar link + rendering into
- * #tab-content, exactly like class-summaries.js. Talks to the backend
- * exclusively through AIToolboxAPI (api.js) so auth headers are attached
- * automatically.
+ * The sidebar entry itself is the standard "aitoolbox" item rendered by
+ * renderSidebarNav()/switchTab() in script.js (gated by ROLE_PERMISSIONS in
+ * api.js, Teacher/Administrator only) — this file only supplies the module's
+ * render/init pair (renderTeacherToolboxModule/initTeacherToolboxModule,
+ * called from switchTab's 'aitoolbox' case) and renders into #tab-content,
+ * exactly like class-summaries.js. Talks to the backend exclusively through
+ * AIToolboxAPI (api.js) so auth headers are attached automatically.
  */
 
 // One entry per backend tool_type. `fields` drives both the form and the
@@ -101,34 +104,20 @@ let lastGenerated = null;
 const escHtml = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const toLabel = (key) => key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
 
-const observer = new MutationObserver(injectTeacherToolbox);
-observer.observe(document.body, { childList: true, subtree: true });
-document.addEventListener("DOMContentLoaded", injectTeacherToolbox);
-window.addEventListener("load", injectTeacherToolbox);
-
-function injectTeacherToolbox() {
-    // Teacher/Administrator only — mirrors the backend's requireRole('Teacher', 'Administrator').
-    if (typeof currentUser === "undefined" || !["Teacher", "Administrator"].includes(currentUser.role)) return;
-
-    const sidebarNav = document.getElementById('sidebar-nav');
-    if (!sidebarNav || document.getElementById('sidebar-toolbox-link')) return;
-
-    const link = document.createElement('a');
-    link.id = 'sidebar-toolbox-link';
-    link.href = "#toolbox";
-    link.className = "flex items-center gap-3 px-4 py-3 text-slate-600 hover:bg-blue-50 hover:text-blue-600 rounded-xl font-medium transition text-sm";
-    link.innerHTML = `<i class="fa-solid fa-toolbox w-5"></i> Teacher Toolbox`;
-    link.onclick = (e) => {
-        e.preventDefault();
-        const pageTitle = document.getElementById('page-title');
-        if (pageTitle) pageTitle.textContent = "Teacher Toolbox";
-        renderToolboxUI(document.getElementById('tab-content'));
-        const sidebar = document.getElementById('sidebar');
-        const backdrop = document.getElementById('sidebar-backdrop');
-        if (sidebar) sidebar.classList.add('-translate-x-full');
-        if (backdrop) backdrop.classList.add('hidden');
-    };
-    sidebarNav.appendChild(link);
+// Render/init pair used by switchTab()'s 'aitoolbox' case in script.js —
+// same contract as every other module (renderXModule() returns the HTML
+// string switchTab drops into #tab-content, initXModule() wires it up
+// afterwards). This replaces the old standalone MutationObserver-injected
+// sidebar link, whose different, light-theme classes (text-slate-600,
+// hover:bg-blue-50, etc.) were unreadable against the dark navy sidebar and
+// read as a disabled/grayed-out item. The nav entry is now the same
+// button renderSidebarNav() renders for every other tab, so it automatically
+// gets identical styling, hover/active states, and RBAC gating.
+function renderTeacherToolboxModule() {
+    return '<div id="toolbox-module-mount"></div>';
+}
+function initTeacherToolboxModule() {
+    renderToolboxUI(document.getElementById('toolbox-module-mount'));
 }
 
 function renderToolboxUI(container) {

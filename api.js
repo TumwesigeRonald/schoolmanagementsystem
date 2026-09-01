@@ -218,10 +218,14 @@ const ROLES = {
 
 const ROLE_PERMISSIONS = {
     [ROLES.ADMIN]: {
-        // "classsummaries" appended here only — new tab id for the Class
-        // Score Summaries feature (see class-summaries.js). No other id
-        // in this array was touched.
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "classsummaries"],
+        // "classsummaries" and "aitoolbox" appended here — tab ids for the
+        // Class Score Summaries (class-summaries.js) and AI Teacher Toolbox
+        // (teacher-toolbox.js) features. No other id in this array was
+        // touched. Without "aitoolbox" here, renderSidebarNav()'s RBAC
+        // filter (`allowedTabs.includes(item.id)`) drops the Teacher Toolbox
+        // nav item entirely, which is why it never picked up the same
+        // active/hover styling as the rest of the menu.
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "classsummaries", "aitoolbox"],
         defaultTab: "dashboard",
         canManageStudents: true,
         canManageScores: true,
@@ -234,8 +238,8 @@ const ROLE_PERMISSIONS = {
         canManageNotices: true      // post/delete school bulletin notices
     },
     [ROLES.TEACHER]: {
-        // "classsummaries" appended here only — same new tab id as above.
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "classsummaries"],
+        // "classsummaries" and "aitoolbox" appended here — same tab ids as above.
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "classsummaries", "aitoolbox"],
         defaultTab: "dashboard",
         canManageStudents: false,   // view-only: cannot add/delete learners
         canManageScores: true,      // core duty: add/update learner scores

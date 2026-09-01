@@ -527,35 +527,61 @@ function renderSidebarNav() {
     const nav = document.getElementById('sidebar-nav');
     if (!nav) return;
     const allowedTabs = getPermissions(currentUser.role).tabs;
+    // `group` drives the thin section dividers below — items are grouped as:
+    // main (Dashboard) / academics (Students..Attendance) / people & resources
+    // (Resources..Subject Marks Status) / admin & tools (Activity Log, Class
+    // Summaries, Teacher Toolbox — and, via renderFinanceNavItem(), School
+    // Finance, which shares this same visual group).
     const items = [
-        { id: 'dashboard', label: 'Dashboard', icon: 'fa-gauge-high' },
-        { id: 'students', label: 'Students', icon: 'fa-user-graduate' },
-        { id: 'scores', label: 'Scores', icon: 'fa-pen-to-square' },
-        { id: 'reports', label: currentUser.role === 'Student' ? 'My Report Card' : 'Report Cards', icon: 'fa-file-lines' },
-        { id: 'analytics', label: 'Analytics', icon: 'fa-chart-column' },
-        { id: 'performers', label: 'Best & Worst Performers', icon: 'fa-ranking-star' },
-        { id: 'attendance', label: 'Attendance', icon: 'fa-calendar-check' },
-        { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open' },
-        { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user' },
-        { id: 'subjectmarksstatus', label: 'Subject Marks Status', icon: 'fa-list-check' },
-        { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left' },
+        { id: 'dashboard', label: 'Dashboard', icon: 'fa-gauge-high', group: 'main' },
+        { id: 'students', label: 'Students', icon: 'fa-user-graduate', group: 'academics' },
+        { id: 'scores', label: 'Scores', icon: 'fa-pen-to-square', group: 'academics' },
+        { id: 'reports', label: currentUser.role === 'Student' ? 'My Report Card' : 'Report Cards', icon: 'fa-file-lines', group: 'academics' },
+        { id: 'analytics', label: 'Analytics', icon: 'fa-chart-column', group: 'academics' },
+        { id: 'performers', label: 'Best & Worst Performers', icon: 'fa-ranking-star', group: 'academics' },
+        { id: 'attendance', label: 'Attendance', icon: 'fa-calendar-check', group: 'academics' },
+        { id: 'resources', label: currentUser.role === 'Student' ? 'Learning Resources' : 'Resources', icon: 'fa-folder-open', group: 'people-resources' },
+        { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user', group: 'people-resources' },
+        { id: 'subjectmarksstatus', label: 'Subject Marks Status', icon: 'fa-list-check', group: 'people-resources' },
+        { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left', group: 'admin-tools' },
         // New nav entry only — Class Score Summaries feature (class-summaries.js).
         // Gated by ROLE_PERMISSIONS in api.js exactly like every other item here.
-        { id: 'classsummaries', label: 'Class Score Summaries', icon: 'fa-table-list' },
+        { id: 'classsummaries', label: 'Class Score Summaries', icon: 'fa-table-list', group: 'admin-tools' },
         // New nav entry only — AI Teacher Toolbox feature (teacher-toolbox.js).
         // Gated by ROLE_PERMISSIONS in api.js (Teacher/Administrator only).
-        { id: 'aitoolbox', label: 'Teacher Toolbox', icon: 'fa-wand-magic-sparkles' }
+        // "aitoolbox" now lives in ROLE_PERMISSIONS.tabs (api.js) like every
+        // other item, so it's routed and styled through the exact same path
+        // as "School Finance" and "Activity Log" — no separate disabled/
+        // reduced-opacity treatment.
+        { id: 'aitoolbox', label: 'Teacher Toolbox', icon: 'fa-wand-magic-sparkles', group: 'admin-tools' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
     // styles.css), so unselected items use a light slate (#e2e8f0) instead of
     // the dark slate previously used here, which was unreadable against the
     // dark background. Hover/selected states use white for maximum contrast.
-    nav.innerHTML = items.map(item => `
-        <button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors mb-1">
-            <i class="fa-solid ${item.icon} mr-2"></i>${item.label}
-        </button>
-    `).join('') + renderFinanceNavItem();
+    let previousGroup = null;
+    nav.innerHTML = items.map(item => {
+        // Thin muted divider whenever the section changes (border-white/10),
+        // so related items (e.g. the academics block) read as one group.
+        const divider = (previousGroup !== null && item.group !== previousGroup)
+            ? '<div class="my-2 border-t border-white/10" role="separator"></div>' : '';
+        previousGroup = item.group;
+        return `${divider}<button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
+            <i class="fa-solid ${item.icon} w-4 text-center"></i><span>${item.label}</span>
+        </button>`;
+    }).join('') + renderFinanceNavItem();
 }
+// Shared class strings for sidebar nav buttons, so the active state
+// (switchTab), inactive state (renderSidebarNav), and the School Finance
+// placeholder (renderFinanceNavItem) always stay visually identical —
+// same font weight, tracking, color and interactivity, with only the
+// active item picking up the glowing left-border accent + fill.
+const SIDEBAR_NAV_BASE_CLASS = "flex items-center gap-3 w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wide border-l-[3px] transition-all duration-200 ease-in-out mb-1";
+const SIDEBAR_NAV_INACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} text-slate-200 border-transparent hover:bg-white/10 hover:text-white hover:border-teal-400/50 hover:translate-x-0.5`;
+// Glowing accent: a gold-600 left border + soft matching glow, echoing the
+// gold trim already used on the sidebar brand mark/badge (styles.css), on a
+// teal-700 fill so active text keeps the same WCAG-AA contrast as before.
+const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-[#c9962c] shadow-[0_0_14px_rgba(201,150,44,0.35)]`;
 // "School Finance" is intentionally NOT part of the tabs/RBAC routing array
 // above — it's a placeholder entry that never actually navigates, so it's
 // kept fully separate from switchTab()'s real routing logic. Shown to
@@ -564,8 +590,8 @@ function renderSidebarNav() {
 function renderFinanceNavItem() {
     if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.TEACHER) return '';
     return `
-        <button id="nav-finance" onclick="openUnderConstructionNotice('School Finance'); closeMobileSidebar();" class="block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors mb-1">
-            <i class="fa-solid fa-sack-dollar mr-2"></i>School Finance
+        <button id="nav-finance" onclick="openUnderConstructionNotice('School Finance'); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
+            <i class="fa-solid fa-sack-dollar w-4 text-center"></i><span>School Finance</span>
         </button>
     `;
 }
@@ -602,12 +628,14 @@ function switchTab(tabName) {
         if (tab === tabName) {
             // teal-700 (not teal-600) is used here specifically so white nav
             // text clears the 4.5:1 WCAG AA contrast ratio against the fill.
-            // w-full + text-left keep this left-aligned like the unselected
-            // state below — without them, the browser's default centered
-            // button text styling was applying only to the active item.
-            navItem.className = "block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider bg-teal-700 text-white shadow-sm";
+            // flex + w-full + text-left keep this left-aligned like the
+            // unselected state below — without them, the browser's default
+            // centered button text styling was applying only to the active
+            // item. SIDEBAR_NAV_ACTIVE_CLASS adds the glowing gold left-border
+            // accent that marks the current page (renderSidebarNav above).
+            navItem.className = SIDEBAR_NAV_ACTIVE_CLASS;
         } else {
-            navItem.className = "block w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wider text-slate-200 hover:bg-white/10 hover:text-white transition-colors";
+            navItem.className = SIDEBAR_NAV_INACTIVE_CLASS;
         }
     });
     const titleElem = document.getElementById('page-title');
