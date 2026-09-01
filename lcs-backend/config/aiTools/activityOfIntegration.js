@@ -2,8 +2,8 @@
  * Activity of Integration (AOI) + Continuous Assessment Item (CAI).
  * An AOI is a real-life scenario task that requires learners to combine
  * outcomes from several topics; the CAI is the scored task + rubric used
- * to assess it, typically against NCDC's Basic / Moderate / Outstanding
- * competency-level descriptors.
+ * to assess it, typically against the national curriculum's Basic /
+ * Moderate / Outstanding competency-level descriptors.
  */
 module.exports = {
   label: 'Activity of Integration & CAI',
@@ -12,8 +12,8 @@ module.exports = {
   buildPrompt(p) {
     return `You are an experienced Ugandan secondary school teacher designing an
 Activity of Integration (AOI) and its accompanying Continuous Assessment Item
-(CAI), aligned with the NCDC competency-based curriculum's integration and
-continuous assessment approach.
+(CAI), aligned with the national competency-based curriculum's integration
+and continuous assessment approach.
 
 Class: ${p.class}
 Subject: ${p.subject}
