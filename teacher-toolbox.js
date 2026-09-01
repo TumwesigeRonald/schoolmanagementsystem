@@ -409,7 +409,6 @@ const LESSON_PHASE_ORDER = [
     ["evaluation", "Evaluation"],
     ["conclusion", "Conclusion"]
 ];
->>>>>>>>> Temporary merge branch 2
 
 function renderLessonPlanContent(content) {
     const listOrText = (v) => Array.isArray(v)
@@ -436,20 +435,6 @@ function renderLessonPlanContent(content) {
             `).join('')}</tbody>
         </table>`;
 
-<<<<<<<<< Temporary merge branch 1
-    const phases = Array.isArray(content.lessonPhases) ? content.lessonPhases : [];
-    const orderedPhases = [...phases].sort(
-        (a, b) => LESSON_PHASE_ORDER.indexOf(a.phase) - LESSON_PHASE_ORDER.indexOf(b.phase)
-    );
-    const bodyTable = `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">Lesson Development</h4>
-        <table class="toolbox-table w-full text-xs border-collapse mb-4">
-            <thead><tr><th>Duration of Phase</th><th>Teacher Activity</th><th>Learner Activity</th></tr></thead>
-            <tbody>${orderedPhases.map(p => `<tr>
-                <td>${escHtml(p.phase)}${p.durationMinutes ? ` (${escHtml(p.durationMinutes)} mins)` : ''}</td>
-                <td>${escHtml(p.teacherActivity)}</td>
-                <td>${escHtml(p.learnerActivity)}</td>
-            </tr>`).join('')}</tbody>
-=========
     // Current schema returns lessonPhases as a fixed-key object
     // ({ introduction, lessonDevelopment, evaluation, conclusion }), each
     // itself a { durationMinutes, teacherActivity, learnerActivity }
