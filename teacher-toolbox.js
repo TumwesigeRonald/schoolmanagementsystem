@@ -403,8 +403,6 @@ function renderScenarioContent(content) {
 // lessonDevelopment: [{ stage, durationMinutes, learnerActivity, teacherActivity }]
 // (exactly 4 items, minItems/maxItems-enforced via responseSchema — see
 // that file's schema comment), teacherSelfAssessment: string[].
-const LESSON_PHASE_ORDER = ["Introduction", "Lesson Development", "Evaluation", "Conclusion"];
-
 function renderLessonPlanContent(content) {
     const listOrText = (v) => Array.isArray(v)
         ? `<ul class="list-disc list-inside space-y-1">${v.map(item => `<li>${escHtml(item)}</li>`).join('')}</ul>`
@@ -414,13 +412,17 @@ function renderLessonPlanContent(content) {
         ['Theme', content.theme],
         ['Topic', content.topic],
         ['Competency', content.competency],
+        ['Key Competences', content.keyCompetences],
         ['Learning Outcomes', content.learningOutcomes],
         ['Generic Skills', content.genericSkills],
         ['Values', content.values],
         ['Cross Cutting Issues', content.crossCuttingIssues],
         ['Key Learning Outcome', content.keyLearningOutcome],
         ['Pre-Requisite Knowledge', content.preRequisiteKnowledge],
-        ['References', content.references]
+        ['Resources', content.resources],
+        ['References', content.references],
+        ['Assessment Strategy', content.assessmentStrategy],
+        ['Homework', content.homework]
     ].filter(([, v]) => v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length));
 
     const contextTable = `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">Curriculum Context</h4>
@@ -430,23 +432,33 @@ function renderLessonPlanContent(content) {
             `).join('')}</tbody>
         </table>`;
 
-    // `lessonDevelopment` is now schema-enforced server-side (exactly 4
-    // items — see ai.controller.js + config/aiTools/lessonPlan.js), so
-    // this should always be a full array. `p.phase`/`p.duration` (minutes
-    // as a plain string) are read as a fallback purely for items saved
-    // before that field rename, so older records still render correctly.
-    const phases = Array.isArray(content.lessonDevelopment)
-        ? content.lessonDevelopment.map(p => ({
+    // Server-side, this should always come back as `lessonDevelopment`
+    // (exactly 4 items — see ai.controller.js + config/aiTools/lessonPlan.js).
+    // `content.lessonFlow` is read as a fallback because the currently
+    // *deployed* backend is returning content under that key instead —
+    // meaning production isn't running the lessonPlan.js reviewed in this
+    // conversation. This fallback unblocks rendering either way, but the
+    // real fix is confirming which lessonPlan.js is actually live and
+    // getting the two back in sync. `p.phase`/`p.duration` cover records
+    // saved under the even older field names.
+    const phaseSource = Array.isArray(content.lessonDevelopment)
+        ? content.lessonDevelopment
+        : (Array.isArray(content.lessonFlow) ? content.lessonFlow : []);
+    const phases = phaseSource.map(p => ({
             stage: p.stage || p.phase || '',
             durationMinutes: p.durationMinutes ?? p.duration ?? '',
             learnerActivity: p.learnerActivity || '',
             teacherActivity: p.teacherActivity || ''
-        }))
-        : [];
+        }));
 
-    const orderedPhases = [...phases].sort(
-        (a, b) => LESSON_PHASE_ORDER.indexOf(a.stage) - LESSON_PHASE_ORDER.indexOf(b.stage)
-    );
+
+    // Preserve the order the API returned the stages in, rather than
+    // re-sorting against a fixed 4-label list — production is currently
+    // generating free-form stage names (e.g. "Activity 1: ...") beyond
+    // the Introduction/Lesson Development/Evaluation/Conclusion set, and
+    // sorting against that fixed list would scramble anything that
+    // doesn't match one of those four labels exactly.
+    const orderedPhases = phases;
 
     const bodyTable = `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">Lesson Development</h4>
         <table class="toolbox-table w-full text-xs border-collapse mb-4">
