@@ -35,7 +35,15 @@ async function generate(req, res) {
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
-        responseSchema: tool.responseSchema
+        // responseJsonSchema (full JSON Schema), not the older
+        // responseSchema (OpenAPI-3.0 subset): the older field silently
+        // ignores minItems/maxItems on arrays, which is how the Lesson
+        // Plan tool's lessonDevelopment table previously came back empty
+        // — an empty array still satisfied `required` on the field's
+        // *key*, just not its length. responseJsonSchema enforces
+        // minItems/maxItems for real, so tool configs that need an exact
+        // array length (see config/aiTools/lessonPlan.js) can rely on it.
+        responseJsonSchema: tool.responseSchema
       }
     });
   } catch (err) {
