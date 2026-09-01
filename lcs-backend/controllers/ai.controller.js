@@ -9,6 +9,25 @@ const { ai } = require('../lib/geminiClient');
 
 const GEMINI_MODEL = 'gemini-3.6-flash';
 
+// Generic check against any top-level array property that declares
+// minItems/maxItems in a tool's responseSchema (e.g. lessonDevelopment's
+// exactly-4-phases rule). Returns a short human-readable message, or null
+// if everything's within bounds.
+function validateArrayLengths(schema, content) {
+  const props = schema?.properties || {};
+  for (const [key, propSchema] of Object.entries(props)) {
+    if (propSchema.type !== 'array' || (propSchema.minItems == null && propSchema.maxItems == null)) continue;
+    const len = Array.isArray(content?.[key]) ? content[key].length : 0;
+    if (propSchema.minItems != null && len < propSchema.minItems) {
+      return `"${key}" needs at least ${propSchema.minItems} item(s), got ${len}`;
+    }
+    if (propSchema.maxItems != null && len > propSchema.maxItems) {
+      return `"${key}" allows at most ${propSchema.maxItems} item(s), got ${len}`;
+    }
+  }
+  return null;
+}
+
 // POST /api/ai/generate
 // Body: { toolType, params: {...}, save?: boolean (default true) }
 async function generate(req, res) {
@@ -35,15 +54,20 @@ async function generate(req, res) {
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
-        // responseJsonSchema (full JSON Schema), not the older
-        // responseSchema (OpenAPI-3.0 subset): the older field silently
-        // ignores minItems/maxItems on arrays, which is how the Lesson
-        // Plan tool's lessonDevelopment table previously came back empty
-        // — an empty array still satisfied `required` on the field's
-        // *key*, just not its length. responseJsonSchema enforces
-        // minItems/maxItems for real, so tool configs that need an exact
-        // array length (see config/aiTools/lessonPlan.js) can rely on it.
-        responseJsonSchema: tool.responseSchema
+        // `responseSchema` (OpenAPI-3.0 subset) — NOT `responseJsonSchema`.
+        // The installed SDK, @google/genai v0.14.0, only recognises
+        // `responseSchema` when it builds the request body; a field named
+        // `responseJsonSchema` isn't in that build list at all and is
+        // silently dropped, so no schema was ever actually reaching
+        // Gemini — the model was generating fully freeform JSON, which is
+        // exactly why the Lesson Plan tool's lessonDevelopment array kept
+        // coming back short/empty/differently-shaped. A prior fix here
+        // assumed `responseSchema` ignores minItems/maxItems on arrays;
+        // that's incorrect — Gemini's OpenAPI-subset schema does enforce
+        // minItems/maxItems on `array` types, which is what the Lesson
+        // Plan's exact-4-phases requirement (config/aiTools/lessonPlan.js)
+        // relies on.
+        responseSchema: tool.responseSchema
       }
     });
   } catch (err) {
@@ -57,6 +81,16 @@ async function generate(req, res) {
   } catch (err) {
     console.error(`[ai.generate] Could not parse Gemini output for tool_type=${toolType}`, response.text);
     return res.status(502).json({ message: 'Unable to process content. Please check your connection and retry.' });
+  }
+
+  // Belt-and-suspenders: even with the schema now actually enforced,
+  // validate any array field that declares minItems/maxItems before we
+  // save or return it, so a malformed generation surfaces as a clear
+  // error instead of silently saving/showing an empty table.
+  const schemaError = validateArrayLengths(tool.responseSchema, content);
+  if (schemaError) {
+    console.error(`[ai.generate] Schema validation failed for tool_type=${toolType}: ${schemaError}`);
+    return res.status(502).json({ message: `Generation did not match the expected format (${schemaError}). Please try again.` });
   }
 
   // save=false lets the frontend preview a generation before the teacher

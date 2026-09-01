@@ -44,11 +44,11 @@ Outcome / Focus given above. Include:
 - One overall key learning outcome for the lesson.
 - Pre-requisite knowledge learners should already have.
 - References (textbook/syllabus sections, teaching aids).
-- A lesson flow broken into exactly four phases, in this order:
+- A lesson flow broken into exactly four stages, in this order:
   "Introduction", "Lesson Development", "Evaluation", "Conclusion" — each
-  with an approximate duration in minutes (summing to the total lesson
-  duration), what the teacher does, and what the learners do. All four
-  phases are REQUIRED — do not omit or leave any phase blank, even a
+  with a whole-number duration in minutes (summing to the total lesson
+  duration), what the learners do, and what the teacher does. All four
+  stages are REQUIRED — do not omit or leave any stage blank, even a
   brief one (e.g. a short Conclusion still needs a real teacherActivity
   and learnerActivity, not an empty string).
 - A short Teacher's Self Assessment section: a few reflection prompts the
@@ -74,15 +74,14 @@ no commentary.`;
       keyLearningOutcome: { type: 'string' },
       preRequisiteKnowledge: { type: 'string' },
       references: { type: 'array', items: { type: 'string' } },
-      // NOTE: this is sent to Gemini via `responseJsonSchema` (full JSON
-      // Schema — see ai.controller.js), not the older `responseSchema`
-      // (OpenAPI-3.0 subset). That distinction matters here: the older
-      // field ignores minItems/maxItems on arrays, so a naive
-      // `lessonDevelopment: { type: 'array', ... }` with only `required`
-      // on the parent object would let the model satisfy validation with
-      // an empty array — which is exactly how this table went blank
-      // before. minItems/maxItems below is what actually forces all four
-      // phases to be present; `required` alone would not.
+      // Sent to Gemini via `responseSchema` (see ai.controller.js), which
+      // DOES enforce minItems/maxItems on arrays — that's what forces all
+      // four stages to actually be present; `required` on the parent
+      // object alone would only demand the key exist, not that it have
+      // any particular length.
+      //
+      // Field names match the school's Lesson Flow table columns exactly:
+      // Stage | Duration Minutes | Learner Activity | Teacher Activity.
       lessonDevelopment: {
         type: 'array',
         minItems: 4,
@@ -90,15 +89,15 @@ no commentary.`;
         items: {
           type: 'object',
           properties: {
-            phase: {
+            stage: {
               type: 'string',
               enum: ['Introduction', 'Lesson Development', 'Evaluation', 'Conclusion']
             },
-            duration: { type: 'string', description: 'e.g. "10 minutes"' },
-            teacherActivity: { type: 'string' },
-            learnerActivity: { type: 'string' }
+            durationMinutes: { type: 'integer', description: 'e.g. 10' },
+            learnerActivity: { type: 'string' },
+            teacherActivity: { type: 'string' }
           },
-          required: ['phase', 'duration', 'teacherActivity', 'learnerActivity']
+          required: ['stage', 'durationMinutes', 'learnerActivity', 'teacherActivity']
         }
       },
       teacherSelfAssessment: { type: 'array', items: { type: 'string' } }

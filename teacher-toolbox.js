@@ -322,11 +322,12 @@ function renderSchemeOfWorkTable(content) {
         </div>`;
 }
 
-// Lesson Plan / Record of Work: flat fields (including array-of-strings,
-// rendered as a bullet list) become a Field/Value table; any
-// array-of-objects field (e.g. lessonPlan's "lessonFlow", recordOfWork's
-// "entries") becomes its own sub-table with columns derived from that
-// array's own keys.
+// Record of Work / Scheme of Work (any tool using the default 'table'
+// format — lesson_plan uses its own renderLessonPlanContent instead):
+// flat fields (including array-of-strings, rendered as a bullet list)
+// become a Field/Value table; any array-of-objects field (e.g.
+// recordOfWork's "entries") becomes its own sub-table with columns
+// derived from that array's own keys.
 function renderGenericTable(content) {
     const isArrayOfObjects = (v) => Array.isArray(v) && v.length && typeof v[0] === 'object';
     const scalarEntries = Object.entries(content).filter(([, v]) => !isArrayOfObjects(v));
@@ -391,16 +392,16 @@ function renderScenarioContent(content) {
     </div>`;
 }
 
-// Lesson Plan: Curriculum Context (key/value table) + a 3-column
-// operational body (Duration of Phase | Teacher Activity | Learner
-// Activity, one row per phase, in Introduction -> Lesson Development ->
-// Evaluation -> Conclusion order) + a Teacher's Self Assessment footer —
-// backend content shape (config/aiTools/lessonPlan.js): { theme, topic,
-// competency, learningOutcomes: string[], genericSkills: string[],
-// values: string[], crossCuttingIssues: string[], keyLearningOutcome,
-// preRequisiteKnowledge, references: string[],
-// lessonDevelopment: [{ phase, duration, teacherActivity, learnerActivity }]
-// (exactly 4 items, minItems/maxItems-enforced via responseJsonSchema — see
+// Lesson Plan: Curriculum Context (key/value table) + the 4-column Lesson
+// Flow / Lesson Development table (Stage | Duration Minutes | Learner
+// Activity | Teacher Activity, one row per stage, in Introduction ->
+// Lesson Development -> Evaluation -> Conclusion order) + a Teacher's Self
+// Assessment footer — backend content shape (config/aiTools/lessonPlan.js):
+// { theme, topic, competency, learningOutcomes: string[],
+// genericSkills: string[], values: string[], crossCuttingIssues: string[],
+// keyLearningOutcome, preRequisiteKnowledge, references: string[],
+// lessonDevelopment: [{ stage, durationMinutes, learnerActivity, teacherActivity }]
+// (exactly 4 items, minItems/maxItems-enforced via responseSchema — see
 // that file's schema comment), teacherSelfAssessment: string[].
 const LESSON_PHASE_ORDER = ["Introduction", "Lesson Development", "Evaluation", "Conclusion"];
 
@@ -429,46 +430,33 @@ function renderLessonPlanContent(content) {
             `).join('')}</tbody>
         </table>`;
 
-    // Current schema returns `lessonDevelopment` as an array of exactly 4
-    // { phase, duration, teacherActivity, learnerActivity } items (order
-    // not guaranteed, so sort by LESSON_PHASE_ORDER). Two earlier shapes
-    // may still exist on already-saved items from before this fix:
-    // `lessonPhases: [{ phase, durationMinutes, ... }]` (array, older key
-    // name) and `lessonPhases: { introduction: {...}, ... }` (fixed-key
-    // object, one fix ago) — read whichever is present so old saves still
-    // render instead of showing nothing.
-    let phases;
-    if (Array.isArray(content.lessonDevelopment)) {
-        phases = content.lessonDevelopment.map(p => ({
-            phase: p.phase, duration: p.duration, teacherActivity: p.teacherActivity, learnerActivity: p.learnerActivity
-        }));
-    } else if (Array.isArray(content.lessonPhases)) {
-        phases = content.lessonPhases.map(p => ({
-            phase: p.phase, duration: p.durationMinutes ? `${p.durationMinutes} minutes` : '',
-            teacherActivity: p.teacherActivity, learnerActivity: p.learnerActivity
-        }));
-    } else if (content.lessonPhases && typeof content.lessonPhases === 'object') {
-        const keyToLabel = { introduction: 'Introduction', lessonDevelopment: 'Lesson Development', evaluation: 'Evaluation', conclusion: 'Conclusion' };
-        phases = Object.entries(content.lessonPhases).map(([key, p]) => ({
-            phase: keyToLabel[key] || key, duration: p.durationMinutes ? `${p.durationMinutes} minutes` : '',
-            teacherActivity: p.teacherActivity, learnerActivity: p.learnerActivity
-        }));
-    } else {
-        phases = [];
-    }
+    // `lessonDevelopment` is now schema-enforced server-side (exactly 4
+    // items — see ai.controller.js + config/aiTools/lessonPlan.js), so
+    // this should always be a full array. `p.phase`/`p.duration` (minutes
+    // as a plain string) are read as a fallback purely for items saved
+    // before that field rename, so older records still render correctly.
+    const phases = Array.isArray(content.lessonDevelopment)
+        ? content.lessonDevelopment.map(p => ({
+            stage: p.stage || p.phase || '',
+            durationMinutes: p.durationMinutes ?? p.duration ?? '',
+            learnerActivity: p.learnerActivity || '',
+            teacherActivity: p.teacherActivity || ''
+        }))
+        : [];
 
-    const orderedPhases = [...phases]
-        .filter(p => p.teacherActivity || p.learnerActivity)
-        .sort((a, b) => LESSON_PHASE_ORDER.indexOf(a.phase) - LESSON_PHASE_ORDER.indexOf(b.phase));
+    const orderedPhases = [...phases].sort(
+        (a, b) => LESSON_PHASE_ORDER.indexOf(a.stage) - LESSON_PHASE_ORDER.indexOf(b.stage)
+    );
 
     const bodyTable = `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">Lesson Development</h4>
         <table class="toolbox-table w-full text-xs border-collapse mb-4">
-            <thead><tr><th>Duration of Phase</th><th>Teacher Activity</th><th>Learner Activity</th></tr></thead>
+            <thead><tr><th>Stage</th><th>Duration Minutes</th><th>Learner Activity</th><th>Teacher Activity</th></tr></thead>
             <tbody>${orderedPhases.length ? orderedPhases.map(p => `<tr>
-                <td>${escHtml(p.phase)}${p.duration ? ` (${escHtml(p.duration)})` : ''}</td>
-                <td>${escHtml(p.teacherActivity || '')}</td>
-                <td>${escHtml(p.learnerActivity || '')}</td>
-            </tr>`).join('') : `<tr><td colspan="3" class="text-center text-slate-400 italic">
+                <td>${escHtml(p.stage)}</td>
+                <td>${escHtml(p.durationMinutes)}</td>
+                <td>${escHtml(p.learnerActivity)}</td>
+                <td>${escHtml(p.teacherActivity)}</td>
+            </tr>`).join('') : `<tr><td colspan="4" class="text-center text-slate-400 italic">
                 No lesson phases were generated for this plan. Try regenerating.
             </td></tr>`}</tbody>
         </table>`;
