@@ -399,16 +399,10 @@ function renderScenarioContent(content) {
 // competency, learningOutcomes: string[], genericSkills: string[],
 // values: string[], crossCuttingIssues: string[], keyLearningOutcome,
 // preRequisiteKnowledge, references: string[],
-// lessonPhases: { introduction, lessonDevelopment, evaluation, conclusion }
-// — each a { durationMinutes, teacherActivity, learnerActivity } object,
-// not an array — see the schema comment in that file for why the shape
-// changed. teacherSelfAssessment: string[].
-const LESSON_PHASE_ORDER = [
-    ["introduction", "Introduction"],
-    ["lessonDevelopment", "Lesson Development"],
-    ["evaluation", "Evaluation"],
-    ["conclusion", "Conclusion"]
-];
+// lessonDevelopment: [{ phase, duration, teacherActivity, learnerActivity }]
+// (exactly 4 items, minItems/maxItems-enforced via responseJsonSchema — see
+// that file's schema comment), teacherSelfAssessment: string[].
+const LESSON_PHASE_ORDER = ["Introduction", "Lesson Development", "Evaluation", "Conclusion"];
 
 function renderLessonPlanContent(content) {
     const listOrText = (v) => Array.isArray(v)
@@ -435,20 +429,37 @@ function renderLessonPlanContent(content) {
             `).join('')}</tbody>
         </table>`;
 
-    // Current schema returns lessonPhases as a fixed-key object
-    // ({ introduction, lessonDevelopment, evaluation, conclusion }), each
-    // itself a { durationMinutes, teacherActivity, learnerActivity }
-    // object — walk LESSON_PHASE_ORDER's keys in the fixed teaching order.
-    // Older saved items (from before this fix) may still hold the previous
-    // `lessonPhases: [{ phase, ... }]` array shape, so fall back to reading
-    // that if the object keys aren't present, rather than showing nothing.
-    const src = content.lessonPhases || {};
-    const legacyArray = Array.isArray(content.lessonPhases) ? content.lessonPhases : null;
-    const orderedPhases = LESSON_PHASE_ORDER.map(([key, label]) => {
-        const fromObject = !legacyArray && src[key];
-        const fromLegacyArray = legacyArray && legacyArray.find(p => p.phase === label);
-        return { label, ...(fromObject || fromLegacyArray || null) };
-    }).filter(p => p.teacherActivity || p.learnerActivity);
+    // Current schema returns `lessonDevelopment` as an array of exactly 4
+    // { phase, duration, teacherActivity, learnerActivity } items (order
+    // not guaranteed, so sort by LESSON_PHASE_ORDER). Two earlier shapes
+    // may still exist on already-saved items from before this fix:
+    // `lessonPhases: [{ phase, durationMinutes, ... }]` (array, older key
+    // name) and `lessonPhases: { introduction: {...}, ... }` (fixed-key
+    // object, one fix ago) — read whichever is present so old saves still
+    // render instead of showing nothing.
+    let phases;
+    if (Array.isArray(content.lessonDevelopment)) {
+        phases = content.lessonDevelopment.map(p => ({
+            phase: p.phase, duration: p.duration, teacherActivity: p.teacherActivity, learnerActivity: p.learnerActivity
+        }));
+    } else if (Array.isArray(content.lessonPhases)) {
+        phases = content.lessonPhases.map(p => ({
+            phase: p.phase, duration: p.durationMinutes ? `${p.durationMinutes} minutes` : '',
+            teacherActivity: p.teacherActivity, learnerActivity: p.learnerActivity
+        }));
+    } else if (content.lessonPhases && typeof content.lessonPhases === 'object') {
+        const keyToLabel = { introduction: 'Introduction', lessonDevelopment: 'Lesson Development', evaluation: 'Evaluation', conclusion: 'Conclusion' };
+        phases = Object.entries(content.lessonPhases).map(([key, p]) => ({
+            phase: keyToLabel[key] || key, duration: p.durationMinutes ? `${p.durationMinutes} minutes` : '',
+            teacherActivity: p.teacherActivity, learnerActivity: p.learnerActivity
+        }));
+    } else {
+        phases = [];
+    }
+
+    const orderedPhases = [...phases]
+        .filter(p => p.teacherActivity || p.learnerActivity)
+        .sort((a, b) => LESSON_PHASE_ORDER.indexOf(a.phase) - LESSON_PHASE_ORDER.indexOf(b.phase));
 
     const bodyTable = `<h4 class="font-semibold text-slate-700 text-sm mb-2 mt-4">Lesson Development</h4>
         <table class="toolbox-table w-full text-xs border-collapse mb-4">
