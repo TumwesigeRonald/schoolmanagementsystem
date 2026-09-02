@@ -2461,6 +2461,8 @@ function renderReportsModule() {
     const t = termSettings;
     const canEditTerm = getPermissions(currentUser.role).canManageTerm;
     const termLock = canEditTerm ? '' : 'disabled';
+    // Bulk "Print / Save PDF (Whole Class)" is Administrator-only — RBAC guard.
+    const canPrintWholeClass = getPermissions(currentUser.role).canPrintWholeClass;
     return `
         <div class="space-y-6">
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
@@ -2504,7 +2506,7 @@ function renderReportsModule() {
                     <div class="flex gap-2 ml-auto">
                         <button onclick="toggleGradingLegendPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-table-list mr-1.5"></i>Grading Scale</button>
                         <button onclick="generateReportCards()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-circle-plus mr-1.5"></i>Generate Report Cards</button>
-                        <button onclick="printReportCards()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF (Whole Class)</button>
+                        ${canPrintWholeClass ? `<button onclick="printReportCards()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF (Whole Class)</button>` : ''}
                     </div>
                 </div>
                 <div id="grading-legend-preview" class="hidden mt-4 pt-4 border-t border-slate-200"></div>
@@ -3166,6 +3168,14 @@ function formatReportDate(dateStr) {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 async function printReportCards() {
+    // RBAC guard: bulk "Print / Save PDF (Whole Class)" is Administrator-only.
+    // The button itself is already hidden for non-admins (see renderReportsTab),
+    // but this function is reachable directly from the console/devtools, so it
+    // must refuse on its own too — the UI hiding it is not the real boundary.
+    if (!getPermissions(currentUser.role).canPrintWholeClass) {
+        alert('Only an Administrator can print or export report cards for a whole class.');
+        return;
+    }
     // Always regenerate right before printing so the printed output reflects
     // any marks entered since the preview was last generated. generateReportCards
     // is async (it fetches attendance history before populating the preview), so

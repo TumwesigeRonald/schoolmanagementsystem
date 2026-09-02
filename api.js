@@ -235,7 +235,8 @@ const ROLE_PERMISSIONS = {
         canManageTeachers: true,
         canManageTerm: true,
         canViewAllReports: true,
-        canManageNotices: true      // post/delete school bulletin notices
+        canManageNotices: true,     // post/delete school bulletin notices
+        canPrintWholeClass: true    // bulk "Print / Save PDF (Whole Class)" report-card export
     },
     [ROLES.TEACHER]: {
         // "classsummaries" and "aitoolbox" appended here — same tab ids as above.
@@ -249,7 +250,8 @@ const ROLE_PERMISSIONS = {
         canManageTeachers: false,   // can only edit their own profile
         canManageTerm: false,       // calendar/term dates are admin-only
         canViewAllReports: true,
-        canManageNotices: false     // can read the bulletin, not post to it
+        canManageNotices: false,    // can read the bulletin, not post to it
+        canPrintWholeClass: false   // whole-class bulk PDF export is Administrator-only
     },
     [ROLES.STUDENT]: {
         tabs: ["dashboard", "reports", "resources"],
@@ -262,7 +264,8 @@ const ROLE_PERMISSIONS = {
         canManageTeachers: false,
         canManageTerm: false,
         canViewAllReports: false,   // can only ever see their own report card
-        canManageNotices: false
+        canManageNotices: false,
+        canPrintWholeClass: false
     }
 };
 
