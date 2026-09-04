@@ -362,6 +362,16 @@ async function handleTermSwitcherChange(term, year) {
     selectedYear = Number(year);
     await applyTermSwitch();
 }
+// Fired by the "Load Term" button. The Year/Term <select>s only track a
+// pending choice as the user browses them (no onchange handler of their
+// own) — nothing actually re-fetches or re-renders until this runs, so
+// clicking through a few options doesn't fire a burst of network requests.
+async function loadSelectedTerm() {
+    const yearEl = document.getElementById('sidebar-term-year');
+    const termEl = document.getElementById('sidebar-term-term');
+    if (!yearEl || !termEl) return;
+    await handleTermSwitcherChange(termEl.value, yearEl.value);
+}
 // "Back to current term" — drops back to following the school's live
 // active term (termSettings) instead of whatever was explicitly selected.
 async function resetTermSwitcherToCurrent() {
@@ -665,11 +675,17 @@ function renderSidebarNav() {
     const nav = document.getElementById('sidebar-nav');
     if (!nav) return;
     const allowedTabs = getPermissions(currentUser.role).tabs;
-    // `group` drives the thin section dividers below — items are grouped as:
+    // `group` drives the sticky section headings below — items are grouped as:
     // main (Dashboard) / academics (Students..Attendance) / people & resources
     // (Resources..Subject Marks Status) / admin & tools (Activity Log, Class
     // Summaries, Teacher Toolbox — and, via renderFinanceNavItem(), School
     // Finance, which shares this same visual group).
+    const GROUP_LABELS = {
+        'main': 'Overview',
+        'academics': 'Academics',
+        'people-resources': 'People & Resources',
+        'admin-tools': 'Admin & Tools'
+    };
     const items = [
         { id: 'dashboard', label: 'Dashboard', icon: 'fa-gauge-high', group: 'main' },
         { id: 'students', label: 'Students', icon: 'fa-user-graduate', group: 'academics' },
@@ -698,16 +714,25 @@ function renderSidebarNav() {
     // the dark slate previously used here, which was unreadable against the
     // dark background. Hover/selected states use white for maximum contrast.
     let previousGroup = null;
+    // "School Finance" (renderFinanceNavItem) is a standalone placeholder
+    // button, not a real routed tab — it always belongs at the end of the
+    // last real item's group (admin-tools) if that group has any visible
+    // items, or gets its own heading if it's the only thing an Admin/
+    // Teacher would otherwise see in that section.
+    const financeHtml = renderFinanceNavItem();
     nav.innerHTML = items.map(item => {
-        // Thin muted divider whenever the section changes (border-white/10),
-        // so related items (e.g. the academics block) read as one group.
-        const divider = (previousGroup !== null && item.group !== previousGroup)
-            ? '<div class="my-2 border-t border-white/10" role="separator"></div>' : '';
+        // A real sticky heading (not just a thin divider) whenever the
+        // section changes, so related items (e.g. the academics block)
+        // read as one labeled group even while scrolling past it.
+        const heading = (item.group !== previousGroup)
+            ? `<div class="sidebar-nav-heading">${escapeHTML(GROUP_LABELS[item.group] || item.group)}</div>` : '';
         previousGroup = item.group;
-        return `${divider}<button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
+        return `${heading}<button id="nav-${item.id}" onclick="switchTab('${item.id}'); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
             <i class="fa-solid ${item.icon} w-4 text-center"></i><span>${item.label}</span>
         </button>`;
-    }).join('') + renderFinanceNavItem();
+    }).join('') + (financeHtml
+        ? (previousGroup === 'admin-tools' ? financeHtml : `<div class="sidebar-nav-heading">${escapeHTML(GROUP_LABELS['admin-tools'])}</div>${financeHtml}`)
+        : '');
 }
 // Shared class strings for sidebar nav buttons, so the active state
 // (switchTab), inactive state (renderSidebarNav), and the School Finance

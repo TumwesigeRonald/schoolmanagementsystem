@@ -357,6 +357,7 @@ img {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-shrink: 0; /* frozen header block — never shrinks/scrolls, see .sidebar-nav's own scroll below */
 }
 .sidebar-brand-inner { display: flex; align-items: center; gap: 12px; }
 .sidebar-brand img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold-600); }
@@ -370,6 +371,7 @@ img {
 .sidebar-term-switcher {
     padding: 14px 20px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0; /* frozen header block, alongside .sidebar-brand — see .sidebar-nav's own scroll below */
 }
 .sidebar-term-switcher-label {
     display: block;
@@ -433,7 +435,53 @@ img {
     padding: 0;
 }
 .sidebar-term-reset:hover { color: #fff; }
-.sidebar-nav { padding: 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+/* "Load Term" — a real filled action button (unlike the plain-text "Back
+   to current term" link below it), since it's the explicit trigger that
+   commits whatever's currently picked in the two <select>s above. Nothing
+   re-fetches/re-renders on dropdown change alone; see loadSelectedTerm()
+   in script.js. */
+.sidebar-term-load {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 100%;
+    margin-top: 10px;
+    background: var(--teal-700);
+    border: none;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 9px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.sidebar-term-load:hover { background: #0a5b5e; }
+/* Scrollable nav (flex:1 fills whatever space is left below the frozen
+   header/above the footer; min-height:0 is required for a flex child to
+   actually shrink and scroll instead of growing to fit its content). */
+.sidebar-nav { padding: 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto; min-height: 0; }
+/* Section headings inside the scrollable nav (renderSidebarNav in
+   script.js) — sticky so each one stays pinned at the top of the nav's
+   own scrollport while its items scroll underneath, with a solid
+   background matching the sidebar so items don't visibly bleed through
+   above it. */
+.sidebar-nav-heading {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--navy-900);
+    padding: 6px 4px;
+    margin: 0 -4px;
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--teal-600);
+}
 /* Belt-and-braces: guarantees every nav item's icon + label stay left-aligned
    inside the sidebar regardless of which state class script.js applies,
    overriding the browser's default centered text-align on <button>. */
@@ -454,7 +502,7 @@ img {
 }
 .nav-link:hover { background: rgba(15,138,143,0.25); color: #fff; }
 .nav-link-active { background: var(--teal-700); color: #fff; }
-.sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; }
+.sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; flex-shrink: 0; }
 .sidebar-footer span {
     display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--gold-600);

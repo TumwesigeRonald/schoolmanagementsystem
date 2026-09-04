@@ -94,9 +94,12 @@
             <div id="sidebar-term-switcher" class="sidebar-term-switcher hidden">
                 <span class="sidebar-term-switcher-label">Viewing Term</span>
                 <div class="sidebar-term-switcher-row">
-                    <select id="sidebar-term-year" class="sidebar-term-select" onchange="handleTermSwitcherChange(document.getElementById('sidebar-term-term').value, this.value)" title="Academic year"></select>
-                    <select id="sidebar-term-term" class="sidebar-term-select" onchange="handleTermSwitcherChange(this.value, document.getElementById('sidebar-term-year').value)" title="Term"></select>
+                    <select id="sidebar-term-year" class="sidebar-term-select" title="Academic year"></select>
+                    <select id="sidebar-term-term" class="sidebar-term-select" title="Term"></select>
                 </div>
+                <button id="sidebar-term-load" type="button" onclick="loadSelectedTerm()" class="sidebar-term-load">
+                    <i class="fa-solid fa-arrows-rotate"></i> Load Term
+                </button>
                 <button id="sidebar-term-reset" type="button" onclick="resetTermSwitcherToCurrent()" class="sidebar-term-reset hidden">
                     <i class="fa-solid fa-rotate-left"></i> Back to current term
                 </button>
