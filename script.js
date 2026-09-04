@@ -313,43 +313,95 @@ async function refreshScoresList() {
         }
     } catch (e) { /* keep existing local marksStorage */ }
 }
-// Every {term, year} combination that has data on file, for the term
-// switcher dropdown (see renderTermSwitcher / handleTermSwitcherChange).
+// Every {term, year} combination that has data on file, for the sidebar
+// term/year switcher (see renderTermSwitcher / handleTermSwitcherChange).
 async function refreshTermHistory() {
     try {
         const remote = await TermAPI.history();
         if (Array.isArray(remote) && remote.length) termHistory = remote;
     } catch (e) { /* keep existing local termHistory */ }
 }
-// Fired when the user picks a different term/year from the switcher.
-// Re-scopes every term-sensitive in-memory store to the newly selected
-// term and re-renders whatever's currently on screen, so switching terms
-// never shows a stale mix of two terms' data.
-async function handleTermSwitcherChange(value) {
-    const [term, yearStr] = value.split('|');
-    selectedTerm = term;
-    selectedYear = Number(yearStr);
+// Fixed academic term names — always offered in the Term dropdown
+// regardless of whether that term has any data on file yet, so an
+// Admin/Teacher can switch into a brand-new term (e.g. right after
+// updating Term Settings) instead of only ever seeing terms that
+// already have scores/attendance saved.
+const TERM_NAMES = ['Term 1', 'Term 2', 'Term 3'];
+// Academic years offered in the Year dropdown: every year that already
+// has data on file, plus the school's current active year and the year
+// right after it (so admins can plan/switch ahead of time), deduplicated
+// and sorted newest first.
+function getTermSwitcherYearOptions() {
+    const years = new Set(termHistory.map(o => Number(o.year)));
+    years.add(Number(termSettings.year));
+    years.add(Number(termSettings.year) + 1);
+    return [...years].sort((a, b) => b - a);
+}
+// Shared by handleTermSwitcherChange and resetTermSwitcherToCurrent: pulls
+// fresh data for whatever term/year is now being viewed and re-renders
+// everything that depends on it, so a switch never leaves a stale mix of
+// two terms' data on screen.
+async function applyTermSwitch() {
     await Promise.all([
         refreshScoresList(),
         refreshAttendanceForTerm(selectedTerm, selectedYear)
     ]);
     renderTermSwitcher();
+    updateDashboardStats();
     // Re-render whichever screen is currently open so the switch is
     // reflected immediately rather than only on next navigation.
     if (typeof refreshCurrentTabView === 'function') refreshCurrentTabView();
 }
-// Populates/refreshes the term-switcher <select> in the header from
-// termHistory, selecting whichever term/year is currently being viewed.
+// Fired when the user picks a different term or year in the sidebar
+// switcher. Always receives both values (whichever <select> didn't fire
+// the change event still reads its own current value), so this fully
+// re-scopes selectedTerm/selectedYear together rather than only updating
+// the one dropdown that changed.
+async function handleTermSwitcherChange(term, year) {
+    selectedTerm = term;
+    selectedYear = Number(year);
+    await applyTermSwitch();
+}
+// "Back to current term" — drops back to following the school's live
+// active term (termSettings) instead of whatever was explicitly selected.
+async function resetTermSwitcherToCurrent() {
+    selectedTerm = null;
+    selectedYear = null;
+    await applyTermSwitch();
+}
+// Populates/refreshes the sidebar's Year + Term selects from
+// getTermSwitcherYearOptions()/TERM_NAMES, selecting whichever term/year
+// is currently being viewed, and shows/hides the whole block by role —
+// only Admin/Teacher get to browse other terms; Students always just see
+// their own current-term data.
 function renderTermSwitcher() {
-    const el = document.getElementById('term-switcher');
-    if (!el) return;
+    const wrap = document.getElementById('sidebar-term-switcher');
+    const yearEl = document.getElementById('sidebar-term-year');
+    const termEl = document.getElementById('sidebar-term-term');
+    const resetBtn = document.getElementById('sidebar-term-reset');
+    if (!wrap || !yearEl || !termEl) return;
+
+    const canSwitch = getPermissions(currentUser.role).canViewAllReports; // true for Admin & Teacher, false for Student
+    wrap.classList.toggle('hidden', !canSwitch);
+    if (!canSwitch) return;
+
     const viewed = getViewedTermYear();
-    const options = termHistory.length ? termHistory : [{ term: viewed.term, year: viewed.year }];
-    el.innerHTML = options.map(o => {
-        const value = `${o.term}|${o.year}`;
-        const selected = (o.term === viewed.term && Number(o.year) === Number(viewed.year)) ? ' selected' : '';
-        return `<option value="${escapeHTML(value)}"${selected}>${escapeHTML(o.term)}, ${o.year}</option>`;
+
+    yearEl.innerHTML = getTermSwitcherYearOptions().map(y => {
+        const selected = Number(y) === Number(viewed.year) ? ' selected' : '';
+        return `<option value="${y}"${selected}>${y}</option>`;
     }).join('');
+
+    termEl.innerHTML = TERM_NAMES.map(t => {
+        const selected = t === viewed.term ? ' selected' : '';
+        return `<option value="${escapeHTML(t)}"${selected}>${escapeHTML(t)}</option>`;
+    }).join('');
+
+    // Only show "Back to current term" once the user has actually strayed
+    // from the live term — otherwise it's a dead-looking button doing
+    // nothing on the screen they're already on.
+    const isViewingCurrent = selectedTerm === null && selectedYear === null;
+    if (resetBtn) resetBtn.classList.toggle('hidden', isViewingCurrent);
 }
 async function refreshAttendanceList() {
     // attendanceStorage is keyed by recordKey ("date_studentId"), same

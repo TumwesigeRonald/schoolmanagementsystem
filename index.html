@@ -67,7 +67,6 @@
             <h1 id="page-title" class="page-title">Dashboard</h1>
         </div>
         <div class="header-right">
-            <select id="term-switcher" class="role-tag term-switcher" onchange="handleTermSwitcherChange(this.value)" title="Switch which term you're viewing"></select>
             <span id="user-badge" class="user-badge"></span>
             <span id="user-role-tag" class="role-tag"></span>
             <button onclick="handleLogout()" class="logout-btn"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</button>
@@ -85,6 +84,22 @@
                     </div>
                 </div>
                 <button onclick="toggleSidebar()" class="sidebar-close">&#10005;</button>
+            </div>
+            <!-- Academic Term / Year switcher — Admin & Teacher only (see
+                 renderTermSwitcher in script.js, which shows/hides and
+                 populates this block). Switching here re-scopes every
+                 term-sensitive view (Scores, Attendance, Analytics,
+                 dashboard "Marks Recorded" stat, etc.) via
+                 handleTermSwitcherChange -> getViewedTermYear(). -->
+            <div id="sidebar-term-switcher" class="sidebar-term-switcher hidden">
+                <span class="sidebar-term-switcher-label">Viewing Term</span>
+                <div class="sidebar-term-switcher-row">
+                    <select id="sidebar-term-year" class="sidebar-term-select" onchange="handleTermSwitcherChange(document.getElementById('sidebar-term-term').value, this.value)" title="Academic year"></select>
+                    <select id="sidebar-term-term" class="sidebar-term-select" onchange="handleTermSwitcherChange(this.value, document.getElementById('sidebar-term-year').value)" title="Term"></select>
+                </div>
+                <button id="sidebar-term-reset" type="button" onclick="resetTermSwitcherToCurrent()" class="sidebar-term-reset hidden">
+                    <i class="fa-solid fa-rotate-left"></i> Back to current term
+                </button>
             </div>
             <nav id="sidebar-nav" class="sidebar-nav"></nav>
             <div class="sidebar-footer">
