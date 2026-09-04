@@ -279,7 +279,9 @@ img {
     border-radius: 999px;
 }
 /* term-switcher reuses .role-tag's pill look but is a real <select>, so
-   reset the native control chrome (border/appearance) it'd otherwise carry. */
+   reset the native control chrome (border/appearance) it'd otherwise carry
+   — then draw our own caret back in via background-image, since without it
+   the pill is visually indistinguishable from a static read-only badge. */
 .term-switcher {
     border: none;
     cursor: pointer;
@@ -287,6 +289,14 @@ img {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
+    padding-right: 26px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23c9962c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+.term-switcher:hover {
+    background-color: var(--gold-100);
+    filter: brightness(0.97);
 }
 .logout-btn {
     background: var(--rose-600);
