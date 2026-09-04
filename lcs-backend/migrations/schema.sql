@@ -129,10 +129,12 @@ CREATE TABLE IF NOT EXISTS users (
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS scores (
   id           SERIAL PRIMARY KEY,
-  record_key   TEXT NOT NULL UNIQUE,        -- e.g. "MATHEMATICS_LCS/001"
+  record_key   TEXT NOT NULL UNIQUE,        -- e.g. "MATHEMATICS_LCS/001_Term 1_2026"
   subject      TEXT NOT NULL,
   student_id   TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   class_level  TEXT,                        -- class at time of entry, e.g. "S.4"
+  term         TEXT,                        -- e.g. "Term 1" — see migration block below
+  year         INTEGER,                     -- e.g. 2026
   ao1          NUMERIC(5,2),
   ao2          NUMERIC(5,2),
   eot          NUMERIC(5,2),
@@ -144,6 +146,63 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 
 -- -------------------------------------------------------------
+-- MIGRATION: scope scores to (student, subject, term, year)
+-- -------------------------------------------------------------
+-- Originally `scores` had one row per (subject, student), globally —
+-- entering Term 2 marks silently overwrote Term 1's marks in place
+-- because record_key = "${subject}_${studentId}" was UNIQUE with no
+-- term/year in it at all. This block adds term/year to any database
+-- created before this existed, backfills existing rows with the best
+-- available guess (the term/year on file in term_settings — the only
+-- historical signal available, since the old rows never recorded which
+-- term they belonged to), then moves uniqueness onto the composite key
+-- so a new term's marks can never again overwrite an old term's marks.
+-- Idempotent / safe to re-run.
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS term TEXT;
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS year INTEGER;
+
+DO $$
+DECLARE
+  fallback_term TEXT;
+  fallback_year INTEGER;
+BEGIN
+  -- Only touch rows that predate this migration (term IS NULL). Rows
+  -- created after the backend routes below were deployed already carry
+  -- a real term/year, so they are never touched here.
+  IF EXISTS (SELECT 1 FROM scores WHERE term IS NULL) THEN
+    SELECT ts.term, ts.year INTO fallback_term, fallback_year
+      FROM term_settings ts WHERE ts.id = 1;
+
+    IF fallback_term IS NULL THEN
+      fallback_term := 'Term 1';
+      fallback_year := EXTRACT(YEAR FROM now())::INTEGER;
+    END IF;
+
+    UPDATE scores
+      SET term = fallback_term, year = fallback_year,
+          record_key = subject || '_' || student_id || '_' || fallback_term || '_' || fallback_year
+      WHERE term IS NULL;
+  END IF;
+END $$;
+
+ALTER TABLE scores ALTER COLUMN term SET NOT NULL;
+ALTER TABLE scores ALTER COLUMN year SET NOT NULL;
+
+-- Replace the old single-column uniqueness with the composite key that
+-- actually reflects "one mark set per student, per subject, per term,
+-- per year" — this is what makes term-switching DB-enforced rather than
+-- convention-enforced. record_key itself stays UNIQUE too (it's derived
+-- 1:1 from the same four columns, so this is a redundant-but-harmless
+-- extra guard, and keeps existing lookups by record_key working as-is).
+DO $$
+BEGIN
+  ALTER TABLE scores ADD CONSTRAINT scores_student_subject_term_year_key
+    UNIQUE (student_id, subject, term, year);
+EXCEPTION
+  WHEN duplicate_table THEN NULL; -- constraint already exists, re-run is a no-op
+END $$;
+
+-- -------------------------------------------------------------
 -- attendance — one row per (date, student).
 -- record_key mirrors the frontend's `${date}_${studentId}` key.
 -- -------------------------------------------------------------
@@ -153,9 +212,40 @@ CREATE TABLE IF NOT EXISTS attendance (
   date         DATE NOT NULL,
   student_id   TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
   class_level  TEXT,
+  term         TEXT,                        -- which term this date fell in, for term-scoped views
+  year         INTEGER,
   status       TEXT NOT NULL DEFAULT 'Present',
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- -------------------------------------------------------------
+-- MIGRATION: tag attendance with term/year too.
+-- Unlike `scores`, attendance was never at overwrite risk (each date is
+-- already its own row, so record_key = "${date}_${studentId}" can't
+-- collide across terms). This just adds term/year so "show me Term 1's
+-- attendance" can be a plain WHERE clause instead of the caller having
+-- to know Term 1's exact date range. Existing rows are backfilled with
+-- term_settings' current value, same best-effort reasoning as scores —
+-- new rows going forward are tagged accurately by the route itself.
+-- Idempotent / safe to re-run.
+ALTER TABLE attendance ADD COLUMN IF NOT EXISTS term TEXT;
+ALTER TABLE attendance ADD COLUMN IF NOT EXISTS year INTEGER;
+
+DO $$
+DECLARE
+  fallback_term TEXT;
+  fallback_year INTEGER;
+BEGIN
+  IF EXISTS (SELECT 1 FROM attendance WHERE term IS NULL) THEN
+    SELECT ts.term, ts.year INTO fallback_term, fallback_year
+      FROM term_settings ts WHERE ts.id = 1;
+    IF fallback_term IS NULL THEN
+      fallback_term := 'Term 1';
+      fallback_year := EXTRACT(YEAR FROM now())::INTEGER;
+    END IF;
+    UPDATE attendance SET term = fallback_term, year = fallback_year WHERE term IS NULL;
+  END IF;
+END $$;
 
 -- -------------------------------------------------------------
 -- term_settings — academic calendar. Single "current" row
@@ -264,9 +354,11 @@ CREATE TABLE IF NOT EXISTS report_card_remarks (
 CREATE INDEX IF NOT EXISTS idx_scores_student      ON scores(student_id);
 CREATE INDEX IF NOT EXISTS idx_scores_subject      ON scores(subject);
 CREATE INDEX IF NOT EXISTS idx_scores_class        ON scores(class_level);
+CREATE INDEX IF NOT EXISTS idx_scores_term_year    ON scores(term, year);
 CREATE INDEX IF NOT EXISTS idx_attendance_date     ON attendance(date);
 CREATE INDEX IF NOT EXISTS idx_attendance_student  ON attendance(student_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_class    ON attendance(class_level);
+CREATE INDEX IF NOT EXISTS idx_attendance_term_year ON attendance(term, year);
 CREATE INDEX IF NOT EXISTS idx_students_class      ON students(class);
 CREATE INDEX IF NOT EXISTS idx_users_student       ON users(student_id);
 CREATE INDEX IF NOT EXISTS idx_users_teacher       ON users(teacher_id);

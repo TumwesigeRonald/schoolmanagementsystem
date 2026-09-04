@@ -76,6 +76,27 @@ let termSettings = {
     nextEnds: ''
 };
 /* ---------------------------------------------------------
+   1c-bis. VIEWED TERM (multi-term data switching)
+   termSettings above is the SCHOOL's current active term (Admin-managed,
+   e.g. what's printed on new report cards). selectedTerm/selectedYear is a
+   separate concept: which term THIS USER is currently looking at in
+   Scores/Attendance/Reports. They're independent on purpose — a teacher
+   should be able to open Term 1's marks for review while the school has
+   already moved into Term 2, without that view being clobbered by (or
+   clobbering) the live term.
+   null/null means "not explicitly switched yet — follow the current term";
+   getViewedTermYear() below is what every scores/attendance call site
+   should use instead of reading termSettings directly.
+   termHistory holds every {term, year} combination that actually has data
+   on file (see refreshTermHistory), used to populate the switcher dropdown.
+   --------------------------------------------------------- */
+let selectedTerm = null;
+let selectedYear = null;
+let termHistory = [];
+function getViewedTermYear() {
+    return { term: selectedTerm || termSettings.term, year: selectedYear || termSettings.year };
+}
+/* ---------------------------------------------------------
    1c2. REPORT CARD REMARKS (Class Teacher's / Headteacher's
    comments) — keyed by student+term+year.
    This in-memory object is now hydrated from the backend
@@ -269,13 +290,16 @@ async function refreshNoticesList() {
     } catch (e) { /* keep existing local list */ }
 }
 async function refreshScoresList() {
-    // marksStorage is keyed by recordKey ("SUBJECT_studentId"), same
-    // convention the backend uses for scores.record_key — just re-key the
-    // rows the API returns into that shape. Grading/report-card logic
+    // marksStorage is keyed by recordKey ("SUBJECT_studentId_Term X_YYYY"),
+    // same convention the backend uses for scores.record_key — just re-key
+    // the rows the API returns into that shape. Grading/report-card logic
     // (section 6 below) reads marksStorage the same way either way, so
     // nothing about how marks are calculated or displayed changes.
+    // Always scoped to the term currently being viewed (getViewedTermYear),
+    // never the whole table — this is what keeps Term 1's marks separate
+    // from Term 2's in memory, not just in the database.
     try {
-        const remote = await ScoresAPI.list();
+        const remote = await ScoresAPI.list(undefined, undefined, getViewedTermYear());
         if (Array.isArray(remote)) {
             const rehydrated = {};
             remote.forEach(row => {
@@ -288,6 +312,44 @@ async function refreshScoresList() {
             marksStorage = rehydrated;
         }
     } catch (e) { /* keep existing local marksStorage */ }
+}
+// Every {term, year} combination that has data on file, for the term
+// switcher dropdown (see renderTermSwitcher / handleTermSwitcherChange).
+async function refreshTermHistory() {
+    try {
+        const remote = await TermAPI.history();
+        if (Array.isArray(remote) && remote.length) termHistory = remote;
+    } catch (e) { /* keep existing local termHistory */ }
+}
+// Fired when the user picks a different term/year from the switcher.
+// Re-scopes every term-sensitive in-memory store to the newly selected
+// term and re-renders whatever's currently on screen, so switching terms
+// never shows a stale mix of two terms' data.
+async function handleTermSwitcherChange(value) {
+    const [term, yearStr] = value.split('|');
+    selectedTerm = term;
+    selectedYear = Number(yearStr);
+    await Promise.all([
+        refreshScoresList(),
+        refreshAttendanceForTerm(selectedTerm, selectedYear)
+    ]);
+    renderTermSwitcher();
+    // Re-render whichever screen is currently open so the switch is
+    // reflected immediately rather than only on next navigation.
+    if (typeof refreshCurrentTabView === 'function') refreshCurrentTabView();
+}
+// Populates/refreshes the term-switcher <select> in the header from
+// termHistory, selecting whichever term/year is currently being viewed.
+function renderTermSwitcher() {
+    const el = document.getElementById('term-switcher');
+    if (!el) return;
+    const viewed = getViewedTermYear();
+    const options = termHistory.length ? termHistory : [{ term: viewed.term, year: viewed.year }];
+    el.innerHTML = options.map(o => {
+        const value = `${o.term}|${o.year}`;
+        const selected = (o.term === viewed.term && Number(o.year) === Number(viewed.year)) ? ' selected' : '';
+        return `<option value="${escapeHTML(value)}"${selected}>${escapeHTML(o.term)}, ${o.year}</option>`;
+    }).join('');
 }
 async function refreshAttendanceList() {
     // attendanceStorage is keyed by recordKey ("date_studentId"), same
@@ -322,6 +384,21 @@ async function refreshAttendanceForStudent(studentId) {
             remote.forEach(row => { attendanceStorage[row.recordKey] = row.status; });
         }
     } catch (e) { /* keep existing local attendanceStorage for this student */ }
+}
+// Pulls one term's full attendance register (all classes/dates within it)
+// and REPLACES attendanceStorage rather than merging — unlike the
+// rolling-window/per-student helpers above, this backs the Attendance tab
+// while a past term is being viewed, so it must show only that term's
+// register, not a mix of the recent window plus the requested term.
+async function refreshAttendanceForTerm(term, year) {
+    try {
+        const remote = await AttendanceAPI.listForTerm(term, year);
+        if (Array.isArray(remote)) {
+            const rehydrated = {};
+            remote.forEach(row => { rehydrated[row.recordKey] = row.status; });
+            attendanceStorage = rehydrated;
+        }
+    } catch (e) { /* keep existing local attendanceStorage */ }
 }
 // Pulls one student's report-card remarks (every term/year on file) from
 // the backend and merges them into reportRemarksStorage, same on-demand,
@@ -391,15 +468,19 @@ async function migrateLocalReportRemarksToServer() {
     }
 }
 async function syncAllRemoteData() {
-    // Run in parallel — independent endpoints, no ordering dependency.
+    // refreshTermSettings must resolve BEFORE refreshScoresList/refreshTermHistory:
+    // getViewedTermYear() falls back to termSettings when the user hasn't
+    // explicitly switched terms yet, so scores would fetch the wrong term on
+    // first login if this ran in the same Promise.all batch as the rest.
+    await refreshTermSettings();
     await Promise.all([
         refreshStudentsList(),
         refreshTeachersList(),
         refreshResourcesList(),
-        refreshTermSettings(),
         refreshScoresList(),
         refreshAttendanceList(),
-        refreshNoticesList()
+        refreshNoticesList(),
+        refreshTermHistory()
     ]);
 }
 /* ---------------------------------------------------------
@@ -489,8 +570,13 @@ async function applySessionUser(user) {
     const roleTag = document.getElementById('user-role-tag');
     if (roleTag) roleTag.innerText = currentUser.role;
 
-    const termBadge = document.getElementById('term-badge');
-    if (termBadge) termBadge.innerText = `${termSettings.term}, ${termSettings.year}`;
+    // Reset the viewed term to "follow current" on every fresh login, then
+    // render the switcher — this deliberately does NOT persist selectedTerm
+    // across logins, so a user always lands on the live term first and has
+    // to explicitly choose to look at history each session.
+    selectedTerm = null;
+    selectedYear = null;
+    renderTermSwitcher();
 
     const banner = document.getElementById('welcome-banner');
     if (banner) {
@@ -614,6 +700,7 @@ function openUnderConstructionNotice(sectionName) {
         </div>
     `;
 }
+let currentTabName = null; // tracks whatever switchTab() last rendered, so refreshCurrentTabView() (e.g. after a term switch) knows what to re-render
 function switchTab(tabName) {
     // RBAC gate: never render a tab this role isn't permitted to access,
     // even if switchTab() is called directly (e.g. from the console).
@@ -621,6 +708,7 @@ function switchTab(tabName) {
     if (!permissions.tabs.includes(tabName)) {
         tabName = permissions.defaultTab;
     }
+    currentTabName = tabName;
     const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
@@ -733,6 +821,13 @@ function switchTab(tabName) {
             break;
     }
     updateDashboardStats();
+}
+// Re-renders whatever tab is currently on screen without changing
+// navigation state — used after switching the viewed term so the visible
+// screen immediately reflects the newly loaded term/year data instead of
+// requiring the user to click away and back.
+function refreshCurrentTabView() {
+    if (currentTabName) switchTab(currentTabName);
 }
 /* ---------------------------------------------------------
    3. DASHBOARD STATISTICS CALCULATION
@@ -1513,7 +1608,8 @@ async function saveModalRemarksNow(studentId, buttonEl) {
 async function removeStudentSubject(studentId, subject) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
     if (!confirm(`Remove ${subject} from this student? This clears all recorded marks for it and cannot be undone.`)) return;
-    const recordKey = `${subject}_${studentId}`;
+    const { term, year } = getViewedTermYear();
+    const recordKey = buildScoreRecordKey(subject, studentId, term, year);
     try {
         await ScoresAPI.remove(recordKey);
     } catch (err) {
@@ -1972,8 +2068,9 @@ function loadScoreSheetData() {
     }
     
     // Same fix as loadStudentData(): assemble all rows first, write once.
+    const { term: viewedTerm, year: viewedYear } = getViewedTermYear();
     tbody.innerHTML = classStudents.map(student => {
-        const recordKey = `${selectedSubject}_${student.id}`;
+        const recordKey = buildScoreRecordKey(selectedSubject, student.id, viewedTerm, viewedYear);
         return isALevel ? buildALevelRow(student, recordKey, isSubsidiary) : buildOLevelRow(student, recordKey);
     }).join('');
     // Re-apply any existing search term so it stays in effect across a
@@ -2271,7 +2368,8 @@ function updateMarks(studId, type, value, inputEl) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
-    const recordKey = `${selectedSubject}_${studId}`;
+    const termYear = getViewedTermYear();
+    const recordKey = buildScoreRecordKey(selectedSubject, studId, termYear.term, termYear.year);
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: null, ao2: null, eot: null };
     const [min, max] = O_LEVEL_FIELD_LIMITS[type] || [0, 100];
     const cleanValue = clampValue(value, min, max);
@@ -2306,7 +2404,7 @@ function updateMarks(studId, type, value, inputEl) {
     if (gradeEl) gradeEl.innerText = displayOrDash(gradeData.grade, '');
     if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeData.descriptor, '');
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
-    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
+    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value, termYear)
         .then(() => markRowSaveState(recordKey, true))
         .catch(err => handleScoreSaveError(err, recordKey)); // UI already updated optimistically above; this surfaces real save failures instead of hiding them
     updateDashboardStats();
@@ -2315,7 +2413,8 @@ function updateALevelMarks(studId, type, value, inputEl) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
-    const recordKey = `${selectedSubject}_${studId}`;
+    const termYear = getViewedTermYear();
+    const recordKey = buildScoreRecordKey(selectedSubject, studId, termYear.term, termYear.year);
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: null, p2: null };
     // A-Level papers are whole-number marks only (e.g. 90, 98) — round any
     // clamped value so decimals never enter storage/display for this table.
@@ -2341,7 +2440,7 @@ function updateALevelMarks(studId, type, value, inputEl) {
     if (descriptorEl) descriptorEl.innerText = displayOrDash(gradeInfo.descriptor, '');
     if (pointsEl) pointsEl.innerText = displayOrDash(gradeInfo.points, '');
     unsavedScoreRows.add(recordKey); // pending until the save below resolves — guards against a refresh mid-flight
-    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value)
+    ScoresAPI.save(recordKey, marks, document.getElementById('score-class-select')?.value, termYear)
         .then(() => markRowSaveState(recordKey, true))
         .catch(err => handleScoreSaveError(err, recordKey)); // UI already updated optimistically above; this surfaces real save failures instead of hiding them
     updateDashboardStats();
@@ -2350,12 +2449,13 @@ function updateOLevelRemarks(studId, value) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
-    const recordKey = `${selectedSubject}_${studId}`;
+    const termYear = getViewedTermYear();
+    const recordKey = buildScoreRecordKey(selectedSubject, studId, termYear.term, termYear.year);
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { ao1: null, ao2: null, eot: null };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
     unsavedScoreRows.add(recordKey);
-    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value)
+    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value, termYear)
         .then(() => markRowSaveState(recordKey, true))
         .catch(err => handleScoreSaveError(err, recordKey));
 }
@@ -2363,12 +2463,13 @@ function updateALevelRemarks(studId, value) {
     if (!getPermissions(currentUser.role).canManageScores) return; // RBAC guard
     const subjectSelect = document.getElementById('score-subject-select');
     const selectedSubject = subjectSelect ? subjectSelect.value : "GENERAL";
-    const recordKey = `${selectedSubject}_${studId}`;
+    const termYear = getViewedTermYear();
+    const recordKey = buildScoreRecordKey(selectedSubject, studId, termYear.term, termYear.year);
     if (!marksStorage[recordKey]) marksStorage[recordKey] = { p1: null, p2: null };
     marksStorage[recordKey].remarks = value.trim();
     if (marksStorage[recordKey].remarks !== '') marksStorage[recordKey].touched = true;
     unsavedScoreRows.add(recordKey);
-    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value)
+    ScoresAPI.save(recordKey, marksStorage[recordKey], document.getElementById('score-class-select')?.value, termYear)
         .then(() => markRowSaveState(recordKey, true))
         .catch(err => handleScoreSaveError(err, recordKey));
 }
@@ -2715,14 +2816,15 @@ async function generateReportCards() {
    (or stay off) a student's report card the moment real data is entered
    or removed.
    --------------------------------------------------------- */
-function getALevelSubjectRecords(student) {
+function getALevelSubjectRecords(student, termYear) {
+    const { term, year } = termYear || getViewedTermYear();
     return aLevelSubjects
         .filter(subj => {
-            const m = marksStorage[`${subj}_${student.id}`];
+            const m = marksStorage[buildScoreRecordKey(subj, student.id, term, year)];
             return m && m.touched;
         })
         .map(subj => {
-            const recordKey = `${subj}_${student.id}`;
+            const recordKey = buildScoreRecordKey(subj, student.id, term, year);
             const marks = marksStorage[recordKey];
             const isSubsidiary = subsidiarySubjects.includes(subj.toUpperCase());
             const avgMark = computeALevelAvgMark(marks);
@@ -2735,14 +2837,15 @@ function getALevelSubjectRecords(student) {
         // profile view, performance summary, or report card.
         .filter(record => record.avgMark !== null);
 }
-function getOLevelSubjectRecords(student) {
+function getOLevelSubjectRecords(student, termYear) {
+    const { term, year } = termYear || getViewedTermYear();
     return oLevelSubjects
         .filter(subj => {
-            const m = marksStorage[`${subj}_${student.id}`];
+            const m = marksStorage[buildScoreRecordKey(subj, student.id, term, year)];
             return m && m.touched;
         })
         .map(subj => {
-            const recordKey = `${subj}_${student.id}`;
+            const recordKey = buildScoreRecordKey(subj, student.id, term, year);
             const marks = marksStorage[recordKey];
             const avScore = calculateAOAverage(marks.ao1, marks.ao2);
             const faScore = (avScore / 3.0) * 20;
@@ -4242,7 +4345,8 @@ function computeSubjectMarksStatusRow(subject, classLevels) {
         const studentsInClass = studentsList.filter(s => s.class === cls);
         const total = studentsInClass.length;
         const recorded = studentsInClass.filter(s => {
-            const m = marksStorage[`${subject}_${s.id}`];
+            const { term, year } = getViewedTermYear();
+            const m = marksStorage[buildScoreRecordKey(subject, s.id, term, year)];
             // Use hasRecordedScore (real ao1/ao2/eot/p1/p2 field check) instead
             // of the stale `touched` flag: `touched` is set true the first time
             // a teacher opens/edits a subject and never gets reset, so it stays

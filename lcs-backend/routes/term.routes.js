@@ -32,4 +32,21 @@ router.put('/', authenticate, requireRole('Administrator'), asyncHandler(async (
   res.json(rows[0]);
 }));
 
+// GET /api/settings/term/history — everyone can read (needed to populate
+// the term-switcher dropdown). Returns every distinct (term, year) that
+// actually has scores and/or attendance on file, newest first, plus
+// whichever one term_settings currently calls "current" (so the switcher
+// can show it even before any marks have been entered for it yet).
+router.get('/history', authenticate, asyncHandler(async (req, res) => {
+  const { rows } = await db.query(`
+    SELECT term, year FROM scores
+    UNION
+    SELECT term, year FROM attendance WHERE term IS NOT NULL
+    UNION
+    SELECT term, year FROM term_settings WHERE id = 1
+    ORDER BY year DESC, term DESC
+  `);
+  res.json(rows);
+}));
+
 module.exports = router;

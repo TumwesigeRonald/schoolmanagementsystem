@@ -278,6 +278,16 @@ img {
     padding: 5px 10px;
     border-radius: 999px;
 }
+/* term-switcher reuses .role-tag's pill look but is a real <select>, so
+   reset the native control chrome (border/appearance) it'd otherwise carry. */
+.term-switcher {
+    border: none;
+    cursor: pointer;
+    outline: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
 .logout-btn {
     background: var(--rose-600);
     color: #fff;

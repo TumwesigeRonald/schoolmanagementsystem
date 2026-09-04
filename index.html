@@ -67,7 +67,7 @@
             <h1 id="page-title" class="page-title">Dashboard</h1>
         </div>
         <div class="header-right">
-            <span id="term-badge" class="role-tag"></span>
+            <select id="term-switcher" class="role-tag term-switcher" onchange="handleTermSwitcherChange(this.value)" title="Switch which term you're viewing"></select>
             <span id="user-badge" class="user-badge"></span>
             <span id="user-role-tag" class="role-tag"></span>
             <button onclick="handleLogout()" class="logout-btn"><i class="fa-solid fa-arrow-right-from-bracket"></i> Logout</button>

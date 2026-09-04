@@ -187,7 +187,8 @@ function computeOLevelSummaryRow(student, subjects) {
     let total = 0;
     let countedSubjects = 0;
     subjects.forEach(subject => {
-        const recordKey = `${subject}_${student.id}`;
+        const { term, year } = getViewedTermYear();
+        const recordKey = buildScoreRecordKey(subject, student.id, term, year);
         // Same rule as buildOLevelRow(): an unrecorded subject is
         // { ao1: null, ao2: null, eot: null } — never defaulted to 0.
         const marks = marksStorage[recordKey] || { ao1: null, ao2: null, eot: null };
@@ -218,7 +219,8 @@ function computeALevelSummaryRow(student, subjects) {
     let totalMarks = 0;
     let gradedSubjects = 0;
     subjects.forEach(subject => {
-        const recordKey = `${subject}_${student.id}`;
+        const { term, year } = getViewedTermYear();
+        const recordKey = buildScoreRecordKey(subject, student.id, term, year);
         // Same rule as buildALevelRow(): an unrecorded subject is
         // { p1: null, p2: null } — never defaulted to 0.
         const marks = marksStorage[recordKey] || { p1: null, p2: null };

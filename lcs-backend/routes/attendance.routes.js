@@ -5,15 +5,20 @@ const asyncHandler = require('../middleware/asyncHandler');
 
 const router = express.Router();
 
-// GET /api/attendance?class=S.4&date=2026-07-27&since=2026-01-01&studentId=LCS/001
+// GET /api/attendance?class=S.4&date=2026-07-27&since=2026-01-01&studentId=LCS/001&term=Term 1&year=2026
 router.get('/', authenticate, asyncHandler(async (req, res) => {
-  const { class: classLevel, date, since, studentId } = req.query;
+  const { class: classLevel, date, since, studentId, term, year } = req.query;
 
   if (req.user.role === 'Student') {
+    const conditions = ['student_id = $1'];
+    const values = [req.user.studentId];
+    let i = 2;
+    if (term) { conditions.push(`term = $${i++}`); values.push(term); }
+    if (year) { conditions.push(`year = $${i++}`); values.push(Number(year)); }
     const { rows } = await db.query(
-      `SELECT record_key AS "recordKey", date, student_id AS "studentId", status
-       FROM attendance WHERE student_id = $1 ORDER BY date DESC`,
-      [req.user.studentId]
+      `SELECT record_key AS "recordKey", date, student_id AS "studentId", term, year, status
+       FROM attendance WHERE ${conditions.join(' AND ')} ORDER BY date DESC`,
+      values
     );
     return res.json(rows);
   }
@@ -31,18 +36,31 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   // actually computing that student's report-card attendance summary,
   // rather than pulling every student's history to get one of them.
   if (studentId) { conditions.push(`student_id = $${i++}`); values.push(studentId); }
+  // "term"/"year" scope to one term's register — used by the term-switcher
+  // so past terms' attendance can be viewed without computing date ranges.
+  if (term) { conditions.push(`term = $${i++}`); values.push(term); }
+  if (year) { conditions.push(`year = $${i++}`); values.push(Number(year)); }
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const { rows } = await db.query(
-    `SELECT record_key AS "recordKey", date, student_id AS "studentId", class_level AS "classLevel", status
+    `SELECT record_key AS "recordKey", date, student_id AS "studentId", class_level AS "classLevel", term, year, status
      FROM attendance ${where} ORDER BY date DESC, student_id`,
     values
   );
   res.json(rows);
 }));
 
+// term/year default to term_settings' current row when the caller omits
+// them, same convention as scores.routes.js's resolveTermYear.
+async function resolveTermYear(body) {
+  if (body.term && body.year) return { term: body.term, year: Number(body.year) };
+  const { rows } = await db.query(`SELECT term, year FROM term_settings WHERE id = 1`);
+  const current = rows[0] || { term: 'Term 1', year: new Date().getFullYear() };
+  return { term: body.term || current.term, year: body.year ? Number(body.year) : current.year };
+}
+
 // POST /api/attendance — set a single student's status for a date.
-// Body: { date, studentId, status }
+// Body: { date, studentId, status, term?, year? }
 router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const { date, studentId, status } = req.body || {};
   if (!date || !studentId || !status) {
@@ -54,13 +72,14 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
     return res.status(404).json({ message: `Student ${studentId} not found.` });
   }
 
+  const { term, year } = await resolveTermYear(req.body || {});
   const recordKey = `${date}_${studentId}`;
   const { rows } = await db.query(
-    `INSERT INTO attendance (record_key, date, student_id, class_level, status, updated_at)
-     VALUES ($1,$2,$3,$4,$5, now())
-     ON CONFLICT (record_key) DO UPDATE SET status = EXCLUDED.status, updated_at = now()
-     RETURNING record_key AS "recordKey", date, student_id AS "studentId", status`,
-    [recordKey, date, studentId, student.rows[0].class, status]
+    `INSERT INTO attendance (record_key, date, student_id, class_level, term, year, status, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7, now())
+     ON CONFLICT (record_key) DO UPDATE SET status = EXCLUDED.status, term = EXCLUDED.term, year = EXCLUDED.year, updated_at = now()
+     RETURNING record_key AS "recordKey", date, student_id AS "studentId", term, year, status`,
+    [recordKey, date, studentId, student.rows[0].class, term, year, status]
   );
 
   res.json(rows[0]);
@@ -77,6 +96,7 @@ router.put('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHand
     return res.status(400).json({ message: 'date and records are required.' });
   }
 
+  const { term, year } = await resolveTermYear(req.body || {});
   const prefix = `${date}_`;
   const entries = Object.entries(records).filter(([key]) => key.startsWith(prefix));
 
@@ -91,10 +111,10 @@ router.put('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHand
       if (classLevel && student.rows[0].class !== classLevel) continue;
 
       await client.query(
-        `INSERT INTO attendance (record_key, date, student_id, class_level, status, updated_at)
-         VALUES ($1,$2,$3,$4,$5, now())
-         ON CONFLICT (record_key) DO UPDATE SET status = EXCLUDED.status, updated_at = now()`,
-        [key, date, studentId, student.rows[0].class, status]
+        `INSERT INTO attendance (record_key, date, student_id, class_level, term, year, status, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7, now())
+         ON CONFLICT (record_key) DO UPDATE SET status = EXCLUDED.status, term = EXCLUDED.term, year = EXCLUDED.year, updated_at = now()`,
+        [key, date, studentId, student.rows[0].class, term, year, status]
       );
       saved += 1;
     }

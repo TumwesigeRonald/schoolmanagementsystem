@@ -69,8 +69,20 @@ const ENDPOINTS = {
     TEACHER_RESET_PASSWORD: (id) => `/teachers/${encodeURIComponent(id)}/reset-password`,
 
     // --- Scores / Marks ---
+    // term/year are appended (when provided) by SCORES_QUERY / ScoresAPI
+    // below rather than baked into these builders, so every scores read
+    // is explicitly scoped to the term the caller is looking at instead
+    // of silently falling back to "whatever the server thinks is current".
     SCORES: "/scores",
-    SCORES_BY_CLASS_SUBJECT: (cls, subject) => `/scores?class=${encodeURIComponent(cls)}&subject=${encodeURIComponent(subject)}`,
+    SCORES_QUERY: (params = {}) => {
+        const qs = new URLSearchParams();
+        if (params.class) qs.set('class', params.class);
+        if (params.subject) qs.set('subject', params.subject);
+        if (params.term) qs.set('term', params.term);
+        if (params.year) qs.set('year', params.year);
+        const s = qs.toString();
+        return s ? `/scores?${s}` : '/scores';
+    },
     SCORE_BY_RECORD_KEY: (recordKey) => `/scores/${encodeURIComponent(recordKey)}`,
     SCORES_BULK_INITIALS: "/scores/bulk-initials",
 
@@ -79,6 +91,7 @@ const ENDPOINTS = {
     ATTENDANCE_BY_CLASS_DATE: (cls, date) => `/attendance?class=${encodeURIComponent(cls)}&date=${encodeURIComponent(date)}`,
     ATTENDANCE_SINCE: (sinceDate) => `/attendance?since=${encodeURIComponent(sinceDate)}`,
     ATTENDANCE_BY_STUDENT: (studentId) => `/attendance?studentId=${encodeURIComponent(studentId)}`,
+    ATTENDANCE_BY_TERM: (term, year) => `/attendance?term=${encodeURIComponent(term)}&year=${encodeURIComponent(year)}`,
 
     // --- Resources ---
     RESOURCES: "/resources",
@@ -87,6 +100,7 @@ const ENDPOINTS = {
 
     // --- Term / academic calendar settings ---
     TERM_SETTINGS: "/settings/term",
+    TERM_HISTORY: "/settings/term/history",
 
     // --- Report cards (optional server-side PDF generation) ---
     REPORT_CARD: (studentId) => `/reports/${encodeURIComponent(studentId)}`,
@@ -448,25 +462,36 @@ const TeachersAPI = {
    9. SCORES / MARKS DATA-ACCESS LAYER
    --------------------------------------------------------- */
 const ScoresAPI = {
-    async list() {
+    // termYear: { term, year } — the term currently being viewed. Every
+    // caller should pass the app's selectedTerm (see script.js), not
+    // termSettings — those are two different things: termSettings is the
+    // school's "current active term", selectedTerm is "what this user is
+    // looking at right now", and they diverge whenever someone opens a
+    // past term's records while the school has already moved on.
+    async list(classLevel, subject, termYear) {
         // No local-storage fallback here on purpose: marksStorage already *is*
         // the local store, so there's nothing useful to fall back to — if the
         // backend can't be reached, refreshScoresList() in script.js just
         // leaves the existing in-memory marksStorage untouched.
         return remoteFirst(
-            () => apiRequest(ENDPOINTS.SCORES),
+            () => apiRequest(ENDPOINTS.SCORES_QUERY({ class: classLevel, subject, term: termYear && termYear.term, year: termYear && termYear.year })),
             () => null
         );
     },
-    async save(recordKey, marksRecord, classLevel) {
-        const [subject, studentId] = [recordKey.split("_").slice(0, -1).join("_"), recordKey.split("_").pop()];
+    async save(recordKey, marksRecord, classLevel, termYear) {
+        const parsed = parseScoreRecordKey(recordKey);
         // NOTE: deliberately NOT using remoteFirst's silent local-fallback here.
         // marksStorage lives only in this tab's memory (nothing backs it with
         // localStorage), so a network failure "succeeding" via local fallback
         // would mean the mark quietly vanishes on refresh with zero indication
         // anything was wrong — which is exactly the bug this used to cause.
         // Every failure, network or server-side, must reach the caller.
-        const body = { subject, studentId, classLevel, ...marksRecord };
+        const body = {
+            subject: parsed.subject, studentId: parsed.studentId, classLevel,
+            term: (termYear && termYear.term) || parsed.term,
+            year: (termYear && termYear.year) || parsed.year,
+            ...marksRecord
+        };
         // A cleared score field is kept as '' in local state (see
         // updateMarks/updateALevelMarks) so it renders as a clean blank
         // instead of any stale value. The scores table's mark columns are
@@ -482,22 +507,42 @@ const ScoresAPI = {
             throw err;
         }
     },
-    // Fully unlinks a subject from one student: deletes the scores row
-    // outright (not a save() with cleared values, which would just re-trigger
-    // the sticky touched-flag OR'ing on the backend). Same no-silent-fallback
-    // reasoning as save() — the caller must know if this didn't persist.
+    // Fully unlinks a subject from one student for one term: deletes the
+    // scores row outright (not a save() with cleared values, which would
+    // just re-trigger the sticky touched-flag OR'ing on the backend). Same
+    // no-silent-fallback reasoning as save() — the caller must know if this
+    // didn't persist. recordKey must be the full 4-segment key (subject,
+    // studentId, term, year) so this can never touch a different term's row.
     async remove(recordKey) {
         return apiRequest(ENDPOINTS.SCORE_BY_RECORD_KEY(recordKey), { method: "DELETE" });
     },
     // Stamps one initials value onto every existing scores row for a
-    // class+subject in a single request, instead of one save() call per
-    // student. Same no-silent-fallback reasoning as save() above — a bulk
-    // action failing silently would be worse than a single-row one, since it
-    // could look like an entire class got updated when nothing was saved.
-    async applyBulkInitials(classLevel, subject, initials) {
-        return apiRequest(ENDPOINTS.SCORES_BULK_INITIALS, { method: "POST", body: { classLevel, subject, initials } });
+    // class+subject+term+year in a single request, instead of one save()
+    // call per student. Same no-silent-fallback reasoning as save() above.
+    async applyBulkInitials(classLevel, subject, initials, termYear) {
+        return apiRequest(ENDPOINTS.SCORES_BULK_INITIALS, {
+            method: "POST",
+            body: { classLevel, subject, initials, term: termYear && termYear.term, year: termYear && termYear.year }
+        });
     }
 };
+
+// recordKey convention for scores is "SUBJECT_studentId_Term X_YYYY" (four
+// segments; the subject itself may contain underscores, so parsing walks in
+// from both ends rather than assuming a fixed split). Centralised here so
+// every call site builds/reads the key the same way instead of hand-rolling
+// string splits that break the moment the format changes again.
+function buildScoreRecordKey(subject, studentId, term, year) {
+    return `${subject}_${studentId}_${term}_${year}`;
+}
+function parseScoreRecordKey(recordKey) {
+    const parts = recordKey.split('_');
+    const year = parts.pop();
+    const term = parts.pop();
+    const studentId = parts.pop();
+    const subject = parts.join('_');
+    return { subject, studentId, term, year: Number(year) };
+}
 
 /* ---------------------------------------------------------
    10. ATTENDANCE DATA-ACCESS LAYER
@@ -532,17 +577,28 @@ const AttendanceAPI = {
             () => null
         );
     },
-    async setStatus(date, studentId, status) {
+    // One term's register — used by the term-switcher to show a past
+    // term's attendance without the caller having to know its date range.
+    async listForTerm(term, year) {
         return remoteFirst(
-            () => apiRequest(ENDPOINTS.ATTENDANCE, { method: "POST", body: { date, studentId, status } }),
+            () => apiRequest(ENDPOINTS.ATTENDANCE_BY_TERM(term, year)),
+            () => null
+        );
+    },
+    async setStatus(date, studentId, status, termYear) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.ATTENDANCE, {
+                method: "POST",
+                body: { date, studentId, status, term: termYear && termYear.term, year: termYear && termYear.year }
+            }),
             () => { attendanceStorage[`${date}_${studentId}`] = status; return status; }
         );
     },
-    async saveRegistry(date, classLevel) {
+    async saveRegistry(date, classLevel, termYear) {
         return remoteFirst(
             () => apiRequest(ENDPOINTS.ATTENDANCE, {
                 method: "PUT",
-                body: { date, classLevel, records: attendanceStorage }
+                body: { date, classLevel, records: attendanceStorage, term: termYear && termYear.term, year: termYear && termYear.year }
             }),
             () => true
         );
@@ -589,6 +645,17 @@ const TermAPI = {
         return remoteFirst(
             () => apiRequest(ENDPOINTS.TERM_SETTINGS, { method: "PUT", body: settings }),
             () => { Object.assign(termSettings, settings); return termSettings; }
+        );
+    },
+    // Every distinct { term, year } that has data on file, newest first —
+    // used to populate the term-switcher dropdown so a user can only ever
+    // pick a term that actually has something to show. Falls back to just
+    // the current termSettings value when the backend isn't reachable, so
+    // the switcher still shows at least one option offline.
+    async history() {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.TERM_HISTORY),
+            () => [{ term: termSettings.term, year: termSettings.year }]
         );
     }
 };
