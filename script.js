@@ -382,8 +382,10 @@ async function resetTermSwitcherToCurrent() {
 // Populates/refreshes the sidebar's Year + Term selects from
 // getTermSwitcherYearOptions()/TERM_NAMES, selecting whichever term/year
 // is currently being viewed, and shows/hides the whole block by role —
-// only Admin/Teacher get to browse other terms; Students always just see
-// their own current-term data.
+// every role (Admin/Teacher/Student) can browse other terms now; a
+// Student's underlying data is still always scoped to their own
+// studentId server-side (see routes/scores.routes.js etc.), so this only
+// changes which term of THEIR OWN data they can look at, never whose.
 function renderTermSwitcher() {
     const wrap = document.getElementById('sidebar-term-switcher');
     const yearEl = document.getElementById('sidebar-term-year');
@@ -391,7 +393,7 @@ function renderTermSwitcher() {
     const resetBtn = document.getElementById('sidebar-term-reset');
     if (!wrap || !yearEl || !termEl) return;
 
-    const canSwitch = getPermissions(currentUser.role).canViewAllReports; // true for Admin & Teacher, false for Student
+    const canSwitch = getPermissions(currentUser.role).canSwitchTerm; // true for Admin, Teacher & Student
     wrap.classList.toggle('hidden', !canSwitch);
     if (!canSwitch) return;
 
@@ -1561,8 +1563,14 @@ function buildModalOverallMetricBox(student, subjectRecords, isALevel) {
    --------------------------------------------------------- */
 function buildModalCommentsSection(student) {
     const editable = getPermissions(currentUser.role).canViewAllReports;
-    const term = termSettings.term;
-    const year = termSettings.year;
+    // Scoped to whichever term/year is currently being VIEWED (the sidebar
+    // term switcher), same as the subject scores above (getALevelSubjectRecords/
+    // getOLevelSubjectRecords) — not termSettings.term/year directly, which is
+    // the school's live active term and does not change when Admin/Teacher
+    // browses a past term. Using termSettings here was the bug: scores/
+    // attendance correctly followed the switcher while this comment box kept
+    // showing/saving against the live term regardless of what was selected.
+    const { term, year } = getViewedTermYear();
     const key = getReportRemarkKey(student.id, term, year);
     const classTeacherValue = getReportRemark(student.id, term, year, 'classTeacherComment');
     const headteacherValue = getReportRemark(student.id, term, year, 'headteacherComment');
@@ -1645,8 +1653,11 @@ function buildModalSaveSection(student) {
 }
 async function saveModalRemarksNow(studentId, buttonEl) {
     if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
-    const term = termSettings.term;
-    const year = termSettings.year;
+    // Same viewed-term scoping as buildModalCommentsSection — must match
+    // exactly, or the "key" computed here (used to find the textareas on
+    // screen) would point at a different term/year than what's actually
+    // displayed, saving the comment under the wrong term.
+    const { term, year } = getViewedTermYear();
     const key = getReportRemarkKey(studentId, term, year);
     const container = buttonEl ? buttonEl.closest('#student-profile-body, #own-dashboard-summary-body') : document;
     const classTeacherEl = container ? container.querySelector(`textarea[data-remark-key="${key}"][data-remark-field="classTeacherComment"]`) : null;

@@ -249,6 +249,7 @@ const ROLE_PERMISSIONS = {
         canManageTeachers: true,
         canManageTerm: true,
         canViewAllReports: true,
+        canSwitchTerm: true,        // can browse a past term/year instead of only the live one
         canManageNotices: true,     // post/delete school bulletin notices
         canPrintWholeClass: true    // bulk "Print / Save PDF (Whole Class)" report-card export
     },
@@ -264,6 +265,7 @@ const ROLE_PERMISSIONS = {
         canManageTeachers: false,   // can only edit their own profile
         canManageTerm: false,       // calendar/term dates are admin-only
         canViewAllReports: true,
+        canSwitchTerm: true,        // can browse a past term/year instead of only the live one
         canManageNotices: false,    // can read the bulletin, not post to it
         canPrintWholeClass: false   // whole-class bulk PDF export is Administrator-only
     },
@@ -278,6 +280,12 @@ const ROLE_PERMISSIONS = {
         canManageTeachers: false,
         canManageTerm: false,
         canViewAllReports: false,   // can only ever see their own report card
+        // Can still browse a past term/year of their OWN dashboard/report
+        // card/attendance — the backend already scopes every scores/
+        // attendance/remarks read to req.user.studentId regardless of which
+        // term/year is requested, so this only changes what the student can
+        // *view*, never whose data they can see.
+        canSwitchTerm: true,
         canManageNotices: false,
         canPrintWholeClass: false
     }
