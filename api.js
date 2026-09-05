@@ -85,6 +85,9 @@ const ENDPOINTS = {
     },
     SCORE_BY_RECORD_KEY: (recordKey) => `/scores/${encodeURIComponent(recordKey)}`,
     SCORES_BULK_INITIALS: "/scores/bulk-initials",
+    // Student-only: this student's term-by-term average score history,
+    // used by the "My Performance Trend" chart on the student dashboard.
+    SCORES_TREND: "/scores/trend",
 
     // --- Attendance ---
     ATTENDANCE: "/attendance",
@@ -532,6 +535,17 @@ const ScoresAPI = {
             method: "POST",
             body: { classLevel, subject, initials, term: termYear && termYear.term, year: termYear && termYear.year }
         });
+    },
+    // Student-only self-service call — the backend scopes this to
+    // req.user.studentId regardless of who's asking, same as list()'s
+    // Student branch. No local-storage fallback (same reasoning as
+    // list()): there's nothing meaningful to fall back to, so a network
+    // failure just resolves to null and the chart shows its empty state.
+    async trend() {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.SCORES_TREND),
+            () => null
+        );
     }
 };
 

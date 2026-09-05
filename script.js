@@ -50,6 +50,7 @@ const subsidiarySubjects = ["GENERAL PAPER", "SUBSIDIARY MATHEMATICS", "ICT (SUB
 let performanceChartInstance = null;
 let gradeDistributionChartInstance = null;
 let dashboardClassChartInstance = null;
+let myPerformanceTrendChartInstance = null;
 let performersLevelView = 'O-Level'; // toggle state for the Best & Worst Performers panel
 /* ---------------------------------------------------------
    1e. ADMIN NOTICE BOARD / SCHOOL BULLETIN (Dashboard widget)
@@ -837,6 +838,10 @@ function switchTab(tabName) {
     if (dashboardClassChartInstance) {
         dashboardClassChartInstance.destroy();
         dashboardClassChartInstance = null;
+    }
+    if (myPerformanceTrendChartInstance) {
+        myPerformanceTrendChartInstance.destroy();
+        myPerformanceTrendChartInstance = null;
     }
     switch (tabName) {
         case 'dashboard':
@@ -2775,6 +2780,22 @@ function renderOwnDashboardModule() {
                 <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
                 <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
             </div>
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-chart-line mr-1.5 text-teal-600"></i>My Performance Trend</h4>
+                <div class="relative h-72">
+                    <canvas id="my-performance-trend-chart" class="hidden"></canvas>
+                    <div id="my-performance-trend-empty" class="hidden absolute inset-0 flex items-center justify-center text-center text-slate-400 text-xs font-semibold px-6"></div>
+                    <div id="my-performance-trend-loading" class="absolute inset-0 flex items-center justify-center text-center text-slate-400 text-xs font-semibold">
+                        <i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Loading your term-by-term averages&hellip;
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-trophy mr-1.5 text-amber-500"></i>My Achievements</h4>
+                <div id="my-achievements-panel" class="text-center text-slate-400 text-xs font-semibold py-10">
+                    <i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Loading achievements&hellip;
+                </div>
+            </div>
             <div id="own-dashboard-summary-body" class="space-y-5 text-center text-slate-400 text-xs font-semibold py-10">
                 <i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Loading attendance &amp; performance summary&hellip;
             </div>
@@ -2782,13 +2803,193 @@ function renderOwnDashboardModule() {
     `;
 }
 // Fetches this student's full attendance history (same on-demand call the
-// admin/teacher profile modal and report card engine already use) and then
-// renders the shared profile body into the dashboard's own container id.
+// admin/teacher profile modal and report card engine already use) plus
+// their term-by-term score trend, in parallel, then renders all three
+// dashboard pieces (profile summary, trend chart, achievements) into
+// their own container ids. Each render function independently guards on
+// its container still being present (`if (!el) return;`), same pattern
+// as renderStudentProfileBody, in case the student navigates away from
+// Dashboard while these are still loading.
 async function initOwnDashboardModule() {
     const student = studentsList.find(s => s.id.toLowerCase() === (currentUser.studentId || currentUser.username).toLowerCase());
     if (!student) return;
-    await refreshAttendanceForStudent(student.id);
+    const [, trend] = await Promise.all([
+        refreshAttendanceForStudent(student.id),
+        ScoresAPI.trend()
+    ]);
     renderStudentProfileBody(student, 'own-dashboard-summary-body');
+    renderMyPerformanceTrendChart(trend);
+    renderMyAchievementsPanel(student, trend);
+}
+/* ---------------------------------------------------------
+   3c-i. PERSONAL PERFORMANCE TREND CHART
+   Line chart of this student's own term-by-term average score,
+   backed by GET /api/scores/trend (Student-only, always scoped
+   server-side to req.user.studentId — see scores.routes.js).
+   Terms with no valid mark yet come back with average: null and
+   are skipped here, so the line only ever connects real data
+   points instead of dipping to a misleading 0.
+   --------------------------------------------------------- */
+function renderMyPerformanceTrendChart(trend) {
+    const canvas = document.getElementById('my-performance-trend-chart');
+    if (!canvas) return; // navigated away from Dashboard while this was loading
+    const emptyState = document.getElementById('my-performance-trend-empty');
+    const loading = document.getElementById('my-performance-trend-loading');
+    if (loading) loading.classList.add('hidden');
+
+    if (myPerformanceTrendChartInstance) {
+        myPerformanceTrendChartInstance.destroy();
+        myPerformanceTrendChartInstance = null;
+    }
+
+    const points = (trend || []).filter(t => t.average !== null);
+    if (points.length === 0) {
+        canvas.classList.add('hidden');
+        if (emptyState) {
+            emptyState.classList.remove('hidden');
+            emptyState.textContent = trend === null
+                ? "Couldn't load your performance trend right now — please try again shortly."
+                : 'Your term-by-term trend will appear here once scores are recorded.';
+        }
+        return;
+    }
+    canvas.classList.remove('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
+
+    myPerformanceTrendChartInstance = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: points.map(p => p.label),
+            datasets: [{
+                label: 'My Average Score',
+                data: points.map(p => p.average),
+                borderColor: 'rgba(15, 118, 110, 1)',
+                backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                borderWidth: 2,
+                pointBackgroundColor: 'rgba(15, 118, 110, 1)',
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, max: 100, ticks: { font: { weight: 'bold' } } },
+                x: { ticks: { font: { weight: 'bold' } } }
+            }
+        }
+    });
+}
+/* ---------------------------------------------------------
+   3c-ii. "MY ACHIEVEMENTS" PANEL
+   Highlights positive signals only (score improvement, attendance
+   consistency, strongest subject, subjects on track) — never a
+   ranking against other students. Every input already comes from
+   data the backend scopes exclusively to the logged-in student:
+   subjectRecords via getOLevelSubjectRecords/getALevelSubjectRecords
+   (built from marksStorage, itself hydrated from GET /api/scores,
+   which forces student_id = req.user.studentId for the Student
+   role — see scores.routes.js), attendance via getAttendanceSummary
+   (built from attendanceStorage, same Student-role scoping in
+   attendance.routes.js), and trend via GET /api/scores/trend
+   (Student-only, same scoping). No client-side call here ever
+   passes another student's id.
+   --------------------------------------------------------- */
+function computeStudentAchievements(subjectRecords, isALevel, attendance, trend) {
+    const achievements = [];
+
+    // Score improvement: compare the two most recent terms that actually
+    // have a computed average (skips gaps from ungraded terms).
+    const gradedPoints = (trend || []).filter(t => t.average !== null);
+    if (gradedPoints.length >= 2) {
+        const last = gradedPoints[gradedPoints.length - 1];
+        const prev = gradedPoints[gradedPoints.length - 2];
+        const delta = last.average - prev.average;
+        if (delta > 0) {
+            achievements.push({
+                icon: 'fa-arrow-trend-up', color: 'emerald', title: 'Score Improvement',
+                description: `Your average rose from ${prev.average.toFixed(1)} (${prev.label}) to ${last.average.toFixed(1)} (${last.label}) — up ${delta.toFixed(1)} points.`
+            });
+        }
+    }
+
+    // Attendance consistency, for the term currently being viewed.
+    if (attendance.total > 0 && attendance.absent === 0) {
+        achievements.push({
+            icon: 'fa-calendar-check', color: 'teal', title: 'Perfect Attendance',
+            description: `No recorded absences this term across ${attendance.total} day${attendance.total === 1 ? '' : 's'} tracked.`
+        });
+    } else if (attendance.total > 0 && attendance.pct >= 90) {
+        achievements.push({
+            icon: 'fa-calendar-check', color: 'teal', title: 'Strong Attendance',
+            description: `${attendance.pct}% attendance this term (${attendance.present}/${attendance.total} days present).`
+        });
+    }
+
+    // Strongest subject this term, by whichever score type this level uses.
+    if (subjectRecords.length > 0) {
+        let best = null, bestScore = null;
+        subjectRecords.forEach(r => {
+            const score = isALevel ? r.avgMark : r.finalTotal;
+            if (score !== null && (bestScore === null || score > bestScore)) { best = r; bestScore = score; }
+        });
+        if (best) {
+            const bestGrade = isALevel ? best.gradeInfo.grade : best.gradeData.grade;
+            achievements.push({
+                icon: 'fa-star', color: 'amber', title: 'Strongest Subject',
+                description: `${best.subj} is your top-performing subject this term — ${bestScore}${isALevel ? '' : '/100'} (Grade ${bestGrade}).`
+            });
+        }
+    }
+
+    // Subjects graded A or B this term.
+    const strongSubjects = subjectRecords.filter(r => ['A', 'B'].includes(isALevel ? r.gradeInfo.grade : r.gradeData.grade));
+    if (strongSubjects.length > 0) {
+        achievements.push({
+            icon: 'fa-medal', color: 'indigo', title: 'Subjects On Track',
+            description: `${strongSubjects.length} subject${strongSubjects.length === 1 ? '' : 's'} graded A or B this term: ${strongSubjects.map(r => r.subj).join(', ')}.`
+        });
+    }
+
+    return achievements;
+}
+const ACHIEVEMENT_COLOR_CLASSES = {
+    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    teal: 'bg-teal-50 border-teal-200 text-teal-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700'
+};
+function renderMyAchievementsPanel(student, trend) {
+    const container = document.getElementById('my-achievements-panel');
+    if (!container) return; // navigated away from Dashboard while this was loading
+
+    const isALevel = (student.class === 'S.5' || student.class === 'S.6');
+    const subjectRecords = isALevel ? getALevelSubjectRecords(student) : getOLevelSubjectRecords(student);
+    const attendance = getAttendanceSummary(student);
+    const achievements = computeStudentAchievements(subjectRecords, isALevel, attendance, trend);
+
+    if (achievements.length === 0) {
+        container.innerHTML = `<div class="text-center text-slate-400 text-xs font-semibold py-8">
+            <i class="fa-solid fa-seedling mr-1.5"></i>Your achievements will show up here as scores and attendance are recorded.
+        </div>`;
+        return;
+    }
+
+    container.innerHTML = `<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        ${achievements.map(a => `
+            <div class="border rounded-xl p-4 flex items-start gap-3 ${ACHIEVEMENT_COLOR_CLASSES[a.color] || ACHIEVEMENT_COLOR_CLASSES.teal}">
+                <div class="w-9 h-9 rounded-xl bg-white flex items-center justify-center text-sm shrink-0 shadow-xs"><i class="fa-solid ${a.icon}"></i></div>
+                <div class="min-w-0">
+                    <p class="text-xs font-extrabold uppercase tracking-wider">${escapeHTML(a.title)}</p>
+                    <p class="text-[11px] font-semibold mt-0.5 opacity-90">${escapeHTML(a.description)}</p>
+                </div>
+            </div>
+        `).join('')}
+    </div>`;
 }
 /* ---------------------------------------------------------
    6a2. STUDENT SELF-SERVICE REPORT VIEW

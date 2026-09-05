@@ -66,6 +66,84 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   res.json(rows);
 }));
 
+// --- Term-by-term trend helpers -------------------------------------------
+// These mirror script.js's exact same Final/Average-mark formulas
+// (calculateAOAverage -> faScore -> +EOT for O-Level classes; average of
+// attempted papers for A-Level classes) so GET /trend below can never
+// silently disagree with the report card / performance summary a student
+// sees elsewhere in the portal. A subject only counts once it has a real
+// mark — an untouched or cleared field yields null, not a misleading 0.
+const A_LEVEL_TREND_CLASSES = new Set(['S.5', 'S.6']);
+
+function computeOLevelSubjectScore(row) {
+  const ao1 = row.ao1 === null || row.ao1 === undefined ? 0 : Number(row.ao1);
+  const ao2 = row.ao2 === null || row.ao2 === undefined ? 0 : Number(row.ao2);
+  let avScore;
+  if (ao1 > 0 && ao2 > 0) avScore = (ao1 + ao2) / 2;
+  else if (ao1 > 0) avScore = ao1;
+  else if (ao2 > 0) avScore = ao2;
+  else avScore = 0;
+  const faScore = (avScore / 3.0) * 20;
+  if (row.eot === null || row.eot === undefined) return null; // no valid Final mark yet
+  return Math.round(faScore + Number(row.eot));
+}
+
+function computeALevelSubjectScore(row) {
+  const attempted = [row.p1, row.p2]
+    .map((p) => (p === null || p === undefined ? null : Number(p)))
+    .filter((p) => p !== null && p > 0);
+  if (!attempted.length) return null; // no paper attempted yet
+  return Math.round(attempted.reduce((sum, p) => sum + p, 0) / attempted.length);
+}
+
+// Terms are labelled "Term 1" / "Term 2" / "Term 3" — sort by the number
+// embedded in the label so terms order correctly within a year.
+function termSortKey(term) {
+  const match = String(term).match(/\d+/);
+  return match ? Number(match[0]) : 0;
+}
+
+// GET /api/scores/trend — Student only (self-service; scoped to
+// req.user.studentId exactly like every other Student-role scores read
+// above, so a student can never request another learner's trend).
+// Returns one point per term/year that has at least one touched scores
+// row on file, in chronological order: { term, year, label, average,
+// subjectsCounted }. A term with rows but no subject that has a real
+// mark yet still appears, with average: null, so the frontend can render
+// a gap in the trend line instead of a misleading 0 — it is never simply
+// omitted, which would make an in-progress term look identical to one
+// with no data at all.
+router.get('/trend', authenticate, requireRole('Student'), asyncHandler(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT class_level AS "classLevel", term, year, ao1, ao2, eot, p1, p2
+     FROM scores WHERE student_id = $1 AND touched = true`,
+    [req.user.studentId]
+  );
+
+  const groups = new Map(); // "term|year" -> { term, year, scores: [] }
+  for (const row of rows) {
+    const key = `${row.term}|${row.year}`;
+    if (!groups.has(key)) groups.set(key, { term: row.term, year: row.year, scores: [] });
+    const isALevel = A_LEVEL_TREND_CLASSES.has(row.classLevel);
+    const score = isALevel ? computeALevelSubjectScore(row) : computeOLevelSubjectScore(row);
+    if (score !== null) groups.get(key).scores.push(score);
+  }
+
+  const trend = Array.from(groups.values())
+    .sort((a, b) => a.year - b.year || termSortKey(a.term) - termSortKey(b.term))
+    .map((g) => ({
+      term: g.term,
+      year: g.year,
+      label: `${g.term} ${g.year}`,
+      average: g.scores.length
+        ? Math.round((g.scores.reduce((sum, v) => sum + v, 0) / g.scores.length) * 10) / 10
+        : null,
+      subjectsCounted: g.scores.length
+    }));
+
+  res.json(trend);
+}));
+
 // POST /api/scores — Admin or Teacher only.
 // Body: { subject, studentId, classLevel?, term?, year?, ao1?, ao2?, eot?, p1?, p2?, remarks?, touched? }
 // term/year resolve to the current term_settings row if omitted, same as
