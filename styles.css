@@ -1180,3 +1180,30 @@ tr.score-save-error input {
 .app-toast-error { background: #dc2626; }
 .app-toast-warning { background: #3f3f46; }
 .app-toast-success { background: #16a34a; }
+
+/* =========================================================================
+   MAROON THEME OVERRIDE
+   Redefines the --teal-* variables (previously blue) to a deep maroon,
+   since that family already drives every primary action button, active
+   sidebar link, and hover state in this file. Placed at the end of the
+   stylesheet so it wins the cascade without needing !important.
+   Charcoal backgrounds (--navy-*) and white text are untouched.
+   ========================================================================= */
+:root {
+    --teal-900: #3d1010;   /* deepest maroon — reserved for extra emphasis */
+    --teal-800: #4a1414;   /* hover/pressed state for primary buttons */
+    --teal-700: #6b1d1d;   /* base maroon — primary buttons, active nav link */
+    --teal-600: #8a3030;   /* lighter maroon — small accents, headings */
+    --teal-100: #f0dcdc;   /* pale maroon tint — light-surface accents */
+    --teal-50:  #faf1f1;   /* faintest tint — subtle card backgrounds */
+}
+
+/* Hardcoded hex fallbacks that don't read from the variables above —
+   without these two, the Load Term hover and nav-link hover would stay blue. */
+.sidebar-term-load:hover {
+    background: #4a1414;
+}
+.nav-link:hover {
+    background: rgba(107, 29, 29, 0.28);
+    color: #fff;
+}
