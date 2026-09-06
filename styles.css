@@ -73,19 +73,20 @@ img {
     height: auto;
 }
 .hidden { display: none !important; }
-/* ---------------- LOGIN PAGE — GLASSMORPHISM / MAROON ----------------
-   The building photo is shown in its natural, untinted color — no
-   overlay of any kind sits on .login-shell. Legibility for the text
-   sitting directly on the photo (.login-visual) comes from a text-shadow
-   on each element instead, so the photo itself is never dimmed or
-   color-shifted. Maroon is confined entirely to .login-card and its
-   children (badge accent, inputs' focus ring, button) — nothing outside
-   the card carries the maroon tint. The whole shell is a single centered
-   flex column, so .login-visual (intro copy) stacks directly above
-   .login-card, both perfectly centered on the screen. All existing copy
-   (eyebrow, heading, tagline, motto, badge text, footer credit) is
-   unchanged — only re-styled. */
+/* ---------------- LOGIN PAGE — BLURRED GLASSMORPHISM ----------------
+   Full campus photo, heavily blurred (matches the depth-of-field in the
+   reference screenshot) via a ::before pseudo-element rather than a
+   filter on .login-shell itself — filtering the shell would blur the
+   card and text too. The pseudo-element is oversized (inset: -20px) and
+   scaled slightly so the blur's soft edges never show at the viewport
+   boundary. Content (.login-visual, .login-panel-wrap) is lifted onto
+   its own stacking layer with z-index so it paints above the blur.
+   Card uses a cool dark-grey glass fill (not maroon) with a copper/brown
+   gradient button as the sole accent color, matching the screenshot.
+   All existing copy is unchanged — only re-styled. */
 .login-shell {
+    position: relative;
+    overflow: hidden;
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
@@ -93,14 +94,21 @@ img {
     align-items: center;
     justify-content: center;
     padding: 48px 24px;
-    /* Natural, untinted photo — no gradient/color overlay. */
+}
+.login-shell::before {
+    content: "";
+    position: fixed;
+    inset: -20px;
     background-image: url('school_building.jpg');
     background-size: cover;
     background-position: center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
+    transform: scale(1.1);
+    filter: blur(20px);
+    z-index: 0;
 }
 .login-visual {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -115,7 +123,7 @@ img {
     text-transform: uppercase;
     font-size: 11.5px;
     font-weight: 700;
-    color: #ffffff;
+    color: #f0e6d2;
     text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9);
     margin-bottom: 16px;
 }
@@ -129,7 +137,7 @@ img {
 }
 .login-visual p.tagline {
     font-size: 14.5px;
-    color: rgba(255,255,255,0.92);
+    color: #f0e6d2;
     text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9);
     max-width: 460px;
     line-height: 1.6;
@@ -140,32 +148,31 @@ img {
     font-family: var(--font-display);
     font-style: italic;
     font-size: 16px;
-    color: #ffffff;
+    color: #f0e6d2;
     text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9);
     padding-top: 14px;
-    border-top: 1px solid rgba(255,255,255,0.5);
+    border-top: 1px solid rgba(240,230,210,0.4);
     max-width: 320px;
 }
 .login-panel-wrap {
+    position: relative;
+    z-index: 1;
     width: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
 }
-/* The frosted glass card — the ONLY place maroon color lives on this
-   screen. Warm dark-maroon translucent fill over the blur, rather than
-   a neutral white/grey glass, so the card itself carries the brand
-   color instead of the page behind it. */
+/* Cool dark-grey frosted glass card, matching the reference screenshot. */
 .login-card {
     width: 100%;
     max-width: 400px;
-    background: rgba(107, 29, 29, 0.25);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.22);
-    border-radius: 20px;
-    padding: 40px 34px;
-    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
+    background: rgba(31, 41, 55, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 28px;
+    padding: 44px 36px;
+    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.4);
 }
 .login-badge-row {
     display: flex;
@@ -177,15 +184,14 @@ img {
     width: 52px; height: 52px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(255,255,255,0.4);
+    border: 2px solid rgba(240,230,210,0.4);
 }
-/* Selector corrected to h3 to actually match the heading element used in
-   index.html (the previous rule targeted h2 and never applied). */
+/* Selector targets h3 to match the heading element used in index.html. */
 .login-badge-row h3 {
     font-family: var(--font-display);
     font-size: 17px;
     margin: 0;
-    color: #ffffff;
+    color: #f0e6d2;
     font-weight: 600;
 }
 .login-badge-row span {
@@ -194,7 +200,7 @@ img {
     letter-spacing: 0.14em;
     text-transform: uppercase;
     font-weight: 700;
-    color: #e3a9a9;
+    color: #f0e6d2;
     margin-top: 3px;
 }
 .field-label {
@@ -203,47 +209,49 @@ img {
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: rgba(255,255,255,0.82);
-    margin-bottom: 7px;
+    color: #f0e6d2;
+    margin-bottom: 8px;
 }
+/* Minimalist underline style — no fill, no full border, just a thin
+   bottom border. */
 .control-input, .control-select {
     width: 100%;
-    padding: 12px 14px;
-    border: 1.5px solid rgba(255,255,255,0.28);
-    border-radius: 12px;
+    padding: 8px 2px 10px;
+    border: none;
+    border-bottom: 1.5px solid rgba(240,230,210,0.35);
+    border-radius: 0;
     font-size: 16px;
-    font-weight: 600;
-    color: #ffffff;
-    background: rgba(255,255,255,0.08);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    font-weight: 500;
+    color: #f0e6d2;
+    background: transparent;
+    transition: border-color 0.15s ease;
     font-family: var(--font-body);
 }
-.control-input::placeholder { color: rgba(255,255,255,0.45); font-weight: 500; }
+.control-input::placeholder { color: rgba(240,230,210,0.45); font-weight: 400; }
 .control-input:focus, .control-select:focus {
     outline: none;
-    border-color: #c85a5a;
-    background: rgba(255,255,255,0.12);
-    box-shadow: 0 0 0 3px rgba(107,29,29,0.35);
+    border-bottom-color: #f0e6d2;
+    box-shadow: none;
 }
-.login-field { margin-bottom: 18px; }
-/* Primary action button — solid deep maroon, per brand spec. */
+.login-field { margin-bottom: 22px; }
+/* Primary action button — warm copper-to-brown gradient, per screenshot. */
 .login-submit {
     width: 100%;
-    padding: 14px;
-    background: #6b1d1d;
-    color: #fff;
+    padding: 15px;
+    background: linear-gradient(135deg, #c9884f 0%, #8a6a4a 100%);
+    color: #241a12;
     font-weight: 800;
     font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     border: none;
-    border-radius: 12px;
+    border-radius: 999px;
     cursor: pointer;
     transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
     box-shadow: 0 4px 14px rgba(0,0,0,0.35);
 }
-.login-submit:hover { filter: brightness(1.15); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
-.login-submit:active { transform: translateY(1px); filter: brightness(1.05); }
+.login-submit:hover { filter: brightness(1.1); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+.login-submit:active { transform: translateY(1px); filter: brightness(1.03); }
 .login-error {
     background: rgba(220,38,38,0.18);
     color: #ffd7d7;
@@ -261,9 +269,9 @@ img {
     text-align: center;
     font-size: 10.5px;
     font-weight: 700;
-    color: rgba(255,255,255,0.6);
+    color: #f0e6d2;
 }
-.login-footer-note span { color: #e3a9a9; }
+.login-footer-note span { color: #f0e6d2; }
 /* ---------------- DASHBOARD SHELL ---------------- */
 .app-header {
     display: flex;
@@ -827,20 +835,21 @@ input, select, textarea {
    pushes past the edge of a phone screen.
    --------------------------------------------------------- */
 @media (max-width: 900px) {
-    /* background-attachment: fixed is expensive/buggy on mobile browsers,
-       so scroll the background with the page on smaller screens instead. */
+    /* position: fixed on ::before is expensive/buggy on mobile browsers,
+       so anchor the blurred background to the shell itself instead of
+       the viewport on smaller screens. */
     .login-shell {
         min-height: auto;
-        background-attachment: scroll;
         padding: 40px 20px;
         padding-top: calc(40px + env(safe-area-inset-top));
         padding-bottom: calc(40px + env(safe-area-inset-bottom));
     }
+    .login-shell::before { position: absolute; }
     .login-visual { margin-bottom: 28px; }
     .login-motto { margin: 24px auto 0; }
 }
 @media (max-width: 480px) {
-    .login-card { padding: 30px 22px; }
+    .login-card { padding: 34px 26px; }
     .login-visual h1 { font-size: clamp(22px, 7vw, 28px); }
     .login-visual p.tagline { font-size: 13.5px; }
 }
