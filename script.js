@@ -747,7 +747,7 @@ const SIDEBAR_NAV_INACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} text-slate-200 bor
 // Glowing accent: a gold-600 left border + soft matching glow, echoing the
 // gold trim already used on the sidebar brand mark/badge (styles.css), on a
 // teal-700 fill so active text keeps the same WCAG-AA contrast as before.
-const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-[#c9962c] shadow-[0_0_14px_rgba(201,150,44,0.35)]`;
+const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-[#f59e0b] shadow-[0_0_14px_rgba(245,158,11,0.35)]`;
 // "School Finance" is intentionally NOT part of the tabs/RBAC routing array
 // above — it's a placeholder entry that never actually navigates, so it's
 // kept fully separate from switchTab()'s real routing logic. Shown to
@@ -3206,11 +3206,11 @@ function buildPerformanceRemark(records, isALevel) {
 function getPerformanceColor(score, isALevel) {
     if (score === null || score === undefined) return '#94a3b8'; // ungraded - neutral slate
     const bands = isALevel ? [80, 70, 60, 50] : [75, 65, 55, 45];
-    if (score >= bands[0]) return '#1f7a4d'; // A - green
-    if (score >= bands[1]) return '#0f8a8f'; // B - teal
-    if (score >= bands[2]) return '#c9962c'; // C - amber
-    if (score >= bands[3]) return '#e07a2c'; // D - orange
-    return '#c23b3b';                        // E - red
+    if (score >= bands[0]) return '#10b981'; // A - emerald (success)
+    if (score >= bands[1]) return '#3b82f6'; // B - slate blue (secondary brand)
+    if (score >= bands[2]) return '#f59e0b'; // C - amber (warning)
+    if (score >= bands[3]) return '#f97316'; // D - orange
+    return '#ef4444';                        // E - rose/red (danger)
 }
 function buildSubjectBars(records, isALevel) {
     if (records.length === 0) return '<p class="rc-empty-note">No scores recorded yet.</p>';

@@ -1,27 +1,44 @@
 /* =========================================================================
    LUWEERO COMMUNITY SS - PORTAL DESIGN SYSTEM
-   Palette: deep teal (#0D7377) + ink navy (#0F2A3D) + warm gold (#C9962C)
+   Palette: deep navy blue (#1E3A8A) + slate blue (#3B82F6) + amber (#F59E0B)
+   Status accents: emerald success (#10B981) / amber warning (#F59E0B) /
+   rose-red danger (#EF4444). Variable NAMES are kept as before (teal-*,
+   navy-*, gold-*, rose-*, green-*) so nothing else in this file had to be
+   rewired — only the values they point to have changed. "gold-*" now holds
+   the amber accent, and "green-700"/"rose-700" are slightly deepened
+   versions of emerald/red used only where small colored text needs to stay
+   AA-readable on a light background; every background/border use of
+   success or danger still resolves to the exact requested #10B981 /
+   #EF4444 by way of the matching Tailwind utility classes (see index.html).
    ========================================================================= */
 :root {
-    --teal-900: #06282a;
-    --teal-800: #0a4548;
-    --teal-700: #0d7377;
-    --teal-600: #0f8a8f;
-    --teal-100: #e3f4f4;
-    --teal-50:  #f2fafa;
-    --navy-900: #0f2a3d;
-    --navy-700: #1c3f57;
-    --gold-600: #c9962c;
-    --gold-100: #fbf1dc;
-    --slate-900:#1a2229;
-    --slate-700:#3f4a52;
-    --slate-500:#6b7680;
-    --slate-300:#c6ced3;
-    --slate-100:#eef1f3;
-    --rose-600: #c23b3b;
-    --rose-100: #fbe7e7;
-    --green-700:#1f7a4d;
-    --green-100:#e5f6ec;
+    /* Secondary / Supporting — Slate Blue accents (buttons, links, active states) */
+    --teal-900: #1e3a8a;
+    --teal-800: #1d4ed8;
+    --teal-700: #3b82f6;
+    --teal-600: #60a5fa;
+    --teal-100: #dbeafe;
+    --teal-50:  #eff6ff;
+    /* Primary / Dominant Brand — Deep Navy Blue (sidebars, headers, major containers) */
+    --navy-900: #1e3a8a;
+    --navy-700: #1d4ed8;
+    /* Status accent — Amber (warning/pending, also the decorative trim accent) */
+    --gold-600: #f59e0b;
+    --gold-100: #fef3c7;
+    /* Neutrals — true Tailwind slate scale */
+    --slate-900:#0f172a;
+    --slate-700:#334155;
+    --slate-500:#64748b;
+    --slate-300:#cbd5e1;
+    --slate-100:#f1f5f9;
+    --slate-50: #f8fafc;
+    /* Status accent — Rose/Red (danger/fail); -700 used only for small text on light backgrounds */
+    --rose-600: #ef4444;
+    --rose-700: #b91c1c;
+    --rose-100: #fee2e2;
+    /* Status accent — Emerald (success/pass); deepened slightly for AA text contrast */
+    --green-700:#047857;
+    --green-100:#d1fae5;
     --font-display: 'Fraunces', Georgia, serif;
     --font-body: 'Inter', -apple-system, sans-serif;
     --radius: 14px;
@@ -33,7 +50,7 @@ html, body {
 }
 body {
     font-family: var(--font-body);
-    background: var(--slate-100);
+    background: var(--slate-50);
     color: var(--slate-900);
     margin: 0;
 }
@@ -60,7 +77,7 @@ img {
        lowered from 0.87 to 0.68 so the building is more clearly visible
        behind the text (contrast against the login text stays ~7:1, still
        comfortably above the 4.5:1 WCAG AA minimum). */
-    background-image: linear-gradient(135deg, rgba(15,42,61,0.68) 0%, rgba(11,71,68,0.68) 100%), url('school_building.jpg');
+    background-image: linear-gradient(135deg, rgba(30,58,138,0.68) 0%, rgba(37,99,235,0.68) 100%), url('school_building.jpg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -72,7 +89,7 @@ img {
     flex-direction: column;
     justify-content: center;
     padding: 64px;
-    color: #eaf3f2;
+    color: #eaf2fe;
     position: relative;
     overflow: hidden;
 }
@@ -81,7 +98,7 @@ img {
     position: absolute;
     width: 520px; height: 520px;
     border-radius: 50%;
-    border: 1px solid rgba(201,150,44,0.25);
+    border: 1px solid rgba(245,158,11,0.25);
     top: -180px; right: -180px;
 }
 .login-visual::after {
@@ -89,7 +106,7 @@ img {
     position: absolute;
     width: 340px; height: 340px;
     border-radius: 50%;
-    border: 1px solid rgba(201,150,44,0.18);
+    border: 1px solid rgba(245,158,11,0.18);
     bottom: -140px; left: -80px;
 }
 .login-eyebrow {
@@ -110,7 +127,7 @@ img {
 }
 .login-visual p.tagline {
     font-size: 15px;
-    color: #c7dbd9;
+    color: #bfdbfe;
     max-width: 420px;
     line-height: 1.6;
 }
@@ -137,7 +154,7 @@ img {
     background: #ffffff;
     border-radius: var(--radius);
     padding: 40px 36px;
-    box-shadow: 0 24px 60px -20px rgba(15,42,61,0.35);
+    box-shadow: 0 24px 60px -20px rgba(30,58,138,0.35);
     border: 1px solid var(--slate-100);
 }
 .login-badge-row {
@@ -191,7 +208,7 @@ img {
 .control-input:focus, .control-select:focus {
     outline: none;
     border-color: var(--teal-600);
-    box-shadow: 0 0 0 3px rgba(15,138,143,0.15);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
 }
 .login-field { margin-bottom: 18px; }
 .login-submit {
@@ -212,13 +229,13 @@ img {
 .login-submit:active { transform: translateY(1px); }
 .login-error {
     background: var(--rose-100);
-    color: var(--rose-600);
+    color: var(--rose-700);
     font-size: 12px;
     font-weight: 700;
     padding: 10px 14px;
     border-radius: 8px;
     margin-bottom: 16px;
-    border: 1px solid rgba(194,59,59,0.25);
+    border: 1px solid rgba(239,68,68,0.25);
 }
 .login-footer-note {
     margin-top: 22px;
@@ -240,7 +257,7 @@ img {
     padding: 16px 26px;
     padding-top: 16px;
     padding-top: calc(16px + env(safe-area-inset-top));
-    box-shadow: 0 1px 2px rgba(15,42,61,0.04);
+    box-shadow: 0 1px 2px rgba(30,58,138,0.04);
 }
 .header-left { display: flex; align-items: center; gap: 16px; }
 .icon-btn {
@@ -291,11 +308,11 @@ img {
     border-radius: 8px;
     cursor: pointer;
 }
-.logout-btn:hover { background: #a52f2f; }
+.logout-btn:hover { background: #b91c1c; }
 .app-body { display: flex; flex: 1; position: relative; overflow: hidden; }
 .sidebar-backdrop {
     position: fixed; inset: 0;
-    background: rgba(15,42,61,0.45);
+    background: rgba(30,58,138,0.45);
     z-index: 40;
 }
 .sidebar {
@@ -305,7 +322,7 @@ img {
     width: 256px;
     max-width: 84vw;
     background: var(--navy-900);
-    color: #cfe3e2;
+    color: #bfdbfe;
     display: flex;
     flex-direction: column;
     /* Open (visible) by default; the .-translate-x-full toggle class is what
@@ -363,7 +380,7 @@ img {
 .sidebar-brand img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold-600); }
 .sidebar-brand h3 { margin: 0; font-size: 12.5px; font-weight: 800; color: #fff; }
 .sidebar-brand p { margin: 2px 0 0; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal-600); }
-.sidebar-close { background: none; border: none; color: #91a5a4; cursor: pointer; font-size: 14px; }
+.sidebar-close { background: none; border: none; color: #93c5fd; cursor: pointer; font-size: 14px; }
 /* Academic Term/Year switcher (sidebar) — see #sidebar-term-switcher in
    index.html + renderTermSwitcher()/handleTermSwitcherChange() in
    script.js. Sits between the brand block and the nav links, so it reads
@@ -401,7 +418,7 @@ img {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23c9962c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23f59e0b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 8px center;
     transition: background-color 0.15s ease, border-color 0.15s ease;
@@ -459,7 +476,7 @@ img {
     cursor: pointer;
     transition: background-color 0.15s ease;
 }
-.sidebar-term-load:hover { background: #0a5b5e; }
+.sidebar-term-load:hover { background: #1d4ed8; }
 /* Scrollable nav (flex:1 fills whatever space is left below the frozen
    header/above the footer; min-height:0 is required for a flex child to
    actually shrink and scroll instead of growing to fit its content). */
@@ -496,17 +513,17 @@ img {
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #a9bfbe;
+    color: #93c5fd;
     text-decoration: none;
     transition: background 0.15s ease, color 0.15s ease;
 }
-.nav-link:hover { background: rgba(15,138,143,0.25); color: #fff; }
+.nav-link:hover { background: rgba(59,130,246,0.25); color: #fff; }
 .nav-link-active { background: var(--teal-700); color: #fff; }
 .sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; flex-shrink: 0; }
 .sidebar-footer span {
     display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--gold-600);
-    background: rgba(201,150,44,0.12); border: 1px solid rgba(201,150,44,0.3);
+    background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3);
     padding: 5px 12px; border-radius: 8px;
 }
 .term-pill {
@@ -516,7 +533,7 @@ img {
     background: rgba(255,255,255,0.06);
     font-size: 10.5px;
     font-weight: 700;
-    color: #cfe3e2;
+    color: #bfdbfe;
     text-align: center;
     letter-spacing: 0.05em;
 }
@@ -529,7 +546,7 @@ img {
     border: 1px solid var(--slate-100);
     border-radius: 16px;
     padding: 18px 20px;
-    box-shadow: 0 1px 2px rgba(15,42,61,0.04);
+    box-shadow: 0 1px 2px rgba(30,58,138,0.04);
 }
 .metric-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal-700); }
 .metric-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 10px; }
@@ -544,7 +561,7 @@ img {
 .app-footer p { font-size: 11.5px; font-weight: 700; color: var(--slate-500); }
 .app-footer span { color: var(--teal-700); font-weight: 800; }
 /* ---------------- PANELS / TABLES / FORMS (shared) ---------------- */
-.panel-card { background: #fff; border: 1px solid var(--slate-100); border-radius: 18px; padding: 26px; box-shadow: 0 1px 2px rgba(15,42,61,0.04); }
+.panel-card { background: #fff; border: 1px solid var(--slate-100); border-radius: 18px; padding: 26px; box-shadow: 0 1px 2px rgba(30,58,138,0.04); }
 .panel-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--slate-100); }
 .panel-title { font-family: var(--font-display); font-size: 17px; color: var(--navy-900); margin: 0; }
 .panel-subtitle { font-size: 12px; color: var(--slate-500); font-weight: 600; margin: 4px 0 0; }
@@ -558,9 +575,9 @@ img {
 .btn-primary { background: var(--teal-700); color: #fff; font-size: 11.5px; padding: 11px 18px; }
 .btn-primary:hover { background: var(--teal-800); }
 .btn-accent { background: var(--gold-600); color: #35270a; font-size: 11.5px; padding: 11px 18px; }
-.btn-accent:hover { background: #b58323; }
-.btn-danger-sm { background: var(--rose-100); color: var(--rose-600); font-size: 10px; padding: 6px 12px; border: 1px solid rgba(194,59,59,0.2); }
-.btn-danger-sm:hover { background: #f6d3d3; }
+.btn-accent:hover { background: #b45309; }
+.btn-danger-sm { background: var(--rose-100); color: var(--rose-700); font-size: 10px; padding: 6px 12px; border: 1px solid rgba(239,68,68,0.25); }
+.btn-danger-sm:hover { background: #fecaca; }
 .form-panel { background: var(--teal-50); border: 1px solid var(--teal-100); border-radius: 14px; padding: 18px; margin-bottom: 22px; }
 .form-panel-title { margin: 0 0 12px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--teal-800); }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
@@ -701,12 +718,12 @@ img {
 .rc-bars-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
 .rc-bar-row { display: flex; align-items: center; gap: 4px; font-size: 8px; margin: 2px 0; }
 .rc-bar-label { width: 68px; flex-shrink: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #333; }
-.rc-bar-track { flex: 1; background: #eef1f3; border-radius: 5px; height: 7px; overflow: hidden; border: 1px solid #ccc; }
+.rc-bar-track { flex: 1; background: #f1f5f9; border-radius: 5px; height: 7px; overflow: hidden; border: 1px solid #ccc; }
 .rc-bar-fill { height: 100%; border-radius: 5px; }
 .rc-bar-score { width: 22px; text-align: right; font-weight: 800; font-size: 8px; }
 .rc-empty-note { font-size: 8.5px; color: #888; font-style: italic; margin: 3px 0; }
 .rc-remark-box { border: 1px solid #333; border-radius: 8px; padding: 7px 11px; margin-top: 6px; background: var(--gold-100); }
-.rc-remark-box h4 { margin: 0 0 4px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #8a6414; }
+.rc-remark-box h4 { margin: 0 0 4px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #92400e; }
 .rc-remark-box p { margin: 0; font-size: 9.3px; line-height: 1.45; color: #222; }
 /* ---- Footer: sign-off, comments, term dates ---- */
 .rc-footer { margin-top: auto; padding-top: 7px; page-break-inside: avoid; flex-shrink: 0; }
@@ -714,8 +731,8 @@ img {
 .rc-comment-label { color: #111; white-space: nowrap; }
 .rc-comment-line { flex: 1; min-width: 110px; font-weight: 500; border-bottom: 1px dotted #999; padding-bottom: 2px; }
 .rc-comment-editable { cursor: text; outline: none; border-radius: 3px; transition: background-color 0.15s ease; }
-.rc-comment-editable:hover { background-color: #f0fdfa; }
-.rc-comment-editable:focus { background-color: #ecfdf5; box-shadow: 0 0 0 1px #0d9488; }
+.rc-comment-editable:hover { background-color: #eff6ff; }
+.rc-comment-editable:focus { background-color: #eff6ff; box-shadow: 0 0 0 1px #3b82f6; }
 .rc-comment-editable:empty:before { content: attr(data-placeholder); color: #9ca3af; font-weight: 400; font-style: italic; }
 .rc-sign { white-space: nowrap; }
 .rc-sign-line { display: inline-block; min-width: 90px; border-bottom: 1px solid #333; margin-left: 4px; }
@@ -1028,7 +1045,7 @@ input, select, textarea {
     background-color: #fff;
     min-width: 180px;
     white-space: nowrap;
-    box-shadow: 4px 0 6px -4px rgba(15, 42, 61, 0.2);
+    box-shadow: 4px 0 6px -4px rgba(30, 58, 138, 0.2);
 }
 
 /* ---------------------------------------------------------
@@ -1149,4 +1166,4 @@ tr.score-save-error input {
 .app-toast.visible { opacity: 1; transform: translateY(0); }
 .app-toast-error { background: #dc2626; }
 .app-toast-warning { background: #d97706; }
-.app-toast-success { background: #0f8a6f; }
+.app-toast-success { background: #059669; }

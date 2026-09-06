@@ -418,18 +418,18 @@ function getClassSummaryPrintStyles() {
     return `
         @page { size: A4 landscape; margin: 10mm; }
         .gms-print-page { width: 100%; font-family: Arial, Helvetica, sans-serif; color: #111; }
-        .gms-print-header { display: flex; align-items: center; gap: 12px; border-bottom: 3px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px; }
-        .gms-print-logo { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 2px solid #c9a227; flex-shrink: 0; }
+        .gms-print-header { display: flex; align-items: center; gap: 12px; border-bottom: 3px solid #1e3a8a; padding-bottom: 6px; margin-bottom: 8px; }
+        .gms-print-logo { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; border: 2px solid #f59e0b; flex-shrink: 0; }
         .gms-print-school { flex: 1; text-align: center; }
-        .gms-print-school h1 { font-size: 16px; margin: 0 0 2px; letter-spacing: 0.02em; color: #0f172a; }
+        .gms-print-school h1 { font-size: 16px; margin: 0 0 2px; letter-spacing: 0.02em; color: #1e3a8a; }
         .gms-print-school p { font-size: 8px; margin: 1px 0; color: #333; font-weight: 600; }
-        .gms-print-motto { font-style: italic; font-weight: 700; color: #0f766e; }
+        .gms-print-motto { font-style: italic; font-weight: 700; color: #3b82f6; }
         .gms-print-title { text-align: center; font-weight: 800; font-size: 12px; letter-spacing: 0.08em; margin: 6px 0; padding: 4px 0; border-top: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; }
         .gms-print-meta-row { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 9px; font-weight: 700; background: #f1f5f9; border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; }
         .gms-print-meta-row span:first-child { color: #64748b; margin-right: 4px; }
         .gms-print-table { width: 100%; border-collapse: collapse; font-size: 7.2px; }
         .gms-print-table th, .gms-print-table td { border: 1px solid #94a3b8; padding: 2.5px 3px; text-align: center; }
-        .gms-print-table thead th { background: #0f172a; color: #fff; font-size: 6.6px; text-transform: uppercase; letter-spacing: 0.02em; }
+        .gms-print-table thead th { background: #1e3a8a; color: #fff; font-size: 6.6px; text-transform: uppercase; letter-spacing: 0.02em; }
         .gms-print-table .gms-name-col { text-align: left; font-weight: 700; white-space: nowrap; }
         .gms-print-table .gms-final-cell { font-weight: 800; }
         .gms-print-table .gms-total-cell { font-weight: 800; background: #f8fafc; }

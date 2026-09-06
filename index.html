@@ -7,11 +7,56 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
+<script>
+    /* ---------------------------------------------------------------
+       BRAND COLOR OVERRIDE — Professional Navy/Blue palette.
+       The app's Tailwind utility classes (bg-teal-*, text-teal-*,
+       border-teal-*, ring-teal-*, bg-rose-*, text-rose-*, border-rose-*)
+       are used throughout script.js / class-summaries.js / teacher-toolbox.js
+       exactly as before — only the colors those names resolve to are
+       remapped here, so every existing "teal-700" or "rose-600" class in
+       the codebase now renders as the new brand blue / red without any
+       markup changes.
+         - "teal"  -> Deep Navy / Slate Blue scale (teal-900 = brand navy
+           #1E3A8A, teal-500 = brand secondary blue #3B82F6)
+         - "navy"  -> same scale, exposed under its own name too in case
+           it's used directly (e.g. bg-navy-900)
+         - "rose"  -> true red scale so "danger" = #EF4444 (Tailwind's
+           red-500) instead of the old pink-toned rose
+       "slate" (neutral gray), "amber" (warning) and "emerald" (success)
+       are left as Tailwind's own defaults — slate-50 (#F8FAFC), amber-500
+       (#F59E0B) and emerald-500 (#10B981) already match the requested
+       palette exactly.
+       --------------------------------------------------------------- */
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    navy: {
+                        50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
+                        400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
+                        800: '#1e40af', 900: '#1e3a8a', 950: '#172554'
+                    },
+                    teal: {
+                        50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
+                        400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
+                        800: '#1e40af', 900: '#1e3a8a', 950: '#172554'
+                    },
+                    rose: {
+                        50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5',
+                        400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c',
+                        800: '#991b1b', 900: '#7f1d1d', 950: '#450a0a'
+                    }
+                }
+            }
+        }
+    };
+</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="styles.css">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#0f172a">
+<meta name="theme-color" content="#1e3a8a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="LCSS Portal">
