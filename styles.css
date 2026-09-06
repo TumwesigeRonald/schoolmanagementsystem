@@ -1,44 +1,51 @@
 /* =========================================================================
    LUWEERO COMMUNITY SS - PORTAL DESIGN SYSTEM
-   Palette: deep navy blue (#1E3A8A) + slate blue (#3B82F6) + amber (#F59E0B)
-   Status accents: emerald success (#10B981) / amber warning (#F59E0B) /
-   rose-red danger (#EF4444). Variable NAMES are kept as before (teal-*,
-   navy-*, gold-*, rose-*, green-*) so nothing else in this file had to be
-   rewired — only the values they point to have changed. "gold-*" now holds
-   the amber accent, and "green-700"/"rose-700" are slightly deepened
-   versions of emerald/red used only where small colored text needs to stay
-   AA-readable on a light background; every background/border use of
-   success or danger still resolves to the exact requested #10B981 /
-   #EF4444 by way of the matching Tailwind utility classes (see index.html).
+   5-color, high-contrast palette:
+     1. Black / Dark Charcoal — nav bars, table headers, body text
+     2. White / Light Grey    — content surfaces, card backgrounds
+     3. Red                   — urgent alerts, danger actions, high-priority
+     4. Green                 — success states, active status, confirmation
+     5. Blue                  — hyperlinks, tabs, secondary action buttons
+   Variable NAMES are kept as before (teal-*, navy-*, gold-*, slate-*,
+   rose-*, green-*) so nothing else in this file had to be rewired — only
+   the values they point to changed. "navy-*" now holds the charcoal/black
+   tone instead of the old brand blue. "gold-*" (formerly amber) is
+   repurposed to the same neutral charcoal/grey and is only ever used on
+   LIGHT surfaces (badges, decorative borders on white cards); the handful
+   of spots that used gold as an accent on a DARK background (login hero,
+   sidebar) were switched to an explicit blue accent instead so they stay
+   readable — see the comments at those rules further down this file.
    ========================================================================= */
 :root {
-    /* Secondary / Supporting — Slate Blue accents (buttons, links, active states) */
+    /* Blue — hyperlinks, tabs, secondary action buttons */
     --teal-900: #1e3a8a;
     --teal-800: #1d4ed8;
-    --teal-700: #3b82f6;
+    --teal-700: #2563eb;
     --teal-600: #60a5fa;
     --teal-100: #dbeafe;
     --teal-50:  #eff6ff;
-    /* Primary / Dominant Brand — Deep Navy Blue (sidebars, headers, major containers) */
-    --navy-900: #1e3a8a;
-    --navy-700: #1d4ed8;
-    /* Status accent — Amber (warning/pending, also the decorative trim accent) */
-    --gold-600: #f59e0b;
-    --gold-100: #fef3c7;
-    /* Neutrals — true Tailwind slate scale */
-    --slate-900:#0f172a;
-    --slate-700:#334155;
-    --slate-500:#64748b;
-    --slate-300:#cbd5e1;
-    --slate-100:#f1f5f9;
-    --slate-50: #f8fafc;
-    /* Status accent — Rose/Red (danger/fail); -700 used only for small text on light backgrounds */
-    --rose-600: #ef4444;
+    /* Black / Dark Charcoal — navigation bars, main table headers, body text */
+    --navy-900: #18181b;
+    --navy-700: #3f3f46;
+    /* Neutral accent (formerly amber/gold) — repurposed to charcoal/grey;
+       used only on light surfaces, never on a dark background */
+    --gold-600: #27272a;
+    --gold-100: #e4e4e7;
+    /* White / Light Grey — content surfaces, card containers, and the true
+       (non blue-tinted) neutral text/border scale */
+    --slate-900:#18181b;
+    --slate-700:#3f3f46;
+    --slate-500:#71717a;
+    --slate-300:#d4d4d8;
+    --slate-100:#f4f4f5;
+    --slate-50: #fafafa;
+    /* Red — urgent alerts, danger actions, high-priority indicators */
+    --rose-600: #dc2626;
     --rose-700: #b91c1c;
     --rose-100: #fee2e2;
-    /* Status accent — Emerald (success/pass); deepened slightly for AA text contrast */
-    --green-700:#047857;
-    --green-100:#d1fae5;
+    /* Green — success states, active statuses, confirmation buttons */
+    --green-700:#15803d;
+    --green-100:#dcfce7;
     --font-display: 'Fraunces', Georgia, serif;
     --font-body: 'Inter', -apple-system, sans-serif;
     --radius: 14px;
@@ -71,13 +78,12 @@ img {
     min-height: 100vh;
     display: flex;
     align-items: stretch;
-    /* School building photo as the backdrop, with the existing navy/teal
-       gradient reused as a semi-transparent dark overlay on top of it so
-       the login form and text stay easily readable. Overlay opacity was
-       lowered from 0.87 to 0.68 so the building is more clearly visible
-       behind the text (contrast against the login text stays ~7:1, still
-       comfortably above the 4.5:1 WCAG AA minimum). */
-    background-image: linear-gradient(135deg, rgba(30,58,138,0.68) 0%, rgba(37,99,235,0.68) 100%), url('school_building.jpg');
+    /* School building photo as the backdrop, with a semi-transparent dark
+       charcoal overlay on top of it so the login form and text stay easily
+       readable. Overlay opacity kept at 0.68 so the building is still
+       clearly visible behind the text (contrast against the login text
+       stays ~7:1, comfortably above the 4.5:1 WCAG AA minimum). */
+    background-image: linear-gradient(135deg, rgba(24,24,27,0.72) 0%, rgba(39,39,42,0.72) 100%), url('school_building.jpg');
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -98,7 +104,7 @@ img {
     position: absolute;
     width: 520px; height: 520px;
     border-radius: 50%;
-    border: 1px solid rgba(245,158,11,0.25);
+    border: 1px solid rgba(147,197,253,0.25);
     top: -180px; right: -180px;
 }
 .login-visual::after {
@@ -106,16 +112,19 @@ img {
     position: absolute;
     width: 340px; height: 340px;
     border-radius: 50%;
-    border: 1px solid rgba(245,158,11,0.18);
+    border: 1px solid rgba(147,197,253,0.18);
     bottom: -140px; left: -80px;
 }
+/* Blue accent (not var(--gold-600)/charcoal) — this text sits on the dark
+   charcoal hero overlay above, so it needs a bright accent to stay
+   readable rather than the near-black tone gold-600 resolves to now. */
 .login-eyebrow {
     font-family: var(--font-body);
     letter-spacing: 0.22em;
     text-transform: uppercase;
     font-size: 12px;
     font-weight: 700;
-    color: var(--gold-600);
+    color: #93c5fd;
     margin-bottom: 18px;
 }
 .login-visual h1 {
@@ -131,13 +140,14 @@ img {
     max-width: 420px;
     line-height: 1.6;
 }
+/* Blue accent for the same reason as .login-eyebrow above (dark hero bg). */
 .login-motto {
     margin-top: 48px;
     font-family: var(--font-display);
     font-style: italic;
     font-size: 18px;
-    color: var(--gold-600);
-    border-left: 3px solid var(--gold-600);
+    color: #93c5fd;
+    border-left: 3px solid #93c5fd;
     padding-left: 16px;
 }
 .login-panel-wrap {
@@ -154,7 +164,7 @@ img {
     background: #ffffff;
     border-radius: var(--radius);
     padding: 40px 36px;
-    box-shadow: 0 24px 60px -20px rgba(30,58,138,0.35);
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.35);
     border: 1px solid var(--slate-100);
 }
 .login-badge-row {
@@ -235,7 +245,7 @@ img {
     padding: 10px 14px;
     border-radius: 8px;
     margin-bottom: 16px;
-    border: 1px solid rgba(239,68,68,0.25);
+    border: 1px solid rgba(220,38,38,0.25);
 }
 .login-footer-note {
     margin-top: 22px;
@@ -257,7 +267,7 @@ img {
     padding: 16px 26px;
     padding-top: 16px;
     padding-top: calc(16px + env(safe-area-inset-top));
-    box-shadow: 0 1px 2px rgba(30,58,138,0.04);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .header-left { display: flex; align-items: center; gap: 16px; }
 .icon-btn {
@@ -312,7 +322,7 @@ img {
 .app-body { display: flex; flex: 1; position: relative; overflow: hidden; }
 .sidebar-backdrop {
     position: fixed; inset: 0;
-    background: rgba(30,58,138,0.45);
+    background: rgba(0,0,0,0.45);
     z-index: 40;
 }
 .sidebar {
@@ -377,7 +387,9 @@ img {
     flex-shrink: 0; /* frozen header block — never shrinks/scrolls, see .sidebar-nav's own scroll below */
 }
 .sidebar-brand-inner { display: flex; align-items: center; gap: 12px; }
-.sidebar-brand img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--gold-600); }
+/* Blue border (not var(--gold-600)/charcoal) — this sits on the dark
+   charcoal sidebar background, so it needs a bright accent to be visible. */
+.sidebar-brand img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #60a5fa; }
 .sidebar-brand h3 { margin: 0; font-size: 12.5px; font-weight: 800; color: #fff; }
 .sidebar-brand p { margin: 2px 0 0; font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--teal-600); }
 .sidebar-close { background: none; border: none; color: #93c5fd; cursor: pointer; font-size: 14px; }
@@ -418,7 +430,7 @@ img {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23f59e0b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%233b82f6' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 8px center;
     transition: background-color 0.15s ease, border-color 0.15s ease;
@@ -426,7 +438,7 @@ img {
 .sidebar-term-select:hover,
 .sidebar-term-select:focus {
     background-color: rgba(255,255,255,0.12);
-    border-color: var(--gold-600);
+    border-color: #60a5fa;
 }
 .sidebar-term-select option {
     /* Native <select> options render outside our theme's control on most
@@ -443,7 +455,7 @@ img {
     margin-top: 10px;
     background: none;
     border: none;
-    color: var(--gold-600);
+    color: #93c5fd;
     font-size: 10.5px;
     font-weight: 800;
     text-transform: uppercase;
@@ -520,10 +532,11 @@ img {
 .nav-link:hover { background: rgba(59,130,246,0.25); color: #fff; }
 .nav-link-active { background: var(--teal-700); color: #fff; }
 .sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; flex-shrink: 0; }
+/* Blue chip (not gold-600/charcoal) — sits on the dark charcoal sidebar. */
 .sidebar-footer span {
     display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
-    text-transform: uppercase; color: var(--gold-600);
-    background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.3);
+    text-transform: uppercase; color: #93c5fd;
+    background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3);
     padding: 5px 12px; border-radius: 8px;
 }
 .term-pill {
@@ -546,7 +559,7 @@ img {
     border: 1px solid var(--slate-100);
     border-radius: 16px;
     padding: 18px 20px;
-    box-shadow: 0 1px 2px rgba(30,58,138,0.04);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 .metric-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal-700); }
 .metric-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 10px; }
@@ -561,7 +574,7 @@ img {
 .app-footer p { font-size: 11.5px; font-weight: 700; color: var(--slate-500); }
 .app-footer span { color: var(--teal-700); font-weight: 800; }
 /* ---------------- PANELS / TABLES / FORMS (shared) ---------------- */
-.panel-card { background: #fff; border: 1px solid var(--slate-100); border-radius: 18px; padding: 26px; box-shadow: 0 1px 2px rgba(30,58,138,0.04); }
+.panel-card { background: #fff; border: 1px solid var(--slate-100); border-radius: 18px; padding: 26px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
 .panel-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid var(--slate-100); }
 .panel-title { font-family: var(--font-display); font-size: 17px; color: var(--navy-900); margin: 0; }
 .panel-subtitle { font-size: 12px; color: var(--slate-500); font-weight: 600; margin: 4px 0 0; }
@@ -574,9 +587,9 @@ img {
 }
 .btn-primary { background: var(--teal-700); color: #fff; font-size: 11.5px; padding: 11px 18px; }
 .btn-primary:hover { background: var(--teal-800); }
-.btn-accent { background: var(--gold-600); color: #35270a; font-size: 11.5px; padding: 11px 18px; }
-.btn-accent:hover { background: #b45309; }
-.btn-danger-sm { background: var(--rose-100); color: var(--rose-700); font-size: 10px; padding: 6px 12px; border: 1px solid rgba(239,68,68,0.25); }
+.btn-accent { background: var(--gold-600); color: #fff; font-size: 11.5px; padding: 11px 18px; }
+.btn-accent:hover { background: #3f3f46; }
+.btn-danger-sm { background: var(--rose-100); color: var(--rose-700); font-size: 10px; padding: 6px 12px; border: 1px solid rgba(220,38,38,0.25); }
 .btn-danger-sm:hover { background: #fecaca; }
 .form-panel { background: var(--teal-50); border: 1px solid var(--teal-100); border-radius: 14px; padding: 18px; margin-bottom: 22px; }
 .form-panel-title { margin: 0 0 12px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--teal-800); }
@@ -602,7 +615,7 @@ img {
 .cell-total { font-weight: 800; color: var(--teal-700); }
 .cell-grade { font-weight: 800; color: var(--green-700); }
 .badge-blue { background: var(--teal-50); color: var(--teal-700); border: 1px solid var(--teal-100); padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 800; }
-.badge-green { background: var(--green-100); color: var(--green-700); border: 1px solid rgba(31,122,77,0.2); padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 800; }
+.badge-green { background: var(--green-100); color: var(--green-700); border: 1px solid rgba(21,128,61,0.2); padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 800; }
 .score-input { width: 66px; padding: 6px; text-align: center; border: 1px solid var(--slate-300); border-radius: 8px; font-weight: 700; }
 .score-input:disabled { background: var(--slate-100); color: var(--slate-500); }
 .term-status-card { display: flex; gap: 26px; background: var(--teal-50); border: 1px solid var(--teal-100); border-radius: 14px; padding: 20px; margin-bottom: 22px; }
@@ -718,12 +731,12 @@ img {
 .rc-bars-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
 .rc-bar-row { display: flex; align-items: center; gap: 4px; font-size: 8px; margin: 2px 0; }
 .rc-bar-label { width: 68px; flex-shrink: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #333; }
-.rc-bar-track { flex: 1; background: #f1f5f9; border-radius: 5px; height: 7px; overflow: hidden; border: 1px solid #ccc; }
+.rc-bar-track { flex: 1; background: var(--slate-100); border-radius: 5px; height: 7px; overflow: hidden; border: 1px solid #ccc; }
 .rc-bar-fill { height: 100%; border-radius: 5px; }
 .rc-bar-score { width: 22px; text-align: right; font-weight: 800; font-size: 8px; }
 .rc-empty-note { font-size: 8.5px; color: #888; font-style: italic; margin: 3px 0; }
 .rc-remark-box { border: 1px solid #333; border-radius: 8px; padding: 7px 11px; margin-top: 6px; background: var(--gold-100); }
-.rc-remark-box h4 { margin: 0 0 4px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #92400e; }
+.rc-remark-box h4 { margin: 0 0 4px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gold-600); }
 .rc-remark-box p { margin: 0; font-size: 9.3px; line-height: 1.45; color: #222; }
 /* ---- Footer: sign-off, comments, term dates ---- */
 .rc-footer { margin-top: auto; padding-top: 7px; page-break-inside: avoid; flex-shrink: 0; }
@@ -1018,10 +1031,10 @@ input, select, textarea {
     border-spacing: 0;
 }
 #score-table-head th {
-    border-bottom: 1px solid #e2e8f0; /* replaces the header <tr>'s border-b border-slate-200 */
+    border-bottom: 1px solid var(--slate-300); /* replaces the header <tr>'s border-b border-slate-200 */
 }
 #score-table-body tr:not(:first-child) td {
-    border-top: 1px solid #f1f5f9; /* replaces tbody's divide-y divide-slate-100 row dividers */
+    border-top: 1px solid var(--slate-100); /* replaces tbody's divide-y divide-slate-100 row dividers */
 }
 
 /* ---------------------------------------------------------
@@ -1165,5 +1178,5 @@ tr.score-save-error input {
 }
 .app-toast.visible { opacity: 1; transform: translateY(0); }
 .app-toast-error { background: #dc2626; }
-.app-toast-warning { background: #d97706; }
-.app-toast-success { background: #059669; }
+.app-toast-warning { background: #3f3f46; }
+.app-toast-success { background: #16a34a; }

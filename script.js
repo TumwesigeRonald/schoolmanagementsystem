@@ -744,10 +744,10 @@ function renderSidebarNav() {
 // active item picking up the glowing left-border accent + fill.
 const SIDEBAR_NAV_BASE_CLASS = "flex items-center gap-3 w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wide border-l-[3px] transition-all duration-200 ease-in-out mb-1";
 const SIDEBAR_NAV_INACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} text-slate-200 border-transparent hover:bg-white/10 hover:text-white hover:border-teal-400/50 hover:translate-x-0.5`;
-// Glowing accent: a gold-600 left border + soft matching glow, echoing the
-// gold trim already used on the sidebar brand mark/badge (styles.css), on a
-// teal-700 fill so active text keeps the same WCAG-AA contrast as before.
-const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-[#f59e0b] shadow-[0_0_14px_rgba(245,158,11,0.35)]`;
+// Glowing accent: a white left border + soft matching glow on a teal-700
+// (blue) fill, so the active item stays inside the 5-color palette (no
+// amber/gold) while keeping the same WCAG-AA text contrast as before.
+const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-white shadow-[0_0_14px_rgba(255,255,255,0.35)]`;
 // "School Finance" is intentionally NOT part of the tabs/RBAC routing array
 // above — it's a placeholder entry that never actually navigates, so it's
 // kept fully separate from switchTab()'s real routing logic. Shown to
@@ -1238,8 +1238,8 @@ function initDashboardModule() {
             datasets: [{
                 label: 'Class Mean Score (%)',
                 data: ANALYTICS_CLASS_LEVELS.map(level => analytics.classAverages[level]),
-                backgroundColor: 'rgba(13, 148, 136, 0.8)',
-                borderColor: 'rgba(15, 118, 110, 1)',
+                backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                borderColor: 'rgba(29, 78, 216, 1)',
                 borderWidth: 1,
                 borderRadius: 8
             }]
@@ -1390,7 +1390,7 @@ function loadStudentData() {
                 <td class="p-4 text-slate-600 font-semibold">${escapeHTML(student.gender)}</td>
                 <td class="p-4 text-center space-x-2 whitespace-nowrap">
                     <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
-                    ${canManage ? `<button onclick="openEditStudentModal('${student.id}')" class="text-indigo-600 hover:text-indigo-700 text-[11px] font-extrabold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>` : ''}
+                    ${canManage ? `<button onclick="openEditStudentModal('${student.id}')" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>` : ''}
                     ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
                 </td>
             </tr>
@@ -1532,19 +1532,19 @@ function buildModalOverallMetricBox(student, subjectRecords, isALevel) {
             ? subjectRecords.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0)
             : null;
         return `
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
-            <p class="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">Total Points</p>
-            <p class="text-2xl font-extrabold text-indigo-900">${hasGradedRecords ? totalPoints : 'Not yet available'}</p>
-            <p class="text-[10px] text-indigo-700">${hasGradedRecords ? 'Sum of subject grade points this term' : 'No graded subjects recorded yet'}</p>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+            <p class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Total Points</p>
+            <p class="text-2xl font-extrabold text-blue-900">${hasGradedRecords ? totalPoints : 'Not yet available'}</p>
+            <p class="text-[10px] text-blue-700">${hasGradedRecords ? 'Sum of subject grade points this term' : 'No graded subjects recorded yet'}</p>
         </div>`;
     }
     const overallAvg = hasGradedRecords ? calculateOLevelOverallAchievement(student.class, subjectRecords) : null;
     const overallIdentifier = overallAvg !== null ? getOverallIdentifier(overallAvg) : null;
     return `
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
-            <p class="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">Overall Achievement</p>
-            <p class="text-2xl font-extrabold text-indigo-900">${hasGradedRecords ? `${overallAvg.toFixed(1)} &mdash; ${overallIdentifier}` : 'Not yet available'}</p>
-            <p class="text-[10px] text-indigo-700">${hasGradedRecords ? 'Weighted against ' + (O_LEVEL_TIER_SUBJECT_COUNTS[student.class] || 12) + '-subject tier load' : 'No graded subjects recorded yet'}</p>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+            <p class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Overall Achievement</p>
+            <p class="text-2xl font-extrabold text-blue-900">${hasGradedRecords ? `${overallAvg.toFixed(1)} &mdash; ${overallIdentifier}` : 'Not yet available'}</p>
+            <p class="text-[10px] text-blue-700">${hasGradedRecords ? 'Weighted against ' + (O_LEVEL_TIER_SUBJECT_COUNTS[student.class] || 12) + '-subject tier load' : 'No graded subjects recorded yet'}</p>
         </div>`;
 }
 /* ---------------------------------------------------------
@@ -1955,7 +1955,7 @@ function openEditStudentModal(studentId) {
         <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                 <div class="flex items-center justify-between p-5 border-b border-slate-200">
-                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-indigo-600"></i>Edit Student</h3>
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-blue-600"></i>Edit Student</h3>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
                 <form onsubmit="submitEditStudent(event, '${student.id}')" class="p-5 space-y-4">
@@ -2863,10 +2863,10 @@ function renderMyPerformanceTrendChart(trend) {
             datasets: [{
                 label: 'My Average Score',
                 data: points.map(p => p.average),
-                borderColor: 'rgba(15, 118, 110, 1)',
-                backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                borderColor: 'rgba(29, 78, 216, 1)',
+                backgroundColor: 'rgba(37, 99, 235, 0.15)',
                 borderWidth: 2,
-                pointBackgroundColor: 'rgba(15, 118, 110, 1)',
+                pointBackgroundColor: 'rgba(29, 78, 216, 1)',
                 pointRadius: 4,
                 pointHoverRadius: 6,
                 tension: 0.3,
@@ -2950,7 +2950,7 @@ function computeStudentAchievements(subjectRecords, isALevel, attendance, trend)
     const strongSubjects = subjectRecords.filter(r => ['A', 'B'].includes(isALevel ? r.gradeInfo.grade : r.gradeData.grade));
     if (strongSubjects.length > 0) {
         achievements.push({
-            icon: 'fa-medal', color: 'indigo', title: 'Subjects On Track',
+            icon: 'fa-medal', color: 'blue', title: 'Subjects On Track',
             description: `${strongSubjects.length} subject${strongSubjects.length === 1 ? '' : 's'} graded A or B this term: ${strongSubjects.map(r => r.subj).join(', ')}.`
         });
     }
@@ -2961,7 +2961,7 @@ const ACHIEVEMENT_COLOR_CLASSES = {
     emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
     teal: 'bg-teal-50 border-teal-200 text-teal-700',
     amber: 'bg-amber-50 border-amber-200 text-amber-700',
-    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700'
+    blue: 'bg-blue-50 border-blue-200 text-blue-700'
 };
 function renderMyAchievementsPanel(student, trend) {
     const container = document.getElementById('my-achievements-panel');
@@ -3203,14 +3203,17 @@ function buildPerformanceRemark(records, isALevel) {
 }
 // Colour bands mirror each level's own grading scale, so a bar's colour always
 // reflects how that specific score was actually graded (A=green ... E=red).
+// Kept to the app's 5-color palette (black/grey, white, red, green, blue):
+// grey for ungraded/mid-tier, green for the top band, blue for the next,
+// and two shades of red for the lower bands.
 function getPerformanceColor(score, isALevel) {
-    if (score === null || score === undefined) return '#94a3b8'; // ungraded - neutral slate
+    if (score === null || score === undefined) return '#a1a1aa'; // ungraded - neutral grey
     const bands = isALevel ? [80, 70, 60, 50] : [75, 65, 55, 45];
-    if (score >= bands[0]) return '#10b981'; // A - emerald (success)
-    if (score >= bands[1]) return '#3b82f6'; // B - slate blue (secondary brand)
-    if (score >= bands[2]) return '#f59e0b'; // C - amber (warning)
-    if (score >= bands[3]) return '#f97316'; // D - orange
-    return '#ef4444';                        // E - rose/red (danger)
+    if (score >= bands[0]) return '#16a34a'; // A - green (success)
+    if (score >= bands[1]) return '#2563eb'; // B - blue (secondary brand)
+    if (score >= bands[2]) return '#71717a'; // C - neutral grey (mid-tier)
+    if (score >= bands[3]) return '#f87171'; // D - lighter red (caution)
+    return '#dc2626';                        // E - red (danger)
 }
 function buildSubjectBars(records, isALevel) {
     if (records.length === 0) return '<p class="rc-empty-note">No scores recorded yet.</p>';
@@ -3741,8 +3744,8 @@ function initPerformanceChart() {
                 datasets: [{
                     label: 'Class Mean Score (%)',
                     data: ANALYTICS_CLASS_LEVELS.map(level => analytics.classAverages[level]),
-                    backgroundColor: 'rgba(13, 148, 136, 0.8)',
-                    borderColor: 'rgba(15, 118, 110, 1)',
+                    backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                    borderColor: 'rgba(29, 78, 216, 1)',
                     borderWidth: 1,
                     borderRadius: 8
                 }]
@@ -3768,11 +3771,11 @@ function initPerformanceChart() {
                     label: 'Number of Students',
                     data: ['A', 'B', 'C', 'D', 'E'].map(g => analytics.overallGradeCounts[g]),
                     backgroundColor: [
-                        'rgba(13, 148, 136, 0.9)',
-                        'rgba(59, 130, 246, 0.9)',
-                        'rgba(234, 179, 8, 0.9)',
-                        'rgba(249, 115, 22, 0.9)',
-                        'rgba(225, 29, 72, 0.9)'
+                        'rgba(22, 163, 74, 0.9)',
+                        'rgba(37, 99, 235, 0.9)',
+                        'rgba(113, 113, 122, 0.9)',
+                        'rgba(248, 113, 113, 0.9)',
+                        'rgba(220, 38, 38, 0.9)'
                     ],
                     borderWidth: 2,
                     borderColor: '#ffffff'
@@ -3805,11 +3808,11 @@ function initPerformanceChart() {
                     label: 'Share of Grades',
                     data: ['A', 'B', 'C', 'D', 'E'].map(g => analytics.overallGradeCounts[g]),
                     backgroundColor: [
-                        'rgba(13, 148, 136, 0.9)',
-                        'rgba(59, 130, 246, 0.9)',
-                        'rgba(234, 179, 8, 0.9)',
-                        'rgba(249, 115, 22, 0.9)',
-                        'rgba(225, 29, 72, 0.9)'
+                        'rgba(22, 163, 74, 0.9)',
+                        'rgba(37, 99, 235, 0.9)',
+                        'rgba(113, 113, 122, 0.9)',
+                        'rgba(248, 113, 113, 0.9)',
+                        'rgba(220, 38, 38, 0.9)'
                     ],
                     borderWidth: 2,
                     borderColor: '#ffffff'
@@ -4437,7 +4440,7 @@ function loadTeacherData() {
                 <td class="p-4 text-slate-600 font-semibold">${escapeHTML(teacher.subject || '-')}</td>
                 <td class="p-4 font-mono text-xs text-slate-500" title="Passwords are never shown in plain text once stored securely on the server.">${teacher.password ? teacher.password : '••••••••'}</td>
                 <td class="p-4 text-center space-x-2">
-                    <button onclick="openEditTeacherModal(${index})" class="text-indigo-600 hover:text-indigo-700 text-[11px] font-extrabold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
+                    <button onclick="openEditTeacherModal(${index})" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
                     <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>
                     <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
                 </td>
@@ -4525,7 +4528,7 @@ function openEditTeacherModal(index) {
         <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                 <div class="flex items-center justify-between p-5 border-b border-slate-200">
-                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-indigo-600"></i>Edit Teacher</h3>
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-blue-600"></i>Edit Teacher</h3>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
                 <form onsubmit="submitEditTeacher(event, '${teacher.id}')" class="p-5 space-y-4">

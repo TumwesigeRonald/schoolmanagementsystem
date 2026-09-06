@@ -9,33 +9,44 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
     /* ---------------------------------------------------------------
-       BRAND COLOR OVERRIDE — Professional Navy/Blue palette.
+       BRAND COLOR OVERRIDE — 5-color, high-contrast palette:
+         1. Black / Dark Charcoal — nav bars, table headers, body text
+         2. White / Light Grey    — content surfaces, card containers
+         3. Red                   — urgent alerts, danger, high-priority
+         4. Green                 — success, active status, confirmation
+         5. Blue                  — hyperlinks, tabs, secondary actions
        The app's Tailwind utility classes (bg-teal-*, text-teal-*,
-       border-teal-*, ring-teal-*, bg-rose-*, text-rose-*, border-rose-*)
-       are used throughout script.js / class-summaries.js / teacher-toolbox.js
-       exactly as before — only the colors those names resolve to are
-       remapped here, so every existing "teal-700" or "rose-600" class in
-       the codebase now renders as the new brand blue / red without any
-       markup changes.
-         - "teal"  -> Deep Navy / Slate Blue scale (teal-900 = brand navy
-           #1E3A8A, teal-500 = brand secondary blue #3B82F6)
-         - "navy"  -> same scale, exposed under its own name too in case
-           it's used directly (e.g. bg-navy-900)
-         - "rose"  -> true red scale so "danger" = #EF4444 (Tailwind's
-           red-500) instead of the old pink-toned rose
-       "slate" (neutral gray), "amber" (warning) and "emerald" (success)
-       are left as Tailwind's own defaults — slate-50 (#F8FAFC), amber-500
-       (#F59E0B) and emerald-500 (#10B981) already match the requested
-       palette exactly.
+       border-teal-*, ring-teal-*, bg-rose-*, text-rose-*, border-rose-*,
+       bg-amber-*, text-amber-*, bg-emerald-*, text-emerald-*, bg-slate-*,
+       text-slate-*) are used throughout script.js / class-summaries.js /
+       teacher-toolbox.js exactly as before — only the colors those names
+       resolve to are remapped here, so no markup changes were needed.
+         - "teal"    -> Blue (unchanged: already the exact requested blue)
+         - "navy"    -> Black / Dark Charcoal (was blue; nav/header
+           elements now render charcoal instead of brand blue)
+         - "rose"    -> Red (already true red, Tailwind's own red scale)
+         - "slate"   -> True neutral grey (zinc) instead of the
+           blue-tinted default, so "White / Light Grey" surfaces read as
+           genuinely neutral rather than having a blue cast
+         - "amber"   -> repurposed to the same true neutral grey as
+           "slate", since the 5-color spec has no separate warning color
+           (previously used for pending/warning badges — those now read
+           as neutral grey instead of amber)
+         - "emerald" -> true Green (Tailwind's own green scale) so it
+           matches the "green-*" utility classes already used elsewhere
+           for success states
+       Tailwind's own "red", "green", "blue", and "gray" utility classes
+       (used directly in a few spots) are left as their normal defaults,
+       since those already match the requested palette.
        --------------------------------------------------------------- */
     tailwind.config = {
         theme: {
             extend: {
                 colors: {
                     navy: {
-                        50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
-                        400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8',
-                        800: '#1e40af', 900: '#1e3a8a', 950: '#172554'
+                        50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#d4d4d8',
+                        400: '#a1a1aa', 500: '#71717a', 600: '#52525b', 700: '#3f3f46',
+                        800: '#27272a', 900: '#18181b', 950: '#09090b'
                     },
                     teal: {
                         50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
@@ -46,6 +57,21 @@
                         50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 300: '#fca5a5',
                         400: '#f87171', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c',
                         800: '#991b1b', 900: '#7f1d1d', 950: '#450a0a'
+                    },
+                    slate: {
+                        50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#d4d4d8',
+                        400: '#a1a1aa', 500: '#71717a', 600: '#52525b', 700: '#3f3f46',
+                        800: '#27272a', 900: '#18181b', 950: '#09090b'
+                    },
+                    amber: {
+                        50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#d4d4d8',
+                        400: '#a1a1aa', 500: '#71717a', 600: '#52525b', 700: '#3f3f46',
+                        800: '#27272a', 900: '#18181b', 950: '#09090b'
+                    },
+                    emerald: {
+                        50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac',
+                        400: '#4ade80', 500: '#22c55e', 600: '#16a34a', 700: '#15803d',
+                        800: '#166534', 900: '#14532d', 950: '#052e16'
                     }
                 }
             }
@@ -56,7 +82,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="styles.css">
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#1e3a8a">
+<meta name="theme-color" content="#18181b">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="LCSS Portal">
