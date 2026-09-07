@@ -1007,7 +1007,7 @@ input, select, textarea {
     letter-spacing: 0.02em;
 }
 .welcome-banner.visible { display: block; }
-.welcome-banner span {
+.welcome-banner .banner-subtext {
     display: block;
     font-weight: 600;
     font-size: 11px;
