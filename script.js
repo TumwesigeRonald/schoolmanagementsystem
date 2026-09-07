@@ -789,6 +789,11 @@ function switchTab(tabName) {
         tabName = permissions.defaultTab;
     }
     currentTabName = tabName;
+    // Welcome banner and summary metric cards are Dashboard-only —
+    // hide them on every other tab (Scores, Students, etc.) instead of
+    // leaving them visible across the whole portal.
+    const bannerElem = document.getElementById('welcome-banner');
+    if (bannerElem) bannerElem.classList.toggle('visible', tabName === 'dashboard');
     const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
@@ -930,8 +935,11 @@ function updateDashboardStats() {
     const metricsGrid = document.querySelector('.metrics-grid');
     if (metricsGrid) {
         // School-wide counts are administrative overview data — not part of
-        // a Student's restricted, self-only view.
-        metricsGrid.classList.toggle('hidden', currentUser.role === 'Student');
+        // a Student's restricted, self-only view. Also Dashboard-only: this
+        // function runs after nearly every data change regardless of which
+        // tab is on screen, so it must re-check the active tab each time
+        // rather than just role, or the grid would reappear on other tabs.
+        metricsGrid.classList.toggle('hidden', currentUser.role === 'Student' || currentTabName !== 'dashboard');
     }
     const totalStudents = studentsList.length;
     const uniqueClasses = [...new Set(studentsList.map(s => s.class))].length;
