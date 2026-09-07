@@ -576,7 +576,7 @@ img {
     padding: 18px 20px;
     box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
-.metric-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--teal-700); }
+.metric-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #1d4ed8; }
 .metric-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 10px; }
 .metric-value { font-family: var(--font-display); font-size: 30px; color: var(--navy-900); }
 .metric-icon {
@@ -607,7 +607,7 @@ img {
 .btn-danger-sm { background: var(--rose-100); color: var(--rose-700); font-size: 10px; padding: 6px 12px; border: 1px solid rgba(220,38,38,0.25); }
 .btn-danger-sm:hover { background: #fecaca; }
 .form-panel { background: var(--teal-50); border: 1px solid var(--teal-100); border-radius: 14px; padding: 18px; margin-bottom: 22px; }
-.form-panel-title { margin: 0 0 12px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: var(--teal-800); }
+.form-panel-title { margin: 0 0 12px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #1e40af; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .mt-2 { margin-top: 8px; } .mt-6 { margin-top: 24px; } .mb-3 { margin-bottom: 12px; }
@@ -740,7 +740,7 @@ img {
 .rc-summary-section { margin-top: 7px; page-break-inside: avoid; flex-shrink: 0; }
 .rc-summary-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 8px; }
 .rc-summary-card { border: 1px solid #333; border-radius: 8px; padding: 7px 10px; }
-.rc-summary-card h4 { margin: 0 0 5px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--teal-700); border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+.rc-summary-card h4 { margin: 0 0 5px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #1d4ed8; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
 .rc-summary-row { display: flex; justify-content: space-between; font-size: 9.5px; font-weight: 700; padding: 2.5px 0; color: #222; }
 .rc-summary-row span:first-child { color: #666; font-weight: 600; }
 .rc-bars-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; }
