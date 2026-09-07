@@ -650,7 +650,7 @@ async function applySessionUser(user) {
             [ROLES.TEACHER]: `You have view access across the system, with permission to add and update learner scores.`,
             [ROLES.STUDENT]: `This view is limited to your own dashboard summary, report card, and shared learning resources.`
         };
-        banner.innerHTML = `Welcome back, <span class="text-amber-300">${currentUser.name || currentUser.username}</span><span class="banner-subtext">${greetings[currentUser.role] || ''}</span>`;
+        banner.innerHTML = `Welcome back, <span class="text-yellow-400">${currentUser.name || currentUser.username}</span><span class="banner-subtext">${greetings[currentUser.role] || ''}</span>`;
         banner.classList.add('visible');
     }
 
