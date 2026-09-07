@@ -1003,7 +1003,7 @@ function renderDashboardModule() {
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Active Enrollment</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Active Enrollment</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-user-graduate"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.totalStudents}</p>
@@ -1011,7 +1011,7 @@ function renderDashboardModule() {
                 </div>
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Classes</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Total Classes</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-school"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.uniqueClasses}</p>
@@ -1019,7 +1019,7 @@ function renderDashboardModule() {
                 </div>
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Subjects</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Total Subjects</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-book"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.totalSubjects}</p>
@@ -1027,7 +1027,7 @@ function renderDashboardModule() {
                 </div>
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Marks Recorded</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Marks Recorded</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-pen-to-square"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.totalMarksRecorded}</p>
