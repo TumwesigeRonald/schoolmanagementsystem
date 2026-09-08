@@ -660,6 +660,11 @@ async function applySessionUser(user) {
 }
 function handleLogout() {
     AuthAPI.logout();
+    // sessionStorage is per-tab, not per-user — on a shared browser, a
+    // stale Finance unlock would otherwise silently carry over to
+    // whoever logs in next on this same tab. Clear it explicitly so
+    // the next user always has to enter their own Finance password.
+    FinanceAuthAPI.lock();
     currentUser.username = "";
     currentUser.role = "";
     currentUser.name = "";
@@ -756,10 +761,168 @@ const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-whi
 function renderFinanceNavItem() {
     if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.TEACHER) return '';
     return `
-        <button id="nav-finance" onclick="openUnderConstructionNotice('School Finance'); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
+        <button id="nav-finance" onclick="openFinanceGate(); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
             <i class="fa-solid fa-sack-dollar w-4 text-center"></i><span>School Finance</span>
         </button>
     `;
+}
+/* ---------------------------------------------------------
+   SCHOOL FINANCE ACCESS GATE
+   -----------------------------------------------------------
+   A second, independent password (verified server-side by
+   FinanceAuthAPI / routes/finance-auth.routes.js — never checked
+   client-side) that gates the "School Finance" nav item. Once the
+   backend confirms it, a short-lived finance token is kept in
+   sessionStorage for the rest of the tab session (see
+   FinanceTokenStore in api.js) so the modal doesn't reappear on
+   every click — only on a fresh tab/session, exactly like the main
+   login token already behaves.
+
+   For now, a verified session still opens the existing "Under
+   Construction" notice (openUnderConstructionNotice) rather than a
+   real dashboard, since there's no Finance data/view built yet —
+   swap that one line for the real panel once it exists.
+   --------------------------------------------------------- */
+function openFinanceGate() {
+    if (FinanceAuthAPI.isUnlocked()) {
+        openUnderConstructionNotice('School Finance');
+        return;
+    }
+    showFinancePasswordModal();
+}
+async function showFinancePasswordModal() {
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+
+    // Loading state while we ask the backend whether this account has
+    // a Finance password set yet — determines which form to show.
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+                <i class="fa-solid fa-circle-notch fa-spin text-teal-600 text-xl"></i>
+                <p class="text-xs font-semibold text-slate-500 mt-3">Checking Finance access…</p>
+            </div>
+        </div>
+    `;
+
+    const status = await FinanceAuthAPI.status();
+    if (!status.ok) {
+        root.innerHTML = `
+            <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+                    <div class="p-6 text-center">
+                        <div class="w-14 h-14 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Couldn't Reach Server</h3>
+                        <p class="text-xs font-semibold text-slate-500 mt-2 leading-relaxed">${escapeHTML(status.message)}</p>
+                        <button onclick="closeModal()" class="mt-5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    renderFinancePasswordForm(status.hasPassword ? 'verify' : 'create');
+}
+function renderFinancePasswordForm(mode) {
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    const isCreate = mode === 'create';
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+                <div class="p-6">
+                    <div class="w-14 h-14 mx-auto rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-lock"></i></div>
+                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider text-center">School Finance</h3>
+                    <p class="text-xs font-semibold text-slate-500 mt-2 mb-4 text-center leading-relaxed">
+                        ${isCreate
+                            ? 'This is your first time opening Finance. Set a password to protect it — you\'ll only need it once per browser session.'
+                            : 'Enter your Finance password to continue.'}
+                    </p>
+                    <div id="finance-form-fields" class="space-y-2">
+                        ${isCreate ? `
+                            <input type="password" id="finance-new-password" placeholder="New Finance password (min. 6 characters)" autocomplete="new-password"
+                                class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                            <input type="password" id="finance-confirm-password" placeholder="Confirm password" autocomplete="new-password"
+                                class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                        ` : `
+                            <input type="password" id="finance-password-input" placeholder="Finance password" autocomplete="current-password"
+                                class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                        `}
+                    </div>
+                    <p id="finance-form-error" class="text-rose-600 text-xs font-bold mt-2 hidden"></p>
+                    <div class="flex justify-end gap-2 mt-5">
+                        <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
+                        <button id="finance-submit-btn" onclick="submitFinancePasswordForm('${mode}')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">
+                            ${isCreate ? 'Set Password' : 'Unlock'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    const firstInput = document.getElementById(isCreate ? 'finance-new-password' : 'finance-password-input');
+    if (firstInput) {
+        firstInput.focus();
+        root.querySelectorAll('input').forEach(inp => {
+            inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitFinancePasswordForm(mode); });
+        });
+    }
+}
+function showFinanceFormError(message) {
+    const errEl = document.getElementById('finance-form-error');
+    if (!errEl) return;
+    errEl.textContent = message;
+    errEl.classList.remove('hidden');
+}
+async function submitFinancePasswordForm(mode) {
+    const btn = document.getElementById('finance-submit-btn');
+    const errEl = document.getElementById('finance-form-error');
+    if (errEl) errEl.classList.add('hidden');
+
+    if (mode === 'create') {
+        const pw = document.getElementById('finance-new-password').value;
+        const confirm = document.getElementById('finance-confirm-password').value;
+        if (!pw || pw.length < 6) return showFinanceFormError('Password must be at least 6 characters.');
+        if (pw !== confirm) return showFinanceFormError('Passwords do not match.');
+
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        const result = await FinanceAuthAPI.setPassword(pw);
+        if (!result.ok) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Set Password'; }
+            return showFinanceFormError(result.message);
+        }
+        // Password is set — immediately verify with it so the user isn't
+        // asked to type the same password twice in a row.
+        const verify = await FinanceAuthAPI.verifyPassword(pw);
+        if (!verify.ok) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Set Password'; }
+            return showFinanceFormError(verify.message);
+        }
+        closeModal();
+        openUnderConstructionNotice('School Finance');
+        return;
+    }
+
+    // mode === 'verify'
+    const password = document.getElementById('finance-password-input').value;
+    if (!password) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    const result = await FinanceAuthAPI.verifyPassword(password);
+    if (!result.ok) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+        // Account was reset/never finished setup server-side — drop back
+        // into the "create" form instead of showing a confusing error.
+        if (result.notSet) {
+            renderFinancePasswordForm('create');
+            return;
+        }
+        const input = document.getElementById('finance-password-input');
+        if (input) { input.value = ''; input.focus(); }
+        return showFinanceFormError(result.message);
+    }
+    closeModal();
+    openUnderConstructionNotice('School Finance');
 }
 // Professional "coming soon" modal for placeholder sidebar sections. Reuses
 // the existing #modal-root + closeModal() pattern already used by the
