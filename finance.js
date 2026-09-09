@@ -34,8 +34,14 @@
 
 const FINANCE_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
 let financeReceiptCache = {}; // paymentId -> { payment, student } — populated whenever a receipt could be printed from, so print buttons don't need to re-fetch
-let financeActiveSection = 'payments'; // 'payments' | 'fees' | 'summary'
+let financeActiveSection = 'payments'; // 'payments' | 'fees' | 'summary' | 'defaulters'
 let financePaymentsCache = []; // last-fetched balances list for the active class/term/year, so the search box can filter instantly without refetching
+let financeCollectedChart = null; // Chart.js instances for the summary page — kept so the canvas can be
+let financeMethodChart = null;    // destroyed and redrawn cleanly whenever the summary reloads (term/year change)
+
+// Small fixed color set for chart series — kept in one place so the
+// donut and the method chart read the same palette as the rest of the app.
+const FINANCE_CHART_COLORS = ['#0f766e', '#2563eb', '#f59e0b', '#a855f7', '#ec4899', '#64748b'];
 
 function financeCanEdit() {
     return currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.BURSAR;
@@ -82,6 +88,7 @@ function renderFinanceModule() {
                 <button id="fin-tab-payments" onclick="switchFinanceSection('payments')" class="finance-section-tab">Fees &amp; Payments</button>
                 <button id="fin-tab-fees" onclick="switchFinanceSection('fees')" class="finance-section-tab">Fee Structure</button>
                 <button id="fin-tab-summary" onclick="switchFinanceSection('summary')" class="finance-section-tab">Termly Summary</button>
+                <button id="fin-tab-defaulters" onclick="switchFinanceSection('defaulters')" class="finance-section-tab">Defaulters</button>
             </div>
             <style>
                 .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; }
@@ -100,7 +107,7 @@ function initFinanceModule() {
 
 function switchFinanceSection(section) {
     financeActiveSection = section;
-    ['payments', 'fees', 'summary'].forEach(s => {
+    ['payments', 'fees', 'summary', 'defaulters'].forEach(s => {
         const tabEl = document.getElementById(`fin-tab-${s}`);
         if (tabEl) tabEl.classList.toggle('active', s === section);
     });
@@ -110,6 +117,7 @@ function switchFinanceSection(section) {
 function loadFinanceActiveSection() {
     if (financeActiveSection === 'fees') return loadFinanceFeeStructure();
     if (financeActiveSection === 'summary') return loadFinanceSummary();
+    if (financeActiveSection === 'defaulters') return loadFinanceDefaulters();
     return loadFinancePayments();
 }
 
@@ -520,10 +528,44 @@ async function loadFinanceSummary() {
         return;
     }
 
+    const collectionRate = data.totals.billed > 0 ? (data.totals.collected / data.totals.billed) * 100 : 0;
+
     body.innerHTML = `
         <div class="flex justify-end mb-3">
             <button onclick="printFinanceSummary()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print</button>
         </div>
+
+        <!-- Stat cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+            ${[
+                { label: 'Expected (Billed)', value: data.totals.billed, bg: '#2563eb' },
+                { label: 'Collected', value: data.totals.collected, bg: '#0f766e' },
+                { label: 'Outstanding', value: data.totals.outstanding, bg: '#e11d48' },
+                { label: 'Collection Rate', value: collectionRate.toFixed(1) + '%', bg: '#a855f7', raw: true }
+            ].map(card => `
+                <div class="rounded-2xl shadow-xs p-4 text-white" style="background:${card.bg};">
+                    <p class="text-2xl font-black leading-tight">${card.raw ? card.value : formatUGX(card.value)}</p>
+                    <p class="text-[10px] font-extrabold uppercase tracking-wider opacity-90 mt-1">${card.label}</p>
+                </div>
+            `).join('')}
+        </div>
+
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Fees Collected vs Outstanding</h4>
+                <div style="height:220px;"><canvas id="fin-collected-chart"></canvas></div>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-4">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Collections by Payment Method</h4>
+                <div style="height:220px;">
+                    ${data.byMethod && data.byMethod.length
+                        ? '<canvas id="fin-method-chart"></canvas>'
+                        : '<p class="text-center text-slate-400 text-xs font-medium pt-16">No payments recorded yet this term.</p>'}
+                </div>
+            </div>
+        </div>
+
         <div id="fin-summary-preview" class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
             <div class="p-5 border-b border-slate-100">
                 <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide">Termly Financial Summary</h3>
@@ -551,6 +593,123 @@ async function loadFinanceSummary() {
                     <td class="p-3 text-emerald-700">${formatUGX(data.totals.collected)}</td>
                     <td class="p-3 text-rose-700">${formatUGX(data.totals.outstanding)}</td>
                 </tr></tfoot>
+            </table>
+        </div>
+    `;
+
+    renderFinanceSummaryCharts(data);
+}
+
+// Draws/redraws the two Chart.js canvases on the summary page. Destroys any
+// previous instance first — required because loadFinanceSummary() re-injects
+// the <canvas> elements every time the term/year changes, and Chart.js
+// throws if you re-init a canvas that's still attached to a live chart.
+function renderFinanceSummaryCharts(data) {
+    if (typeof Chart === 'undefined') return; // Chart.js failed to load (e.g. offline) — charts just won't render
+
+    if (financeCollectedChart) { financeCollectedChart.destroy(); financeCollectedChart = null; }
+    if (financeMethodChart) { financeMethodChart.destroy(); financeMethodChart = null; }
+
+    const collectedCanvas = document.getElementById('fin-collected-chart');
+    if (collectedCanvas) {
+        const collected = data.totals.collected || 0;
+        const outstanding = data.totals.outstanding || 0;
+        financeCollectedChart = new Chart(collectedCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Collected', 'Outstanding'],
+                datasets: [{ data: [collected, outstanding], backgroundColor: ['#0f766e', '#e11d48'], borderWidth: 0 }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, boxWidth: 10 } },
+                    tooltip: { callbacks: { label: ctx => `${ctx.label}: ${formatUGX(ctx.raw)}` } }
+                }
+            }
+        });
+    }
+
+    const methodCanvas = document.getElementById('fin-method-chart');
+    if (methodCanvas && data.byMethod && data.byMethod.length) {
+        financeMethodChart = new Chart(methodCanvas, {
+            type: 'doughnut',
+            data: {
+                labels: data.byMethod.map(m => m.method),
+                datasets: [{
+                    data: data.byMethod.map(m => m.amount),
+                    backgroundColor: data.byMethod.map((_, i) => FINANCE_CHART_COLORS[i % FINANCE_CHART_COLORS.length]),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 11, weight: 'bold' }, boxWidth: 10 } },
+                    tooltip: { callbacks: { label: ctx => `${ctx.label}: ${formatUGX(ctx.raw)}` } }
+                }
+            }
+        });
+    }
+}
+
+/* ---------------------------------------------------------
+   DEFAULTERS — students with an outstanding balance for the selected
+   term/year, sorted highest balance first. Reuses the same balances
+   endpoint as the Payments tab (fetched once for all classes), so no
+   new backend route was needed — just filtered/sorted client-side.
+   --------------------------------------------------------- */
+async function loadFinanceDefaulters() {
+    const body = document.getElementById('fin-section-body');
+    if (!body) return;
+    const { term, year } = getFinanceViewedTermYear();
+    body.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading defaulters&hellip;</div>`;
+
+    let students = [];
+    try {
+        students = await FinanceAPI.getPayments({ term, year });
+    } catch (err) {
+        body.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-rose-500 text-xs font-semibold">${escapeHTML(err.message || "Couldn't load defaulters.")}</div>`;
+        return;
+    }
+
+    const defaulters = students.filter(s => s.balance > 0).sort((a, b) => b.balance - a.balance);
+    const totalOwed = defaulters.reduce((sum, s) => sum + s.balance, 0);
+
+    if (!defaulters.length) {
+        body.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-emerald-600 text-xs font-bold"><i class="fa-solid fa-circle-check mr-1.5"></i>No outstanding balances for ${escapeHTML(term)}, ${escapeHTML(String(year))} &mdash; every student is fully paid up.</div>`;
+        return;
+    }
+
+    body.innerHTML = `
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p class="text-xs font-semibold text-slate-600"><span class="font-extrabold text-rose-600">${defaulters.length}</span> student${defaulters.length === 1 ? '' : 's'} owing a total of <span class="font-extrabold text-rose-600">${formatUGX(totalOwed)}</span> for ${escapeHTML(term)}, ${escapeHTML(String(year))}.</p>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-auto max-h-[65vh]">
+            <table class="w-full text-left text-xs text-slate-700">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider sticky top-0"><tr>
+                    <th class="p-3">Student</th><th class="p-3">Class</th><th class="p-3">Billed</th><th class="p-3">Paid</th><th class="p-3">Balance</th><th class="p-3"></th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${defaulters.map(s => {
+                        const nameEsc = escapeHTML(s.name).replace(/'/g, "\\'");
+                        const classEsc = escapeHTML(s.class).replace(/'/g, "\\'");
+                        return `
+                        <tr>
+                            <td class="p-3 font-extrabold">${escapeHTML(s.name)}</td>
+                            <td class="p-3">${escapeHTML(s.class)}</td>
+                            <td class="p-3">${formatUGX(s.billed)}</td>
+                            <td class="p-3 text-emerald-600 font-bold">${formatUGX(s.paid)}</td>
+                            <td class="p-3 font-extrabold text-rose-600">${formatUGX(s.balance)}</td>
+                            <td class="p-3 whitespace-nowrap">
+                                <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase mr-3">History</button>
+                                ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                            </td>
+                        </tr>
+                    `; }).join('')}
+                </tbody>
             </table>
         </div>
     `;
