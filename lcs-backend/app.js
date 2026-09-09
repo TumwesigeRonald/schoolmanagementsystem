@@ -16,6 +16,8 @@ const activityLogRoutes = require('./routes/activity-log.routes');
 const noticesRoutes = require('./routes/notices.routes');
 const remarksRoutes = require('./routes/remarks.routes');
 const aiRoutes = require('./routes/ai.routes');
+const financeAuthRoutes = require('./routes/finance-auth.routes');
+const financeRoutes = require('./routes/finance.routes');
 
 const app = express();
 
@@ -68,6 +70,9 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 app.use('/api/auth/login', authLimiter);
+// Same brute-force protection as the main login — this is a second
+// password guarding sensitive data, so it deserves the same limiter.
+app.use('/api/finance-auth/verify-password', authLimiter);
 
 // --- Health check (useful for Vercel/Render uptime checks) ---
 app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
@@ -85,6 +90,8 @@ app.use('/api/activity-log', activityLogRoutes);
 app.use('/api/notices', noticesRoutes);
 app.use('/api/remarks', remarksRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/finance-auth', financeAuthRoutes);
+app.use('/api/finance', financeRoutes);
 
 // --- 404 for unmatched /api routes ---
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));

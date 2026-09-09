@@ -19,6 +19,13 @@ EXCEPTION
   WHEN duplicate_object THEN NULL;
 END $$;
 
+-- "Bursar" — new role added for the School Finance feature. Can record
+-- fee payments and set fee structures (Teachers get view-only access to
+-- the same data; see FINANCE_ROLES / EDIT_ROLES in the finance routes).
+-- ADD VALUE IF NOT EXISTS is its own idempotent form (no DO/EXCEPTION
+-- wrapper needed) and is safe outside a transaction on PG 12+.
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'Bursar';
+
 -- -------------------------------------------------------------
 -- students — the learner registry (Admin-managed)
 -- id uses the school's own format, e.g. "LCS/001"
@@ -365,3 +372,52 @@ CREATE INDEX IF NOT EXISTS idx_users_teacher       ON users(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_activity_log_created ON activity_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notices_created       ON notices(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_report_remarks_student ON report_card_remarks(student_id);
+
+-- -------------------------------------------------------------
+-- School Finance access gate — a second, independent password
+-- (bcrypt-hashed, per-user) that Admin/Teacher accounts must enter
+-- to unlock the "School Finance" section, on top of their normal
+-- login. NULL means the user hasn't set one yet (see
+-- routes/finance-auth.routes.js). Safe to re-run against a
+-- database created before this column existed.
+-- -------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS finance_password_hash TEXT;
+
+-- -------------------------------------------------------------
+-- School Finance data — fee billing, payments, balances.
+-- fee_structures: the expected fee amount per class/term/year, set
+--   by Admin/Bursar. Billed amount for a student = whatever row
+--   matches their class + the term/year being viewed.
+-- fee_payments: one row per individual payment received. A
+--   student's balance = billed amount − SUM(their payments).
+-- Both tables sit behind requireFinanceScope (the same Finance-
+-- password gate as finance-auth.routes.js) on every route in
+-- routes/finance.routes.js, on top of the normal login.
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS fee_structures (
+  id          SERIAL PRIMARY KEY,
+  class       TEXT NOT NULL,
+  term        TEXT NOT NULL,
+  year        INTEGER NOT NULL,
+  amount      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  updated_by  TEXT,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (class, term, year)
+);
+
+CREATE TABLE IF NOT EXISTS fee_payments (
+  id            SERIAL PRIMARY KEY,
+  student_id    TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  term          TEXT NOT NULL,
+  year          INTEGER NOT NULL,
+  amount        NUMERIC(12,2) NOT NULL,
+  method        TEXT,
+  reference     TEXT,
+  note          TEXT,
+  recorded_by   TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fee_structures_term_year ON fee_structures(term, year);
+CREATE INDEX IF NOT EXISTS idx_fee_payments_student     ON fee_payments(student_id, term, year);
+CREATE INDEX IF NOT EXISTS idx_fee_payments_term_year   ON fee_payments(term, year);

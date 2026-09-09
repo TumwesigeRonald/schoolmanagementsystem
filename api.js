@@ -46,7 +46,11 @@ const API_CONFIG = {
     BASE_URL: "https://lcs-backend.vercel.app/api",
     TIMEOUT_MS: 12000,
     TOKEN_STORAGE_KEY: "lcs_auth_token",
-    USER_STORAGE_KEY: "lcs_auth_user"
+    USER_STORAGE_KEY: "lcs_auth_user",
+    // Separate from the main login token — this is only ever sent to
+    // /api/finance-auth/* and (later) whatever real Finance data routes
+    // get built, never to the regular endpoints above.
+    FINANCE_TOKEN_STORAGE_KEY: "lcs_finance_token"
 };
 
 // Full REST surface the frontend expects from the backend.
@@ -122,7 +126,17 @@ const ENDPOINTS = {
     // Integration & CAI / Record of Work) — see teacher-toolbox.js ---
     AI_GENERATE: "/ai/generate",
     AI_ITEMS: "/ai/items",
-    AI_ITEM_BY_ID: (id) => `/ai/items/${encodeURIComponent(id)}`
+    AI_ITEM_BY_ID: (id) => `/ai/items/${encodeURIComponent(id)}`,
+
+    // --- School Finance access gate (second password, see
+    // routes/finance-auth.routes.js on the backend) ---
+    FINANCE_AUTH_STATUS: "/finance-auth/status",
+    FINANCE_AUTH_VERIFY: "/finance-auth/verify-password",
+    FINANCE_AUTH_SET_PASSWORD: "/finance-auth/set-password",
+    // --- Finance data (behind the gate above) ---
+    FINANCE_FEE_STRUCTURE: "/finance/fee-structure",
+    FINANCE_PAYMENTS: "/finance/payments",
+    FINANCE_SUMMARY: "/finance/summary"
 };
 
 /* ---------------------------------------------------------
@@ -160,6 +174,30 @@ const TokenStore = {
     }
 };
 
+// Same sessionStorage-per-tab reasoning as TokenStore above, kept as a
+// fully separate key so clearing/expiring the Finance unlock never
+// touches the user's actual login session, and vice versa (e.g.
+// TokenStore.clear() on logout wipes the login token but a stale
+// finance token would otherwise survive — handleLogout() in script.js
+// clears this one explicitly too).
+const FinanceTokenStore = {
+    get() {
+        try { return sessionStorage.getItem(API_CONFIG.FINANCE_TOKEN_STORAGE_KEY); }
+        catch (e) { return null; }
+    },
+    set(token) {
+        try { sessionStorage.setItem(API_CONFIG.FINANCE_TOKEN_STORAGE_KEY, token); }
+        catch (e) { /* storage unavailable, ignore */ }
+    },
+    clear() {
+        try { sessionStorage.removeItem(API_CONFIG.FINANCE_TOKEN_STORAGE_KEY); }
+        catch (e) { /* ignore */ }
+    },
+    has() {
+        return !!this.get();
+    }
+};
+
 /* ---------------------------------------------------------
    3. CORE FETCH WRAPPER
    Every real network call funnels through here so auth headers,
@@ -172,6 +210,13 @@ async function apiRequest(path, { method = "GET", body = null, isFormData = fals
     const token = TokenStore.get();
     if (token) headers["Authorization"] = `Bearer ${token}`;
     if (!isFormData) headers["Content-Type"] = "application/json";
+    // Real Finance data routes (never finance-auth itself) additionally
+    // need the short-lived Finance-scoped token — see requireFinanceScope
+    // in the backend and FinanceTokenStore above.
+    if (path.startsWith("/finance/")) {
+        const financeToken = FinanceTokenStore.get();
+        if (financeToken) headers["x-finance-token"] = financeToken;
+    }
 
     try {
         const response = await fetch(`${API_CONFIG.BASE_URL}${path}`, {
@@ -230,7 +275,8 @@ async function apiRequest(path, { method = "GET", body = null, isFormData = fals
 const ROLES = {
     ADMIN: "Administrator",
     TEACHER: "Teacher",
-    STUDENT: "Student"
+    STUDENT: "Student",
+    BURSAR: "Bursar"
 };
 
 const ROLE_PERMISSIONS = {
@@ -271,6 +317,24 @@ const ROLE_PERMISSIONS = {
         canSwitchTerm: true,        // can browse a past term/year instead of only the live one
         canManageNotices: false,    // can read the bulletin, not post to it
         canPrintWholeClass: false   // whole-class bulk PDF export is Administrator-only
+    },
+    [ROLES.BURSAR]: {
+        // No academic tabs — Bursar's whole job lives behind the "School
+        // Finance" gate (renderFinanceNavItem), which isn't part of this
+        // tabs array (same as how Admin/Teacher reach it).
+        tabs: ["dashboard"],
+        defaultTab: "dashboard",
+        canManageStudents: false,
+        canManageScores: false,
+        canManageAttendance: false,
+        canManageResources: false,
+        canDeleteAnyResource: false,
+        canManageTeachers: false,
+        canManageTerm: false,
+        canViewAllReports: false,
+        canSwitchTerm: false,
+        canManageNotices: false,
+        canPrintWholeClass: false
     },
     [ROLES.STUDENT]: {
         tabs: ["dashboard", "reports", "resources"],
@@ -374,6 +438,108 @@ const AuthAPI = {
 
     getSession() {
         return TokenStore.getUser();
+    }
+};
+
+/* ---------------------------------------------------------
+   5b. FINANCE ACCESS GATE
+   Deliberately has NO local-fallback path like AuthAPI/remoteFirst
+   below — a password gate that silently "succeeds" whenever the
+   backend is unreachable would defeat the entire point of it. If
+   the backend can't be reached, every method here fails closed
+   (ok: false) instead of granting access.
+   --------------------------------------------------------- */
+const FinanceAuthAPI = {
+    // Whether the current user has ever set a Finance password —
+    // lets the modal show "create a password" vs "enter password".
+    async status() {
+        try {
+            const data = await apiRequest(ENDPOINTS.FINANCE_AUTH_STATUS);
+            return { ok: true, hasPassword: !!(data && data.hasPassword) };
+        } catch (err) {
+            return { ok: false, message: err.message || "Couldn't reach the server." };
+        }
+    },
+
+    async verifyPassword(password) {
+        try {
+            const data = await apiRequest(ENDPOINTS.FINANCE_AUTH_VERIFY, {
+                method: "POST",
+                body: { password }
+            });
+            if (data && data.financeToken) {
+                FinanceTokenStore.set(data.financeToken);
+                return { ok: true };
+            }
+            return { ok: false, message: "Unexpected response from server." };
+        } catch (err) {
+            return { ok: false, message: err.message || "Incorrect password.", notSet: err.payload && err.payload.code === 'NOT_SET' };
+        }
+    },
+
+    async setPassword(newPassword, currentPassword) {
+        try {
+            await apiRequest(ENDPOINTS.FINANCE_AUTH_SET_PASSWORD, {
+                method: "POST",
+                body: { newPassword, currentPassword }
+            });
+            return { ok: true };
+        } catch (err) {
+            return { ok: false, message: err.message || "Couldn't set the password." };
+        }
+    },
+
+    isUnlocked() {
+        return FinanceTokenStore.has();
+    },
+
+    lock() {
+        FinanceTokenStore.clear();
+    }
+};
+
+/* ---------------------------------------------------------
+   5c. FINANCE DATA — fee structures, payments/balances, summary.
+   Every call here requires an unlocked Finance session
+   (FinanceAuthAPI.isUnlocked()) — apiRequest() attaches the token
+   automatically for any "/finance/" path. No local-fallback path,
+   same reasoning as FinanceAuthAPI: financial data failing closed
+   when the backend is unreachable is correct, not a bug.
+   --------------------------------------------------------- */
+const FinanceAPI = {
+    async getFeeStructure(term, year) {
+        return apiRequest(`${ENDPOINTS.FINANCE_FEE_STRUCTURE}?term=${encodeURIComponent(term)}&year=${encodeURIComponent(year)}`);
+    },
+
+    async setFeeStructure(className, term, year, amount) {
+        return apiRequest(ENDPOINTS.FINANCE_FEE_STRUCTURE, {
+            method: "PUT",
+            body: { class: className, term, year, amount }
+        });
+    },
+
+    // Omit studentId for a class/term list of balances; pass it for one
+    // student's balance + full payment history.
+    async getPayments({ term, year, class: className, studentId } = {}) {
+        const params = new URLSearchParams({ term, year });
+        if (studentId) params.set("studentId", studentId);
+        else if (className) params.set("class", className);
+        return apiRequest(`${ENDPOINTS.FINANCE_PAYMENTS}?${params.toString()}`);
+    },
+
+    async recordPayment({ studentId, term, year, amount, method, reference, note }) {
+        return apiRequest(ENDPOINTS.FINANCE_PAYMENTS, {
+            method: "POST",
+            body: { studentId, term, year, amount, method, reference, note }
+        });
+    },
+
+    async deletePayment(paymentId) {
+        return apiRequest(`${ENDPOINTS.FINANCE_PAYMENTS}/${paymentId}`, { method: "DELETE" });
+    },
+
+    async getSummary(term, year) {
+        return apiRequest(`${ENDPOINTS.FINANCE_SUMMARY}?term=${encodeURIComponent(term)}&year=${encodeURIComponent(year)}`);
     }
 };
 

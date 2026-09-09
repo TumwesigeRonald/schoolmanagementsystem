@@ -1,4 +1,23 @@
-node_modules
-**/node_modules
+# Dependencies
+node_modules/
+lcs-backend/node_modules/
+
+# Environment variables (never commit real secrets/DB credentials)
 .env
-**/.env
+.env.local
+lcs-backend/.env
+
+# Logs
+npm-debug.log*
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Vercel
+.vercel/

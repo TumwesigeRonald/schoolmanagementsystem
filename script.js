@@ -650,7 +650,7 @@ async function applySessionUser(user) {
             [ROLES.TEACHER]: `You have view access across the system, with permission to add and update learner scores.`,
             [ROLES.STUDENT]: `This view is limited to your own dashboard summary, report card, and shared learning resources.`
         };
-        banner.innerHTML = `Welcome back, ${currentUser.name || currentUser.username}<span>${greetings[currentUser.role] || ''}</span>`;
+        banner.innerHTML = `Welcome back, <span class="text-yellow-400">${currentUser.name || currentUser.username}</span><span class="banner-subtext">${greetings[currentUser.role] || ''}</span>`;
         banner.classList.add('visible');
     }
 
@@ -660,6 +660,11 @@ async function applySessionUser(user) {
 }
 function handleLogout() {
     AuthAPI.logout();
+    // sessionStorage is per-tab, not per-user — on a shared browser, a
+    // stale Finance unlock would otherwise silently carry over to
+    // whoever logs in next on this same tab. Clear it explicitly so
+    // the next user always has to enter their own Finance password.
+    FinanceAuthAPI.lock();
     currentUser.username = "";
     currentUser.role = "";
     currentUser.name = "";
@@ -744,22 +749,204 @@ function renderSidebarNav() {
 // active item picking up the glowing left-border accent + fill.
 const SIDEBAR_NAV_BASE_CLASS = "flex items-center gap-3 w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wide border-l-[3px] transition-all duration-200 ease-in-out mb-1";
 const SIDEBAR_NAV_INACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} text-slate-200 border-transparent hover:bg-white/10 hover:text-white hover:border-teal-400/50 hover:translate-x-0.5`;
-// Glowing accent: a gold-600 left border + soft matching glow, echoing the
-// gold trim already used on the sidebar brand mark/badge (styles.css), on a
-// teal-700 fill so active text keeps the same WCAG-AA contrast as before.
-const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-[#f59e0b] shadow-[0_0_14px_rgba(245,158,11,0.35)]`;
+// Glowing accent: a white left border + soft matching glow on a teal-700
+// (blue) fill, so the active item stays inside the 5-color palette (no
+// amber/gold) while keeping the same WCAG-AA text contrast as before.
+const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-white shadow-[0_0_14px_rgba(255,255,255,0.35)]`;
 // "School Finance" is intentionally NOT part of the tabs/RBAC routing array
 // above — it's a placeholder entry that never actually navigates, so it's
 // kept fully separate from switchTab()'s real routing logic. Shown to
 // Admin & Teacher only (same audience as the Dashboard), matching the
 // existing left-aligned style and high-visibility text color exactly.
 function renderFinanceNavItem() {
-    if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.TEACHER) return '';
+    if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.TEACHER && currentUser.role !== ROLES.BURSAR) return '';
     return `
-        <button id="nav-finance" onclick="openUnderConstructionNotice('School Finance'); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
+        <button id="nav-finance" onclick="openFinanceGate(); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
             <i class="fa-solid fa-sack-dollar w-4 text-center"></i><span>School Finance</span>
         </button>
     `;
+}
+/* ---------------------------------------------------------
+   SCHOOL FINANCE ACCESS GATE
+   -----------------------------------------------------------
+   A second, independent password (verified server-side by
+   FinanceAuthAPI / routes/finance-auth.routes.js — never checked
+   client-side) that gates the "School Finance" nav item. Once the
+   backend confirms it, a short-lived finance token is kept in
+   sessionStorage for the rest of the tab session (see
+   FinanceTokenStore in api.js) so the modal doesn't reappear on
+   every click — only on a fresh tab/session, exactly like the main
+   login token already behaves.
+
+   For now, a verified session still opens the existing "Under
+   Construction" notice (openUnderConstructionNotice) rather than a
+   real dashboard, since there's no Finance data/view built yet —
+   swap that one line for the real panel once it exists.
+   --------------------------------------------------------- */
+function openFinanceGate() {
+    if (FinanceAuthAPI.isUnlocked()) {
+        showFinancePanel();
+        return;
+    }
+    showFinancePasswordModal();
+}
+// Renders the real Finance panel (finance.js) into the same #tab-content
+// switchTab() uses, and mirrors its nav-highlight/title behaviour for the
+// one nav item switchTab() doesn't manage itself — School Finance sits
+// outside the RBAC tabs[] array on purpose (see renderFinanceNavItem's
+// comment above), so it needs this one small equivalent here instead.
+function showFinancePanel() {
+    const contentElem = document.getElementById('tab-content');
+    if (!contentElem) return;
+    currentTabName = 'finance';
+    const titleElem = document.getElementById('page-title');
+    if (titleElem) titleElem.innerText = 'School Finance';
+    const allNavIds = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox', 'finance'];
+    allNavIds.forEach(id => {
+        const el = document.getElementById(`nav-${id}`);
+        if (el) el.className = id === 'finance' ? SIDEBAR_NAV_ACTIVE_CLASS : SIDEBAR_NAV_INACTIVE_CLASS;
+    });
+    const bannerElem = document.getElementById('welcome-banner');
+    if (bannerElem) bannerElem.classList.remove('visible');
+    // renderFinanceModule()/initFinanceModule() live in the separate
+    // finance.js file — isolated feature module, same pattern as
+    // class-summaries.js / teacher-toolbox.js.
+    contentElem.innerHTML = renderFinanceModule();
+    initFinanceModule();
+}
+async function showFinancePasswordModal() {
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+
+    // Loading state while we ask the backend whether this account has
+    // a Finance password set yet — determines which form to show.
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+                <i class="fa-solid fa-circle-notch fa-spin text-teal-600 text-xl"></i>
+                <p class="text-xs font-semibold text-slate-500 mt-3">Checking Finance access…</p>
+            </div>
+        </div>
+    `;
+
+    const status = await FinanceAuthAPI.status();
+    if (!status.ok) {
+        root.innerHTML = `
+            <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+                    <div class="p-6 text-center">
+                        <div class="w-14 h-14 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Couldn't Reach Server</h3>
+                        <p class="text-xs font-semibold text-slate-500 mt-2 leading-relaxed">${escapeHTML(status.message)}</p>
+                        <button onclick="closeModal()" class="mt-5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        return;
+    }
+
+    renderFinancePasswordForm(status.hasPassword ? 'verify' : 'create');
+}
+function renderFinancePasswordForm(mode) {
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    const isCreate = mode === 'create';
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+                <div class="p-6">
+                    <div class="w-14 h-14 mx-auto rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-lock"></i></div>
+                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider text-center">School Finance</h3>
+                    <p class="text-xs font-semibold text-slate-500 mt-2 mb-4 text-center leading-relaxed">
+                        ${isCreate
+                            ? 'This is your first time opening Finance. Set a password to protect it — you\'ll only need it once per browser session.'
+                            : 'Enter your Finance password to continue.'}
+                    </p>
+                    <div id="finance-form-fields" class="space-y-2">
+                        ${isCreate ? `
+                            <input type="password" id="finance-new-password" placeholder="New Finance password (min. 6 characters)" autocomplete="new-password"
+                                class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                            <input type="password" id="finance-confirm-password" placeholder="Confirm password" autocomplete="new-password"
+                                class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                        ` : `
+                            <input type="password" id="finance-password-input" placeholder="Finance password" autocomplete="current-password"
+                                class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                        `}
+                    </div>
+                    <p id="finance-form-error" class="text-rose-600 text-xs font-bold mt-2 hidden"></p>
+                    <div class="flex justify-end gap-2 mt-5">
+                        <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
+                        <button id="finance-submit-btn" onclick="submitFinancePasswordForm('${mode}')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">
+                            ${isCreate ? 'Set Password' : 'Unlock'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    const firstInput = document.getElementById(isCreate ? 'finance-new-password' : 'finance-password-input');
+    if (firstInput) {
+        firstInput.focus();
+        root.querySelectorAll('input').forEach(inp => {
+            inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitFinancePasswordForm(mode); });
+        });
+    }
+}
+function showFinanceFormError(message) {
+    const errEl = document.getElementById('finance-form-error');
+    if (!errEl) return;
+    errEl.textContent = message;
+    errEl.classList.remove('hidden');
+}
+async function submitFinancePasswordForm(mode) {
+    const btn = document.getElementById('finance-submit-btn');
+    const errEl = document.getElementById('finance-form-error');
+    if (errEl) errEl.classList.add('hidden');
+
+    if (mode === 'create') {
+        const pw = document.getElementById('finance-new-password').value;
+        const confirm = document.getElementById('finance-confirm-password').value;
+        if (!pw || pw.length < 6) return showFinanceFormError('Password must be at least 6 characters.');
+        if (pw !== confirm) return showFinanceFormError('Passwords do not match.');
+
+        if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+        const result = await FinanceAuthAPI.setPassword(pw);
+        if (!result.ok) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Set Password'; }
+            return showFinanceFormError(result.message);
+        }
+        // Password is set — immediately verify with it so the user isn't
+        // asked to type the same password twice in a row.
+        const verify = await FinanceAuthAPI.verifyPassword(pw);
+        if (!verify.ok) {
+            if (btn) { btn.disabled = false; btn.textContent = 'Set Password'; }
+            return showFinanceFormError(verify.message);
+        }
+        closeModal();
+        showFinancePanel();
+        return;
+    }
+
+    // mode === 'verify'
+    const password = document.getElementById('finance-password-input').value;
+    if (!password) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+    const result = await FinanceAuthAPI.verifyPassword(password);
+    if (!result.ok) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
+        // Account was reset/never finished setup server-side — drop back
+        // into the "create" form instead of showing a confusing error.
+        if (result.notSet) {
+            renderFinancePasswordForm('create');
+            return;
+        }
+        const input = document.getElementById('finance-password-input');
+        if (input) { input.value = ''; input.focus(); }
+        return showFinanceFormError(result.message);
+    }
+    closeModal();
+    showFinancePanel();
 }
 // Professional "coming soon" modal for placeholder sidebar sections. Reuses
 // the existing #modal-root + closeModal() pattern already used by the
@@ -789,6 +976,11 @@ function switchTab(tabName) {
         tabName = permissions.defaultTab;
     }
     currentTabName = tabName;
+    // Welcome banner and summary metric cards are Dashboard-only —
+    // hide them on every other tab (Scores, Students, etc.) instead of
+    // leaving them visible across the whole portal.
+    const bannerElem = document.getElementById('welcome-banner');
+    if (bannerElem) bannerElem.classList.toggle('visible', tabName === 'dashboard');
     const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
@@ -930,8 +1122,11 @@ function updateDashboardStats() {
     const metricsGrid = document.querySelector('.metrics-grid');
     if (metricsGrid) {
         // School-wide counts are administrative overview data — not part of
-        // a Student's restricted, self-only view.
-        metricsGrid.classList.toggle('hidden', currentUser.role === 'Student');
+        // a Student's restricted, self-only view. Also Dashboard-only: this
+        // function runs after nearly every data change regardless of which
+        // tab is on screen, so it must re-check the active tab each time
+        // rather than just role, or the grid would reappear on other tabs.
+        metricsGrid.classList.toggle('hidden', currentUser.role === 'Student' || currentTabName !== 'dashboard');
     }
     const totalStudents = studentsList.length;
     const uniqueClasses = [...new Set(studentsList.map(s => s.class))].length;
@@ -1003,7 +1198,7 @@ function renderDashboardModule() {
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Active Enrollment</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Active Enrollment</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-user-graduate"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.totalStudents}</p>
@@ -1011,7 +1206,7 @@ function renderDashboardModule() {
                 </div>
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Classes</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Total Classes</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-school"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.uniqueClasses}</p>
@@ -1019,7 +1214,7 @@ function renderDashboardModule() {
                 </div>
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Total Subjects</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Total Subjects</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-book"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.totalSubjects}</p>
@@ -1027,7 +1222,7 @@ function renderDashboardModule() {
                 </div>
                 <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Marks Recorded</span>
+                        <span class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Marks Recorded</span>
                         <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center text-sm"><i class="fa-solid fa-pen-to-square"></i></div>
                     </div>
                     <p class="text-2xl font-black text-slate-900 mt-2">${s.totalMarksRecorded}</p>
@@ -1238,8 +1433,8 @@ function initDashboardModule() {
             datasets: [{
                 label: 'Class Mean Score (%)',
                 data: ANALYTICS_CLASS_LEVELS.map(level => analytics.classAverages[level]),
-                backgroundColor: 'rgba(13, 148, 136, 0.8)',
-                borderColor: 'rgba(15, 118, 110, 1)',
+                backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                borderColor: 'rgba(29, 78, 216, 1)',
                 borderWidth: 1,
                 borderRadius: 8
             }]
@@ -1390,7 +1585,7 @@ function loadStudentData() {
                 <td class="p-4 text-slate-600 font-semibold">${escapeHTML(student.gender)}</td>
                 <td class="p-4 text-center space-x-2 whitespace-nowrap">
                     <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
-                    ${canManage ? `<button onclick="openEditStudentModal('${student.id}')" class="text-indigo-600 hover:text-indigo-700 text-[11px] font-extrabold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>` : ''}
+                    ${canManage ? `<button onclick="openEditStudentModal('${student.id}')" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>` : ''}
                     ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
                 </td>
             </tr>
@@ -1532,19 +1727,19 @@ function buildModalOverallMetricBox(student, subjectRecords, isALevel) {
             ? subjectRecords.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0)
             : null;
         return `
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
-            <p class="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">Total Points</p>
-            <p class="text-2xl font-extrabold text-indigo-900">${hasGradedRecords ? totalPoints : 'Not yet available'}</p>
-            <p class="text-[10px] text-indigo-700">${hasGradedRecords ? 'Sum of subject grade points this term' : 'No graded subjects recorded yet'}</p>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+            <p class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Total Points</p>
+            <p class="text-2xl font-extrabold text-blue-900">${hasGradedRecords ? totalPoints : 'Not yet available'}</p>
+            <p class="text-[10px] text-blue-700">${hasGradedRecords ? 'Sum of subject grade points this term' : 'No graded subjects recorded yet'}</p>
         </div>`;
     }
     const overallAvg = hasGradedRecords ? calculateOLevelOverallAchievement(student.class, subjectRecords) : null;
     const overallIdentifier = overallAvg !== null ? getOverallIdentifier(overallAvg) : null;
     return `
-        <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-center">
-            <p class="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider">Overall Achievement</p>
-            <p class="text-2xl font-extrabold text-indigo-900">${hasGradedRecords ? `${overallAvg.toFixed(1)} &mdash; ${overallIdentifier}` : 'Not yet available'}</p>
-            <p class="text-[10px] text-indigo-700">${hasGradedRecords ? 'Weighted against ' + (O_LEVEL_TIER_SUBJECT_COUNTS[student.class] || 12) + '-subject tier load' : 'No graded subjects recorded yet'}</p>
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+            <p class="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">Overall Achievement</p>
+            <p class="text-2xl font-extrabold text-blue-900">${hasGradedRecords ? `${overallAvg.toFixed(1)} &mdash; ${overallIdentifier}` : 'Not yet available'}</p>
+            <p class="text-[10px] text-blue-700">${hasGradedRecords ? 'Weighted against ' + (O_LEVEL_TIER_SUBJECT_COUNTS[student.class] || 12) + '-subject tier load' : 'No graded subjects recorded yet'}</p>
         </div>`;
 }
 /* ---------------------------------------------------------
@@ -1955,7 +2150,7 @@ function openEditStudentModal(studentId) {
         <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                 <div class="flex items-center justify-between p-5 border-b border-slate-200">
-                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-indigo-600"></i>Edit Student</h3>
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-blue-600"></i>Edit Student</h3>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
                 <form onsubmit="submitEditStudent(event, '${student.id}')" class="p-5 space-y-4">
@@ -2863,10 +3058,10 @@ function renderMyPerformanceTrendChart(trend) {
             datasets: [{
                 label: 'My Average Score',
                 data: points.map(p => p.average),
-                borderColor: 'rgba(15, 118, 110, 1)',
-                backgroundColor: 'rgba(13, 148, 136, 0.15)',
+                borderColor: 'rgba(29, 78, 216, 1)',
+                backgroundColor: 'rgba(37, 99, 235, 0.15)',
                 borderWidth: 2,
-                pointBackgroundColor: 'rgba(15, 118, 110, 1)',
+                pointBackgroundColor: 'rgba(29, 78, 216, 1)',
                 pointRadius: 4,
                 pointHoverRadius: 6,
                 tension: 0.3,
@@ -2950,7 +3145,7 @@ function computeStudentAchievements(subjectRecords, isALevel, attendance, trend)
     const strongSubjects = subjectRecords.filter(r => ['A', 'B'].includes(isALevel ? r.gradeInfo.grade : r.gradeData.grade));
     if (strongSubjects.length > 0) {
         achievements.push({
-            icon: 'fa-medal', color: 'indigo', title: 'Subjects On Track',
+            icon: 'fa-medal', color: 'blue', title: 'Subjects On Track',
             description: `${strongSubjects.length} subject${strongSubjects.length === 1 ? '' : 's'} graded A or B this term: ${strongSubjects.map(r => r.subj).join(', ')}.`
         });
     }
@@ -2961,7 +3156,7 @@ const ACHIEVEMENT_COLOR_CLASSES = {
     emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
     teal: 'bg-teal-50 border-teal-200 text-teal-700',
     amber: 'bg-amber-50 border-amber-200 text-amber-700',
-    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-700'
+    blue: 'bg-blue-50 border-blue-200 text-blue-700'
 };
 function renderMyAchievementsPanel(student, trend) {
     const container = document.getElementById('my-achievements-panel');
@@ -3203,14 +3398,17 @@ function buildPerformanceRemark(records, isALevel) {
 }
 // Colour bands mirror each level's own grading scale, so a bar's colour always
 // reflects how that specific score was actually graded (A=green ... E=red).
+// Kept to the app's 5-color palette (black/grey, white, red, green, blue):
+// grey for ungraded/mid-tier, green for the top band, blue for the next,
+// and two shades of red for the lower bands.
 function getPerformanceColor(score, isALevel) {
-    if (score === null || score === undefined) return '#94a3b8'; // ungraded - neutral slate
+    if (score === null || score === undefined) return '#a1a1aa'; // ungraded - neutral grey
     const bands = isALevel ? [80, 70, 60, 50] : [75, 65, 55, 45];
-    if (score >= bands[0]) return '#10b981'; // A - emerald (success)
-    if (score >= bands[1]) return '#3b82f6'; // B - slate blue (secondary brand)
-    if (score >= bands[2]) return '#f59e0b'; // C - amber (warning)
-    if (score >= bands[3]) return '#f97316'; // D - orange
-    return '#ef4444';                        // E - rose/red (danger)
+    if (score >= bands[0]) return '#16a34a'; // A - green (success)
+    if (score >= bands[1]) return '#2563eb'; // B - blue (secondary brand)
+    if (score >= bands[2]) return '#71717a'; // C - neutral grey (mid-tier)
+    if (score >= bands[3]) return '#f87171'; // D - lighter red (caution)
+    return '#dc2626';                        // E - red (danger)
 }
 function buildSubjectBars(records, isALevel) {
     if (records.length === 0) return '<p class="rc-empty-note">No scores recorded yet.</p>';
@@ -3741,8 +3939,8 @@ function initPerformanceChart() {
                 datasets: [{
                     label: 'Class Mean Score (%)',
                     data: ANALYTICS_CLASS_LEVELS.map(level => analytics.classAverages[level]),
-                    backgroundColor: 'rgba(13, 148, 136, 0.8)',
-                    borderColor: 'rgba(15, 118, 110, 1)',
+                    backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                    borderColor: 'rgba(29, 78, 216, 1)',
                     borderWidth: 1,
                     borderRadius: 8
                 }]
@@ -3768,11 +3966,11 @@ function initPerformanceChart() {
                     label: 'Number of Students',
                     data: ['A', 'B', 'C', 'D', 'E'].map(g => analytics.overallGradeCounts[g]),
                     backgroundColor: [
-                        'rgba(13, 148, 136, 0.9)',
-                        'rgba(59, 130, 246, 0.9)',
-                        'rgba(234, 179, 8, 0.9)',
-                        'rgba(249, 115, 22, 0.9)',
-                        'rgba(225, 29, 72, 0.9)'
+                        'rgba(22, 163, 74, 0.9)',
+                        'rgba(37, 99, 235, 0.9)',
+                        'rgba(113, 113, 122, 0.9)',
+                        'rgba(248, 113, 113, 0.9)',
+                        'rgba(220, 38, 38, 0.9)'
                     ],
                     borderWidth: 2,
                     borderColor: '#ffffff'
@@ -3805,11 +4003,11 @@ function initPerformanceChart() {
                     label: 'Share of Grades',
                     data: ['A', 'B', 'C', 'D', 'E'].map(g => analytics.overallGradeCounts[g]),
                     backgroundColor: [
-                        'rgba(13, 148, 136, 0.9)',
-                        'rgba(59, 130, 246, 0.9)',
-                        'rgba(234, 179, 8, 0.9)',
-                        'rgba(249, 115, 22, 0.9)',
-                        'rgba(225, 29, 72, 0.9)'
+                        'rgba(22, 163, 74, 0.9)',
+                        'rgba(37, 99, 235, 0.9)',
+                        'rgba(113, 113, 122, 0.9)',
+                        'rgba(248, 113, 113, 0.9)',
+                        'rgba(220, 38, 38, 0.9)'
                     ],
                     borderWidth: 2,
                     borderColor: '#ffffff'
@@ -4437,7 +4635,7 @@ function loadTeacherData() {
                 <td class="p-4 text-slate-600 font-semibold">${escapeHTML(teacher.subject || '-')}</td>
                 <td class="p-4 font-mono text-xs text-slate-500" title="Passwords are never shown in plain text once stored securely on the server.">${teacher.password ? teacher.password : '••••••••'}</td>
                 <td class="p-4 text-center space-x-2">
-                    <button onclick="openEditTeacherModal(${index})" class="text-indigo-600 hover:text-indigo-700 text-[11px] font-extrabold uppercase tracking-wider bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
+                    <button onclick="openEditTeacherModal(${index})" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
                     <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>
                     <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
                 </td>
@@ -4525,7 +4723,7 @@ function openEditTeacherModal(index) {
         <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                 <div class="flex items-center justify-between p-5 border-b border-slate-200">
-                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-indigo-600"></i>Edit Teacher</h3>
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-pen mr-2 text-blue-600"></i>Edit Teacher</h3>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
                 <form onsubmit="submitEditTeacher(event, '${teacher.id}')" class="p-5 space-y-4">
