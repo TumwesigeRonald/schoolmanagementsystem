@@ -665,6 +665,11 @@ function handleLogout() {
     // whoever logs in next on this same tab. Clear it explicitly so
     // the next user always has to enter their own Finance password.
     FinanceAuthAPI.lock();
+    // sessionStorage is per-tab, not per-user — on a shared browser, a
+    // stale Finance unlock would otherwise silently carry over to
+    // whoever logs in next on this same tab. Clear it explicitly so
+    // the next user always has to enter their own Finance password.
+    FinanceAuthAPI.lock();
     currentUser.username = "";
     currentUser.role = "";
     currentUser.name = "";
