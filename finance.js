@@ -229,23 +229,97 @@ async function loadFinancePayments() {
                     <th class="p-3">Student</th><th class="p-3">Class</th><th class="p-3">Billed</th><th class="p-3">Paid</th><th class="p-3">Balance</th><th class="p-3"></th>
                 </tr></thead>
                 <tbody class="divide-y divide-slate-100">
-                    ${students.map(s => `
+                    ${students.map(s => {
+                        const nameEsc = escapeHTML(s.name).replace(/'/g, "\\'");
+                        const classEsc = escapeHTML(s.class).replace(/'/g, "\\'");
+                        const reasonEsc = escapeHTML(s.customFeeReason || '').replace(/'/g, "\\'");
+                        return `
                         <tr>
                             <td class="p-3 font-extrabold">${escapeHTML(s.name)}</td>
                             <td class="p-3">${escapeHTML(s.class)}</td>
-                            <td class="p-3">${formatUGX(s.billed)}</td>
+                            <td class="p-3">
+                                ${formatUGX(s.billed)}
+                                ${s.hasCustomFee ? `<span title="${s.customFeeReason ? escapeHTML(s.customFeeReason) : 'Custom fee set for this student'}" class="ml-1 text-[9px] font-extrabold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Custom</span>` : ''}
+                                ${financeCanEdit() ? `<button onclick="openFeeOverrideModal('${s.id}', '${nameEsc}', '${classEsc}', ${s.billed}, ${s.hasCustomFee}, '${reasonEsc}')" class="ml-1 text-slate-400 hover:text-teal-600"><i class="fa-solid fa-pen text-[10px]"></i></button>` : ''}
+                            </td>
                             <td class="p-3 text-emerald-600 font-bold">${formatUGX(s.paid)}</td>
                             <td class="p-3 font-extrabold ${s.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}">${formatUGX(s.balance)}</td>
                             <td class="p-3 whitespace-nowrap">
-                                <button onclick="openFinancePaymentHistory('${s.id}', '${escapeHTML(s.name).replace(/'/g, "\\'")}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase mr-3">History</button>
-                                ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${escapeHTML(s.name).replace(/'/g, "\\'")}', '${escapeHTML(s.class).replace(/'/g, "\\'")}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                                <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase mr-3">History</button>
+                                ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
                             </td>
                         </tr>
-                    `).join('')}
+                    `; }).join('')}
                 </tbody>
             </table>
         </div>
     `;
+}
+
+// Set/clear a per-student expected fee, overriding their class's default
+// for this term/year (scholarship, sibling discount, extra charge, etc).
+function openFeeOverrideModal(studentId, studentName, studentClass, currentBilled, hasCustomFee, currentReason) {
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+                <div class="p-6">
+                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Student Fee</h3>
+                    <p class="text-xs font-semibold text-slate-500 mt-1 mb-4">${escapeHTML(studentName)} &middot; ${escapeHTML(studentClass)}</p>
+                    <p class="text-[11px] text-slate-400 mb-3">${hasCustomFee ? 'This student has a custom fee for the selected term.' : "Currently billed the class's default fee. Set an amount below to override it just for this student."}</p>
+                    <div class="space-y-2">
+                        <input type="number" min="0" id="fin-override-amount" value="${currentBilled}" placeholder="Amount (UGX)" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                        <input type="text" id="fin-override-reason" value="${escapeHTML(currentReason || '')}" placeholder="Reason (optional) e.g. Scholarship" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                    </div>
+                    <p id="fin-override-error" class="text-rose-600 text-xs font-bold mt-2 hidden"></p>
+                    <div class="flex justify-between items-center gap-2 mt-5">
+                        ${hasCustomFee ? `<button onclick="resetFeeOverride('${studentId}', '${escapeHTML(studentName).replace(/'/g, "\\'")}')" class="text-[11px] font-extrabold uppercase tracking-wider text-rose-500 hover:text-rose-700">Reset to Class Default</button>` : '<span></span>'}
+                        <div class="flex gap-2">
+                            <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
+                            <button id="fin-override-submit-btn" onclick="submitFeeOverride('${studentId}')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    const amountInput = document.getElementById('fin-override-amount');
+    if (amountInput) { amountInput.focus(); amountInput.select(); }
+}
+
+async function submitFeeOverride(studentId) {
+    const amount = Number(document.getElementById('fin-override-amount').value);
+    const reason = document.getElementById('fin-override-reason').value.trim();
+    const errEl = document.getElementById('fin-override-error');
+    const btn = document.getElementById('fin-override-submit-btn');
+    if (errEl) errEl.classList.add('hidden');
+    if (isNaN(amount) || amount < 0) {
+        if (errEl) { errEl.textContent = 'Enter a valid amount.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+    const { term, year } = getFinanceViewedTermYear();
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+        await FinanceAPI.setFeeOverride(studentId, term, year, amount, reason);
+        closeModal();
+        loadFinancePayments();
+    } catch (err) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+        if (errEl) { errEl.textContent = err.message || "Couldn't save that fee."; errEl.classList.remove('hidden'); }
+    }
+}
+
+async function resetFeeOverride(studentId, studentName) {
+    if (!confirm(`Reset ${studentName} back to the class's default fee?`)) return;
+    const { term, year } = getFinanceViewedTermYear();
+    try {
+        await FinanceAPI.clearFeeOverride(studentId, term, year);
+        closeModal();
+        loadFinancePayments();
+    } catch (err) {
+        alert(err.message || "Couldn't reset that fee.");
+    }
 }
 
 function openRecordFinancePaymentModal(studentId, studentName, studentClass) {
@@ -424,14 +498,14 @@ async function loadFinanceSummary() {
             </div>
             <table class="w-full text-left text-xs text-slate-700">
                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
-                    <th class="p-3">Class</th><th class="p-3">Students</th><th class="p-3">Fee/Student</th><th class="p-3">Billed</th><th class="p-3">Collected</th><th class="p-3">Outstanding</th>
+                    <th class="p-3">Class</th><th class="p-3">Students</th><th class="p-3">Avg Fee/Student</th><th class="p-3">Billed</th><th class="p-3">Collected</th><th class="p-3">Outstanding</th>
                 </tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     ${data.byClass.map(c => `
                         <tr>
                             <td class="p-3 font-extrabold">${escapeHTML(c.class)}</td>
                             <td class="p-3">${c.studentCount}</td>
-                            <td class="p-3">${formatUGX(c.feePerStudent)}</td>
+                            <td class="p-3">${formatUGX(c.studentCount ? c.billed / c.studentCount : 0)}</td>
                             <td class="p-3">${formatUGX(c.billed)}</td>
                             <td class="p-3 text-emerald-600 font-bold">${formatUGX(c.collected)}</td>
                             <td class="p-3 font-extrabold ${c.outstanding > 0 ? 'text-rose-600' : 'text-emerald-600'}">${formatUGX(c.outstanding)}</td>

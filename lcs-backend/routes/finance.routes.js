@@ -57,6 +57,47 @@ router.put('/fee-structure', requireRole(...EDIT_ROLES), asyncHandler(async (req
   res.json(rows[0]);
 }));
 
+/* ------------------------- Per-student fee override ------------------------- */
+
+// PUT /api/finance/fee-override — set/update ONE student's expected fee for
+// a term/year, overriding their class's default (scholarship, discount,
+// extra charge, etc). Admin + Bursar only.
+router.put('/fee-override', requireRole(...EDIT_ROLES), asyncHandler(async (req, res) => {
+  const { studentId, term, year, amount, reason } = req.body || {};
+  if (!studentId || !term || !year || amount == null || amount < 0) {
+    return res.status(400).json({ message: 'studentId, term, year and a non-negative amount are required.' });
+  }
+  const { rows: studentRows } = await db.query('SELECT id FROM students WHERE id = $1', [studentId]);
+  if (!studentRows.length) return res.status(404).json({ message: 'Student not found.' });
+
+  const { rows } = await db.query(
+    `INSERT INTO student_fee_overrides (student_id, term, year, amount, reason, updated_by, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6, now())
+     ON CONFLICT (student_id, term, year) DO UPDATE SET
+       amount = EXCLUDED.amount, reason = EXCLUDED.reason, updated_by = EXCLUDED.updated_by, updated_at = now()
+     RETURNING student_id AS "studentId", term, year, amount::float AS amount, reason`,
+    [studentId, term, year, amount, reason || null, req.user.username]
+  );
+  await logActivity(req.user.username, `Set a custom fee of ${amount} for ${studentId} (${term} ${year})`, req.ip);
+  res.json(rows[0]);
+}));
+
+// DELETE /api/finance/fee-override?studentId=&term=&year= — clear a
+// student's override so they fall back to their class's default fee.
+// Admin + Bursar only.
+router.delete('/fee-override', requireRole(...EDIT_ROLES), asyncHandler(async (req, res) => {
+  const { studentId, term, year } = req.query;
+  if (!studentId || !term || !year) {
+    return res.status(400).json({ message: 'studentId, term and year are required.' });
+  }
+  await db.query(
+    'DELETE FROM student_fee_overrides WHERE student_id = $1 AND term = $2 AND year = $3',
+    [studentId, term, year]
+  );
+  await logActivity(req.user.username, `Reset ${studentId} to the class default fee (${term} ${year})`, req.ip);
+  res.json({ ok: true });
+}));
+
 /* ------------------------------- Payments ------------------------------- */
 
 // GET /api/finance/payments?term=&year=&class=          -> list with balances
@@ -77,12 +118,17 @@ router.get('/payments', asyncHandler(async (req, res) => {
     filter = ` AND s.class = $${params.length}`;
   }
 
+  // billed = the student's own override if one is set for this term/year,
+  // otherwise their class's default fee_structures amount, otherwise 0.
   const { rows: students } = await db.query(
     `SELECT s.id, s.name, s.class,
-            COALESCE(fs.amount, 0)::float AS billed,
+            COALESCE(sfo.amount, fs.amount, 0)::float AS billed,
+            (sfo.amount IS NOT NULL) AS "hasCustomFee",
+            sfo.reason AS "customFeeReason",
             COALESCE(p.paid, 0)::float AS paid
      FROM students s
      LEFT JOIN fee_structures fs ON fs.class = s.class AND fs.term = $1 AND fs.year = $2
+     LEFT JOIN student_fee_overrides sfo ON sfo.student_id = s.id AND sfo.term = $1 AND sfo.year = $2
      LEFT JOIN (
        SELECT student_id, SUM(amount) AS paid FROM fee_payments
        WHERE term = $1 AND year = $2 GROUP BY student_id
@@ -140,6 +186,8 @@ router.delete('/payments/:id', requireRole(...EDIT_ROLES), asyncHandler(async (r
 /* -------------------------------- Summary -------------------------------- */
 
 // GET /api/finance/summary?term=&year= — termly financial report, by class + totals.
+// Aggregates each student's actual billed amount (override-aware), not
+// just class-count × class-fee, so overrides are reflected correctly here too.
 router.get('/summary', asyncHandler(async (req, res) => {
   const { term, year } = req.query;
   if (!term || !year) return res.status(400).json({ message: 'term and year are required.' });
@@ -147,20 +195,18 @@ router.get('/summary', asyncHandler(async (req, res) => {
   const { rows: byClass } = await db.query(
     `SELECT s.class,
             COUNT(DISTINCT s.id)::int AS "studentCount",
-            COALESCE(fs.amount, 0)::float AS "feePerStudent",
+            COALESCE(SUM(COALESCE(sfo.amount, fs.amount, 0)), 0)::float AS billed,
             COALESCE(SUM(p.amount), 0)::float AS collected
      FROM students s
      LEFT JOIN fee_structures fs ON fs.class = s.class AND fs.term = $1 AND fs.year = $2
+     LEFT JOIN student_fee_overrides sfo ON sfo.student_id = s.id AND sfo.term = $1 AND sfo.year = $2
      LEFT JOIN fee_payments p ON p.student_id = s.id AND p.term = $1 AND p.year = $2
-     GROUP BY s.class, fs.amount
+     GROUP BY s.class
      ORDER BY s.class`,
     [term, year]
   );
 
-  const summary = byClass.map(c => {
-    const billed = c.studentCount * c.feePerStudent;
-    return { ...c, billed, outstanding: Math.max(0, billed - c.collected) };
-  });
+  const summary = byClass.map(c => ({ ...c, outstanding: Math.max(0, c.billed - c.collected) }));
   const totals = summary.reduce((acc, c) => ({
     billed: acc.billed + c.billed,
     collected: acc.collected + c.collected,

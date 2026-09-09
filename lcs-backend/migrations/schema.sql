@@ -418,6 +418,23 @@ CREATE TABLE IF NOT EXISTS fee_payments (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- student_fee_overrides: per-student expected fee for a term/year,
+-- taking priority over that student's class-wide fee_structures row
+-- (e.g. a scholarship, sibling discount, or an extra one-off charge).
+-- No row here for a student = they're billed the normal class amount.
+CREATE TABLE IF NOT EXISTS student_fee_overrides (
+  id          SERIAL PRIMARY KEY,
+  student_id  TEXT NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  term        TEXT NOT NULL,
+  year        INTEGER NOT NULL,
+  amount      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  reason      TEXT,
+  updated_by  TEXT,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (student_id, term, year)
+);
+CREATE INDEX IF NOT EXISTS idx_fee_overrides_term_year ON student_fee_overrides(term, year);
+
 CREATE INDEX IF NOT EXISTS idx_fee_structures_term_year ON fee_structures(term, year);
 CREATE INDEX IF NOT EXISTS idx_fee_payments_student     ON fee_payments(student_id, term, year);
 CREATE INDEX IF NOT EXISTS idx_fee_payments_term_year   ON fee_payments(term, year);

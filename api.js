@@ -135,6 +135,7 @@ const ENDPOINTS = {
     FINANCE_AUTH_SET_PASSWORD: "/finance-auth/set-password",
     // --- Finance data (behind the gate above) ---
     FINANCE_FEE_STRUCTURE: "/finance/fee-structure",
+    FINANCE_FEE_OVERRIDE: "/finance/fee-override",
     FINANCE_PAYMENTS: "/finance/payments",
     FINANCE_SUMMARY: "/finance/summary"
 };
@@ -516,6 +517,20 @@ const FinanceAPI = {
             method: "PUT",
             body: { class: className, term, year, amount }
         });
+    },
+
+    // Per-student override — takes priority over the class's fee for that
+    // one student (scholarship, discount, extra charge, etc).
+    async setFeeOverride(studentId, term, year, amount, reason) {
+        return apiRequest(ENDPOINTS.FINANCE_FEE_OVERRIDE, {
+            method: "PUT",
+            body: { studentId, term, year, amount, reason }
+        });
+    },
+
+    async clearFeeOverride(studentId, term, year) {
+        const params = new URLSearchParams({ studentId, term, year });
+        return apiRequest(`${ENDPOINTS.FINANCE_FEE_OVERRIDE}?${params.toString()}`, { method: "DELETE" });
     },
 
     // Omit studentId for a class/term list of balances; pass it for one
