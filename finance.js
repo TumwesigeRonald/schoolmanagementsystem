@@ -35,6 +35,7 @@
 const FINANCE_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
 let financeReceiptCache = {}; // paymentId -> { payment, student } — populated whenever a receipt could be printed from, so print buttons don't need to re-fetch
 let financeActiveSection = 'payments'; // 'payments' | 'fees' | 'summary'
+let financePaymentsCache = []; // last-fetched balances list for the active class/term/year, so the search box can filter instantly without refetching
 
 function financeCanEdit() {
     return currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.BURSAR;
@@ -190,9 +191,11 @@ async function loadFinancePayments() {
     const { term, year } = getFinanceViewedTermYear();
     const classFilter = document.getElementById('fin-payments-class-select');
     const selectedClass = classFilter ? classFilter.value : '';
+    const searchBox = document.getElementById('fin-payments-search');
+    const searchValue = searchBox ? searchBox.value : '';
 
     body.innerHTML = `
-        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex items-end gap-4 mb-4">
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-wrap items-end gap-4 mb-4">
             <div>
                 <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Class</label>
                 <select id="fin-payments-class-select" onchange="loadFinancePayments()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
@@ -200,25 +203,55 @@ async function loadFinancePayments() {
                     ${FINANCE_CLASSES.map(c => `<option value="${c}" ${selectedClass === c ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
             </div>
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Search Student</label>
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="fin-payments-search" oninput="applyFinancePaymentsFilter()" placeholder="Name or Student ID&hellip;" class="w-full pl-8 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                </div>
+            </div>
         </div>
         <div id="fin-payments-table-wrapper" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading balances&hellip;</div>
     `;
-    // Re-apply the class filter's selected value after the re-render above
-    // wiped it (innerHTML replace resets <select> state).
+    // Re-apply filter values after the re-render above wiped them
+    // (innerHTML replace resets <select>/<input> state).
     const reselect = document.getElementById('fin-payments-class-select');
     if (reselect) reselect.value = selectedClass;
+    const research = document.getElementById('fin-payments-search');
+    if (research) research.value = searchValue;
 
     const wrapper = document.getElementById('fin-payments-table-wrapper');
-    let students = [];
     try {
-        students = await FinanceAPI.getPayments({ term, year, class: selectedClass || undefined });
+        financePaymentsCache = await FinanceAPI.getPayments({ term, year, class: selectedClass || undefined });
     } catch (err) {
+        financePaymentsCache = [];
         wrapper.innerHTML = `<p class="text-rose-500 text-xs font-semibold">${escapeHTML(err.message || "Couldn't load balances.")}</p>`;
         return;
     }
+    applyFinancePaymentsFilter();
+}
 
-    if (!students.length) {
-        wrapper.innerHTML = `<p class="text-slate-400 text-xs font-medium">No students found${selectedClass ? ` in ${escapeHTML(selectedClass)}` : ''}.</p>`;
+// Filters the already-fetched balances list client-side by name or
+// student ID — instant as the bursar types, no extra network call, and
+// works across "All Classes" too so they can find one student quickly
+// without knowing which class they're in.
+function applyFinancePaymentsFilter() {
+    const wrapper = document.getElementById('fin-payments-table-wrapper');
+    if (!wrapper) return;
+    const searchBox = document.getElementById('fin-payments-search');
+    const query = (searchBox ? searchBox.value : '').trim().toLowerCase();
+
+    const filtered = query
+        ? financePaymentsCache.filter(s =>
+            s.name.toLowerCase().includes(query) || String(s.id).toLowerCase().includes(query))
+        : financePaymentsCache;
+
+    if (!financePaymentsCache.length) {
+        wrapper.outerHTML = `<div id="fin-payments-table-wrapper" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">No students found.</div>`;
+        return;
+    }
+    if (!filtered.length) {
+        wrapper.outerHTML = `<div id="fin-payments-table-wrapper" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">No student matches &ldquo;${escapeHTML(searchBox.value.trim())}&rdquo;.</div>`;
         return;
     }
 
@@ -229,7 +262,7 @@ async function loadFinancePayments() {
                     <th class="p-3">Student</th><th class="p-3">Class</th><th class="p-3">Billed</th><th class="p-3">Paid</th><th class="p-3">Balance</th><th class="p-3"></th>
                 </tr></thead>
                 <tbody class="divide-y divide-slate-100">
-                    ${students.map(s => {
+                    ${filtered.map(s => {
                         const nameEsc = escapeHTML(s.name).replace(/'/g, "\\'");
                         const classEsc = escapeHTML(s.class).replace(/'/g, "\\'");
                         const reasonEsc = escapeHTML(s.customFeeReason || '').replace(/'/g, "\\'");
