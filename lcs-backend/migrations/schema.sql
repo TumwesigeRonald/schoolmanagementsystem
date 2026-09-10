@@ -438,3 +438,38 @@ CREATE INDEX IF NOT EXISTS idx_fee_overrides_term_year ON student_fee_overrides(
 CREATE INDEX IF NOT EXISTS idx_fee_structures_term_year ON fee_structures(term, year);
 CREATE INDEX IF NOT EXISTS idx_fee_payments_student     ON fee_payments(student_id, term, year);
 CREATE INDEX IF NOT EXISTS idx_fee_payments_term_year   ON fee_payments(term, year);
+
+-- -------------------------------------------------------------
+-- Expenses & (non-fee) Revenues — the other two sides of the school's
+-- money, alongside student fee collections above. Both are dated
+-- (calendar date, not term/year) so they can be charted month-by-month
+-- on the "Finance Flow" chart regardless of which term is being viewed
+-- elsewhere. category is free text (the frontend offers a suggestions
+-- list of common categories via <datalist>, but doesn't restrict input,
+-- same pattern as fee_payments.method). Behind the same Finance-password
+-- gate + EDIT_ROLES (Admin/Bursar) as everything else in finance.routes.js.
+-- "revenues" here means income OTHER than student fees (donations,
+-- grants, rent, fundraising) — student fee income is already tracked
+-- in fee_payments and both are combined for the Finance Flow chart.
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS expenses (
+  id            SERIAL PRIMARY KEY,
+  category      TEXT NOT NULL,
+  amount        NUMERIC(12,2) NOT NULL,
+  expense_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+  note          TEXT,
+  recorded_by   TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
+
+CREATE TABLE IF NOT EXISTS revenues (
+  id            SERIAL PRIMARY KEY,
+  category      TEXT NOT NULL,
+  amount        NUMERIC(12,2) NOT NULL,
+  revenue_date  DATE NOT NULL DEFAULT CURRENT_DATE,
+  note          TEXT,
+  recorded_by   TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_revenues_date ON revenues(revenue_date);

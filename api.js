@@ -137,7 +137,10 @@ const ENDPOINTS = {
     FINANCE_FEE_STRUCTURE: "/finance/fee-structure",
     FINANCE_FEE_OVERRIDE: "/finance/fee-override",
     FINANCE_PAYMENTS: "/finance/payments",
-    FINANCE_SUMMARY: "/finance/summary"
+    FINANCE_SUMMARY: "/finance/summary",
+    FINANCE_EXPENSES: "/finance/expenses",
+    FINANCE_REVENUES: "/finance/revenues",
+    FINANCE_FLOW: "/finance/finance-flow"
 };
 
 /* ---------------------------------------------------------
@@ -555,6 +558,37 @@ const FinanceAPI = {
 
     async getSummary(term, year) {
         return apiRequest(`${ENDPOINTS.FINANCE_SUMMARY}?term=${encodeURIComponent(term)}&year=${encodeURIComponent(year)}`);
+    },
+
+    // --- Expenses (money spent — salaries, utilities, maintenance, etc.) ---
+    async listExpenses(year, month) {
+        const params = new URLSearchParams({ year });
+        if (month) params.set("month", month);
+        return apiRequest(`${ENDPOINTS.FINANCE_EXPENSES}?${params.toString()}`);
+    },
+    async addExpense({ category, amount, date, note }) {
+        return apiRequest(ENDPOINTS.FINANCE_EXPENSES, { method: "POST", body: { category, amount, date, note } });
+    },
+    async deleteExpense(id) {
+        return apiRequest(`${ENDPOINTS.FINANCE_EXPENSES}/${id}`, { method: "DELETE" });
+    },
+
+    // --- Revenues (non-fee income — donations, grants, rent, fundraising) ---
+    async listRevenues(year, month) {
+        const params = new URLSearchParams({ year });
+        if (month) params.set("month", month);
+        return apiRequest(`${ENDPOINTS.FINANCE_REVENUES}?${params.toString()}`);
+    },
+    async addRevenue({ category, amount, date, note }) {
+        return apiRequest(ENDPOINTS.FINANCE_REVENUES, { method: "POST", body: { category, amount, date, note } });
+    },
+    async deleteRevenue(id) {
+        return apiRequest(`${ENDPOINTS.FINANCE_REVENUES}/${id}`, { method: "DELETE" });
+    },
+
+    // --- Finance Flow (Jan-Dec revenue vs expenses for a calendar year) ---
+    async getFinanceFlow(year) {
+        return apiRequest(`${ENDPOINTS.FINANCE_FLOW}?year=${encodeURIComponent(year)}`);
     }
 };
 
