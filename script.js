@@ -974,6 +974,23 @@ function openUnderConstructionNotice(sectionName) {
 }
 let currentTabName = null; // tracks whatever switchTab() last rendered, so refreshCurrentTabView() (e.g. after a term switch) knows what to re-render
 function switchTab(tabName) {
+    // "finance" is intentionally NOT part of any role's permissions.tabs
+    // (see renderFinanceNavItem's comment) — it's routed through
+    // showFinancePanel()/openFinanceGate() instead. But refreshCurrentTabView()
+    // calls switchTab(currentTabName) generically (e.g. after a term switch),
+    // and currentTabName is 'finance' while the Finance panel is open. Without
+    // this branch, the RBAC check below would treat 'finance' as an
+    // unrecognized/unauthorized tab and silently bounce back to the dashboard
+    // every time that happens. Re-enter through showFinancePanel() instead so
+    // the finance-scoped session/token stays intact and the panel just re-renders.
+    if (tabName === 'finance') {
+        if (typeof FinanceAuthAPI !== 'undefined' && FinanceAuthAPI.isUnlocked()) {
+            showFinancePanel();
+        } else {
+            openFinanceGate();
+        }
+        return;
+    }
     // RBAC gate: never render a tab this role isn't permitted to access,
     // even if switchTab() is called directly (e.g. from the console).
     const permissions = getPermissions(currentUser.role);
