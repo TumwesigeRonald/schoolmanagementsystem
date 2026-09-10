@@ -35,7 +35,6 @@
 const FINANCE_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
 let financeReceiptCache = {}; // paymentId -> { payment, student } — populated whenever a receipt could be printed from, so print buttons don't need to re-fetch
 let financeActiveSection = 'payments'; // 'payments' | 'fees' | 'summary' | 'defaulters'
-let financeActiveSection = 'payments'; // 'payments' | 'fees' | 'summary' | 'defaulters'
 let financePaymentsCache = []; // last-fetched balances list for the active class/term/year, so the search box can filter instantly without refetching
 let financeCollectedChart = null; // Chart.js instances — kept so each canvas can be destroyed and redrawn
 let financeMethodChart = null;    // cleanly whenever its section reloads (term/year change), instead of
@@ -101,7 +100,6 @@ function renderFinanceModule() {
                 <button id="fin-tab-revenue" onclick="switchFinanceSection('revenue')" class="finance-section-tab">Revenue</button>
                 <button id="fin-tab-summary" onclick="switchFinanceSection('summary')" class="finance-section-tab">Termly Summary</button>
                 <button id="fin-tab-defaulters" onclick="switchFinanceSection('defaulters')" class="finance-section-tab">Defaulters</button>
-                <button id="fin-tab-defaulters" onclick="switchFinanceSection('defaulters')" class="finance-section-tab">Defaulters</button>
             </div>
             <style>
                 .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; }
@@ -132,7 +130,6 @@ function loadFinanceActiveSection() {
     if (financeActiveSection === 'expenses') return loadFinanceLedger('expense');
     if (financeActiveSection === 'revenue') return loadFinanceLedger('revenue');
     if (financeActiveSection === 'summary') return loadFinanceSummary();
-    if (financeActiveSection === 'defaulters') return loadFinanceDefaulters();
     if (financeActiveSection === 'defaulters') return loadFinanceDefaulters();
     return loadFinancePayments();
 }
