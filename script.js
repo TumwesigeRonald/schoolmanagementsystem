@@ -25,6 +25,14 @@ function closeMobileSidebar() {
    1. GLOBAL STATE & DATA
    --------------------------------------------------------- */
 let studentsList = [];
+// Pagination state for the Student Records admin table specifically.
+// Kept separate from `studentsList` (the full roster, used everywhere
+// else — dropdowns, the Scores/Attendance student pickers, lookups by
+// id) so paging through the table never affects any of those.
+let studentTablePage = 1;
+const STUDENT_TABLE_PAGE_SIZE = 25;
+let studentTableTotal = 0;
+let studentTableTotalPages = 1;
 let marksStorage = {}; 
 let attendanceStorage = {};
 let resourcesList = [];
@@ -1484,7 +1492,7 @@ function renderStudentsModule() {
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                 <div class="w-full md:w-auto">
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Filter by Class</label>
-                    <select id="class-filter" onchange="loadStudentData()" class="w-full md:w-64 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                    <select id="class-filter" onchange="studentTablePage = 1; loadStudentData();" class="w-full md:w-64 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
                         <option value="ALL">All Classes (S.1 - S.6)</option>
                         <option value="S.1">S.1</option>
                         <option value="S.2">S.2</option>
@@ -1497,7 +1505,7 @@ function renderStudentsModule() {
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Search Students</label>
                         <div class="relative w-full md:w-64">
                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] pointer-events-none"></i>
-                            <input type="text" id="student-search" oninput="loadStudentData()" placeholder="Search by ID or name..." autocomplete="off" class="w-full p-2.5 pl-8 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                            <input type="text" id="student-search" oninput="debouncedStudentSearch()" placeholder="Search by ID or name..." autocomplete="off" class="w-full p-2.5 pl-8 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
                         </div>
                     </div>
                 </div>
@@ -1560,46 +1568,71 @@ function renderStudentsModule() {
                         </tr>
                     </thead>
                     <tbody id="student-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
-                </table>
+                    </table>
+                </div>
+                <div id="student-table-pagination" class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100"></div>
             </div>
         </div>
     `;
 }
-function loadStudentData() {
+// Debounced so a keystroke in #student-search waits 350ms of no further
+// typing before it actually hits the server -- see debounce() in api.js.
+const debouncedStudentSearch = debounce(() => {
+    studentTablePage = 1; // a new search always starts back at page 1
+    loadStudentData();
+}, 350);
+
+async function loadStudentData() {
     const tbody = document.getElementById('student-table-body');
+    const pagination = document.getElementById('student-table-pagination');
     const filterSelect = document.getElementById('class-filter');
     const searchInput = document.getElementById('student-search');
     if (!tbody) return;
     const canManage = getPermissions(currentUser.role).canManageStudents;
     const selectedClass = filterSelect ? filterSelect.value : 'ALL';
-    // Real-time search: partial, case-insensitive match against Student ID or Full Name.
-    // Purely additive — narrows whatever the class filter already produced, so the
-    // existing class-filter logic below is untouched.
-    const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : '';
-    tbody.innerHTML = "";
-    let filteredStudents = (selectedClass === 'ALL') ? studentsList : studentsList.filter(s => s.class === selectedClass);
-    if (searchTerm) {
-        filteredStudents = filteredStudents.filter(s =>
-            (s.id && s.id.toLowerCase().includes(searchTerm)) ||
-            (s.name && s.name.toLowerCase().includes(searchTerm))
-        );
-    }
+    const searchTerm = searchInput ? searchInput.value.trim() : '';
 
-    updateDashboardStats();
-    if (filteredStudents.length === 0) {
-        const contextMsg = searchTerm
-            ? `No student records match "${escapeHTML(searchInput.value.trim())}"${selectedClass !== 'ALL' ? ` in ${selectedClass}` : ''}.`
-            : `No student records found for ${selectedClass}.`;
-        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium">${contextMsg}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading students&hellip;</td></tr>`;
+
+    let result;
+    try {
+        result = await StudentsAPI.list({
+            class: selectedClass,
+            search: searchTerm || undefined,
+            page: studentTablePage,
+            pageSize: STUDENT_TABLE_PAGE_SIZE
+        });
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-rose-500 text-xs font-semibold">${escapeHTML(err.message || "Couldn't load students.")}</td></tr>`;
+        if (pagination) pagination.innerHTML = '';
         return;
     }
+
+    // The paginated shape is { data, total, page, pageSize, totalPages }.
+    // A plain array only happens if something upstream (e.g. the local
+    // fallback with no `page`) returned the old unpaginated form -- guard
+    // for it defensively rather than assuming the envelope is always there.
+    const pageStudents = Array.isArray(result) ? result : (result.data || []);
+    studentTableTotal = Array.isArray(result) ? pageStudents.length : (result.total || 0);
+    studentTableTotalPages = Array.isArray(result) ? 1 : (result.totalPages || 1);
+
+    updateDashboardStats();
+
+    if (pageStudents.length === 0) {
+        const contextMsg = searchTerm
+            ? `No student records match "${escapeHTML(searchTerm)}"${selectedClass !== 'ALL' ? ` in ${selectedClass}` : ''}.`
+            : `No student records found for ${selectedClass}.`;
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium">${contextMsg}</td></tr>`;
+        if (pagination) pagination.innerHTML = '';
+        return;
+    }
+
     // Build every row as a string first and write the table once. Using
     // `tbody.innerHTML += rowHtml` inside the loop (the old code) forces the
     // browser to re-parse and re-render the *entire* accumulated table on
-    // every single iteration — cost grows quadratically with student count,
-    // which is exactly what made this panel lag/freeze once the school had
-    // a few hundred students. One assignment at the end is O(n).
-    const rowsHtml = filteredStudents.map((student) => `
+    // every single iteration. With server-side pagination this only ever
+    // has to render one page's worth of rows at a time anyway.
+    const rowsHtml = pageStudents.map((student) => `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
                 <td class="p-4 font-bold text-slate-900">${escapeHTML(student.name)}</td>
@@ -1613,6 +1646,31 @@ function loadStudentData() {
             </tr>
         `).join('');
     tbody.innerHTML = rowsHtml;
+
+    if (pagination) pagination.innerHTML = renderStudentTablePagination();
+}
+// Prev/Next + "Showing A-B of N" footer. Kept as a small standalone
+// renderer (not inlined into loadStudentData) so it's easy to re-skin
+// later, e.g. to numbered page buttons, without touching fetch logic.
+function renderStudentTablePagination() {
+    const start = studentTableTotal === 0 ? 0 : (studentTablePage - 1) * STUDENT_TABLE_PAGE_SIZE + 1;
+    const end = Math.min(studentTablePage * STUDENT_TABLE_PAGE_SIZE, studentTableTotal);
+    return `
+        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+            Showing ${start}&ndash;${end} of ${studentTableTotal}
+        </p>
+        <div class="flex items-center gap-2">
+            <button onclick="changeStudentPage(-1)" ${studentTablePage <= 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><i class="fa-solid fa-chevron-left mr-1"></i>Prev</button>
+            <span class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider px-1">Page ${studentTablePage} of ${studentTableTotalPages}</span>
+            <button onclick="changeStudentPage(1)" ${studentTablePage >= studentTableTotalPages ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next<i class="fa-solid fa-chevron-right ml-1"></i></button>
+        </div>
+    `;
+}
+function changeStudentPage(delta) {
+    const next = studentTablePage + delta;
+    if (next < 1 || next > studentTableTotalPages) return;
+    studentTablePage = next;
+    loadStudentData();
 }
 /* ---------------------------------------------------------
    4b. STUDENT PROFILE MODAL
@@ -2098,7 +2156,8 @@ async function confirmBulkImport() {
     }
 
     await refreshStudentsList();
-    loadStudentData();
+    studentTablePage = 1; // newly-imported rows should be visible, not stranded off the current page
+    await loadStudentData();
     updateDashboardStats();
 
     if (preview) {
@@ -2135,7 +2194,8 @@ async function handleAddStudent(event) {
         return;
     }
     await refreshStudentsList();
-    loadStudentData();
+    studentTablePage = 1;
+    await loadStudentData();
     toggleStudentForm();
     const studIdEl = document.getElementById('stud-id');
     const studNameEl = document.getElementById('stud-name');
@@ -2153,7 +2213,10 @@ async function deleteStudent(studentId) {
         return;
     }
     await refreshStudentsList();
-    loadStudentData();
+    // If this was the last row on the current page, step back a page
+    // instead of loading an empty one.
+    if (studentTablePage > 1 && studentTablePage >= studentTableTotalPages) studentTablePage -= 1;
+    await loadStudentData();
     updateDashboardStats();
 }
 // ---------------------------------------------------------
@@ -2237,7 +2300,7 @@ async function submitEditStudent(event, originalId) {
     }
     await refreshStudentsList();
     closeModal();
-    loadStudentData();
+    await loadStudentData();
     updateDashboardStats();
 }
 /* ---------------------------------------------------------

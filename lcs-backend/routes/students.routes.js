@@ -7,16 +7,75 @@ const asyncHandler = require('../middleware/asyncHandler');
 const router = express.Router();
 const HASH_ROUNDS = 10;
 
-// GET /api/students
-// Admin/Teacher: full registry. Student: only their own record
-// (defense in depth — the frontend already hides this tab for Students).
+// GET /api/students?class=&search=&page=&pageSize=
+// Admin/Teacher: full registry, optionally filtered/paginated. Student:
+// only their own record (defense in depth — the frontend already hides
+// this tab for Students).
+//
+// Pagination is OPT-IN via `page`: omit it and this behaves exactly as
+// before — a plain array of every matching student, no envelope. That's
+// what every existing caller (class-level dropdowns, the Scores/
+// Attendance screens' student pickers, refreshStudentsList()'s full-roster
+// cache, etc.) expects, so none of them need to change. Only the Student
+// Records admin table passes `page`, and gets back
+// { data, total, page, pageSize, totalPages } instead.
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   if (req.user.role === 'Student') {
     const { rows } = await db.query('SELECT id, name, class, gender FROM students WHERE id = $1', [req.user.studentId]);
     return res.json(rows);
   }
-  const { rows } = await db.query('SELECT id, name, class, gender FROM students ORDER BY id');
-  res.json(rows);
+
+  const { class: classLevel, search, page: rawPage, pageSize: rawPageSize } = req.query;
+
+  const conditions = [];
+  const values = [];
+  if (classLevel && classLevel !== 'ALL') {
+    values.push(classLevel);
+    conditions.push(`class = $${values.length}`);
+  }
+  if (search) {
+    values.push(`%${search}%`);
+    conditions.push(`(id ILIKE $${values.length} OR name ILIKE $${values.length})`);
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  if (rawPage === undefined) {
+    const { rows } = await db.query(
+      `SELECT id, name, class, gender FROM students ${where} ORDER BY id`,
+      values
+    );
+    return res.json(rows);
+  }
+
+  // Offset pagination. pageSize is capped at 200 so a malformed/huge
+  // value from the client can't turn this into an unbounded scan.
+  const page = Math.max(1, parseInt(rawPage, 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, parseInt(rawPageSize, 10) || 25));
+  const offset = (page - 1) * pageSize;
+
+  // COUNT(*) OVER() rides along in the same query/index scan instead of
+  // a separate COUNT(*) round-trip, so pagination costs exactly one query.
+  values.push(pageSize, offset);
+  const limitParam = values.length - 1;
+  const offsetParam = values.length;
+  const { rows } = await db.query(
+    `SELECT id, name, class, gender, COUNT(*) OVER()::int AS "totalCount"
+     FROM students ${where}
+     ORDER BY id
+     LIMIT $${limitParam} OFFSET $${offsetParam}`,
+    values
+  );
+
+  const total = rows.length ? rows[0].totalCount : 0;
+  const data = rows.map(({ totalCount, ...rest }) => rest);
+
+  res.json({
+    data,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize))
+  });
 }));
 
 // POST /api/students — Admin only (matches canManageStudents in api.js).
