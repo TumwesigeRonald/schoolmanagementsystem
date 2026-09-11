@@ -71,12 +71,56 @@ function getFinanceViewedTermYear() {
 }
 
 /* ---------------------------------------------------------
-   SHELL — term/year selector + section tabs, shared by all 3 views.
+   SHELL — overview metrics + term/year selector + section tabs,
+   shared by all views (including Payroll).
    --------------------------------------------------------- */
 function renderFinanceModule() {
     const t = termSettings;
     return `
         <div class="space-y-6">
+
+            <!-- Financial Overview Dashboard — note: deliberately NOT using the
+                 dashboard's .metrics-grid/.metric-card classes here, even though
+                 they look identical. script.js's updateDashboardStats() does a
+                 document.querySelector('.metrics-grid') and hides whatever it
+                 finds whenever currentTabName !== 'dashboard', which runs after
+                 almost every data change app-wide — reusing that class would
+                 make these cards randomly disappear while viewing Finance. -->
+            <div class="fin-metrics-grid" id="fin-overview-metrics">
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Revenue Collected</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value" id="fin-metric-revenue">&hellip;</span>
+                        <span class="fin-metric-icon"><i class="fa-solid fa-sack-dollar"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-emerald-600 mt-2"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Year to date</p>
+                </div>
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Total Expenses</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value" id="fin-metric-expenses">&hellip;</span>
+                        <span class="fin-metric-icon fin-metric-icon-navy"><i class="fa-solid fa-receipt"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-slate-400 mt-2">Year to date</p>
+                </div>
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Outstanding / Defaulters</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value text-rose-600" id="fin-metric-outstanding">&hellip;</span>
+                        <span class="fin-metric-icon fin-metric-icon-danger"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-slate-400 mt-2"><span id="fin-metric-defaulters-count">&hellip;</span> &middot; selected term</p>
+                </div>
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Net Balance</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value" id="fin-metric-net">&hellip;</span>
+                        <span class="fin-metric-icon fin-metric-icon-success"><i class="fa-solid fa-scale-balanced"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-slate-400 mt-2">Revenue minus expenses, year to date</p>
+                </div>
+            </div>
+
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                 <div class="flex flex-wrap items-end gap-4">
                     <div>
@@ -92,10 +136,15 @@ function renderFinanceModule() {
                         <input type="number" id="fin-year-input" value="${t.year}" onchange="loadFinanceActiveSection()" class="w-24 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
                     </div>
                 </div>
-                <button onclick="lockFinancePanel()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-rose-600 transition"><i class="fa-solid fa-lock mr-1.5"></i>Lock Finance</button>
+                <label class="fin-lock-toggle" title="Lock Finance and return to the main dashboard">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-500">Lock Finance</span>
+                    <span class="fin-lock-switch" onclick="lockFinancePanel()">
+                        <i class="fa-solid fa-lock-open"></i>
+                    </span>
+                </label>
             </div>
 
-            <div class="flex gap-2 border-b border-slate-200">
+            <div class="flex gap-2 border-b border-slate-200 overflow-x-auto">
                 <button id="fin-tab-payments" onclick="switchFinanceSection('payments')" class="finance-section-tab">Fees &amp; Payments</button>
                 <button id="fin-tab-fees" onclick="switchFinanceSection('fees')" class="finance-section-tab">Fee Structure</button>
                 <button id="fin-tab-expenses" onclick="switchFinanceSection('expenses')" class="finance-section-tab">Expenses</button>
@@ -105,9 +154,40 @@ function renderFinanceModule() {
                 ${payrollCanAccess() ? `<button id="fin-tab-payroll" onclick="switchFinanceSection('payroll')" class="finance-section-tab">Payroll</button>` : ''}
             </div>
             <style>
-                .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; }
+                .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
                 .finance-section-tab:hover { color: #0f766e; }
                 .finance-section-tab.active { color: #0f766e; border-bottom-color: #0f766e; }
+
+                /* Financial Overview Dashboard — self-contained styles (see the
+                   comment above #fin-overview-metrics for why these aren't the
+                   shared .metrics-grid/.metric-card dashboard classes). Reuses
+                   the same design tokens (--slate-100/--navy-900/--font-display)
+                   already defined in styles.css so it still matches the rest of
+                   the app pixel-for-pixel. */
+                .fin-metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+                @media (max-width: 900px) { .fin-metrics-grid { grid-template-columns: repeat(2, 1fr); } }
+                @media (max-width: 560px) { .fin-metrics-grid { grid-template-columns: 1fr; } }
+                .fin-metric-card { background: #fff; border: 1px solid var(--slate-100); border-radius: 16px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+                .fin-metric-label { font-size: 10.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #1d4ed8; }
+                .fin-metric-row { display: flex; align-items: baseline; justify-content: space-between; margin-top: 10px; }
+                .fin-metric-value { font-family: var(--font-display); font-size: 28px; color: var(--navy-900); }
+                .fin-metric-icon {
+                    width: 32px; height: 32px; border-radius: 10px; background: #eff6ff;
+                    border: 1px solid #dbeafe; color: #2563eb;
+                    display: flex; align-items: center; justify-content: center; font-size: 12px;
+                }
+                .fin-metric-icon-navy { background: #f4f4f5; border-color: #e4e4e7; color: #3f3f46; }
+                .fin-metric-icon-danger { background: #fef2f2; border-color: #fee2e2; color: #dc2626; }
+                .fin-metric-icon-success { background: #f0fdf4; border-color: #dcfce7; color: #16a34a; }
+                @media (max-width: 560px) { .fin-metric-value { font-size: 22px; } .fin-metric-card { padding: 14px 16px; } }
+
+                .fin-lock-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; }
+                .fin-lock-switch {
+                    width: 42px; height: 24px; border-radius: 999px; background: #e4e4e7; border: 1px solid #d4d4d8;
+                    display: flex; align-items: center; justify-content: flex-start; padding: 0 5px;
+                    color: #71717a; font-size: 10px; transition: background .15s ease;
+                }
+                .fin-lock-switch:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
             </style>
 
             <div id="fin-section-body"></div>
@@ -116,6 +196,7 @@ function renderFinanceModule() {
 }
 
 function initFinanceModule() {
+    loadFinanceOverviewMetrics();
     switchFinanceSection(financeActiveSection);
 }
 
@@ -129,6 +210,7 @@ function switchFinanceSection(section) {
 }
 
 function loadFinanceActiveSection() {
+    loadFinanceOverviewMetrics();
     if (financeActiveSection === 'fees') return loadFinanceFeeStructure();
     if (financeActiveSection === 'expenses') return loadFinanceLedger('expense');
     if (financeActiveSection === 'revenue') return loadFinanceLedger('revenue');
@@ -136,6 +218,43 @@ function loadFinanceActiveSection() {
     if (financeActiveSection === 'defaulters') return loadFinanceDefaulters();
     if (financeActiveSection === 'payroll') return loadFinancePayrollSection();
     return loadFinancePayments();
+}
+
+// Financial Overview Dashboard — 4 headline metric cards shown above every
+// Finance section. Revenue/Expenses/Net come from FinanceAPI.getFinanceFlow
+// (calendar-year totals, same source as the Termly Summary flow chart);
+// Outstanding/Defaulters comes from FinanceAPI.getPayments for the
+// currently selected term (same data loadFinanceDefaulters() uses), since
+// student fee balances are term-scoped rather than year-scoped.
+async function loadFinanceOverviewMetrics() {
+    const grid = document.getElementById('fin-overview-metrics');
+    if (!grid) return;
+    const { term, year } = getFinanceViewedTermYear();
+
+    try {
+        const [flow, students] = await Promise.all([
+            FinanceAPI.getFinanceFlow(year),
+            FinanceAPI.getPayments({ term, year })
+        ]);
+        const defaulters = students.filter(s => s.balance > 0);
+        const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
+
+        document.getElementById('fin-metric-revenue').textContent = formatUGX(flow.totals.revenue);
+        document.getElementById('fin-metric-expenses').textContent = formatUGX(flow.totals.expenses);
+        document.getElementById('fin-metric-net').textContent = formatUGX(flow.totals.net);
+        document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
+        document.getElementById('fin-metric-defaulters-count').textContent =
+            `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+    } catch (err) {
+        // Non-fatal — the active section below still loads/shows its own
+        // error state; the overview cards just stay blank on failure.
+        ['fin-metric-revenue', 'fin-metric-expenses', 'fin-metric-net', 'fin-metric-outstanding'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = '—';
+        });
+        const countEl = document.getElementById('fin-metric-defaulters-count');
+        if (countEl) countEl.textContent = '—';
+    }
 }
 
 function lockFinancePanel() {

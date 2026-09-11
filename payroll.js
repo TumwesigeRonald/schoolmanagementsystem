@@ -27,6 +27,8 @@
 let payrollActiveView = 'staff'; // 'staff' | 'runs' — sub-tab inside the Payroll tab
 let payrollStaffCache = [];      // last-fetched staff list, so modals can look up a name without refetching
 let payrollRecordsCache = [];    // last-fetched payroll_records for the selected month/year
+let payrollStaffAllowanceTotals = {}; // staffId -> current total allowances, for the Staff Profiles table's Allowances/Net Pay columns (see loadPayrollStaffAllowanceTotals())
+let payrollStaffSearchTerm = ''; // client-side name filter on top of the Status/Role Type server filters
 
 function payrollCanAccess() {
     return currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.BURSAR;
@@ -74,8 +76,12 @@ async function loadPayrollStaffList() {
     if (!body) return;
     const statusFilter = document.getElementById('payroll-staff-status-filter');
     const roleFilter = document.getElementById('payroll-staff-role-filter');
+    const searchInput = document.getElementById('payroll-staff-search');
     const status = statusFilter ? statusFilter.value : '';
     const roleType = roleFilter ? roleFilter.value : '';
+    // Preserve whatever the user was typing across a full re-render (the
+    // search box itself doesn't trigger a refetch — see the oninput handler).
+    if (searchInput) payrollStaffSearchTerm = searchInput.value;
 
     body.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading staff&hellip;</div>`;
 
@@ -86,54 +92,132 @@ async function loadPayrollStaffList() {
         return;
     }
 
-    body.innerHTML = `
-        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-wrap items-end gap-4 mb-4">
-            <div>
-                <label class="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Status</label>
-                <select id="payroll-staff-status-filter" onchange="loadPayrollStaffList()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
-                    <option value="">All</option>
-                    <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
-                    <option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactive</option>
-                </select>
-            </div>
-            <div>
-                <label class="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Role Type</label>
-                <select id="payroll-staff-role-filter" onchange="loadPayrollStaffList()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
-                    <option value="">All</option>
-                    <option value="teaching" ${roleType === 'teaching' ? 'selected' : ''}>Teaching</option>
-                    <option value="non-teaching" ${roleType === 'non-teaching' ? 'selected' : ''}>Non-teaching</option>
-                </select>
-            </div>
-            <button onclick="openBulkSalaryModal()" class="ml-auto bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-coins mr-1.5"></i>Bulk Salary Update</button>
-            <button onclick="openStaffFormModal()" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-plus mr-1.5"></i>Add Staff</button>
-        </div>
+    renderPayrollStaffToolbar(body, status, roleType);
+    renderPayrollStaffTable();
 
-        ${!payrollStaffCache.length
-            ? `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">No staff profiles found.</div>`
-            : `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-auto max-h-[55vh]">
-                <table class="w-full text-left text-xs text-slate-700">
-                    <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider sticky top-0"><tr>
-                        <th class="p-3">Name</th><th class="p-3">Role</th><th class="p-3">Base Salary</th><th class="p-3">Phone</th><th class="p-3">Status</th><th class="p-3"></th>
-                    </tr></thead>
-                    <tbody class="divide-y divide-slate-100">
-                        ${payrollStaffCache.map(s => `
-                            <tr>
-                                <td class="p-3 font-extrabold"><button onclick="openStaffDetailModal(${s.id})" class="hover:text-teal-600 hover:underline">${escapeHTML(s.name)}</button></td>
-                                <td class="p-3 capitalize">${escapeHTML(s.roleType)}</td>
-                                <td class="p-3 font-bold">${formatUGX(s.baseSalary)}</td>
-                                <td class="p-3 text-slate-500">${s.phone ? escapeHTML(s.phone) : '&mdash;'}</td>
-                                <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${s.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500'}">${escapeHTML(s.status)}</span></td>
-                                <td class="p-3 text-right whitespace-nowrap">
-                                    <button onclick="openStaffDetailModal(${s.id})" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase mr-2"><i class="fa-solid fa-eye"></i></button>
-                                    <button onclick="openStaffFormModal(${s.id})" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase mr-2"><i class="fa-solid fa-pen"></i></button>
-                                    <button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" class="text-rose-500 hover:text-rose-700 text-[11px] font-extrabold uppercase"><i class="fa-solid fa-trash"></i></button>
-                                </td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>`}
+    // Allowances aren't in the list payload (routes/payroll.routes.js keeps
+    // /staff lightweight on purpose), so total them per row via the same
+    // /staff/:id call the detail modal already uses, in parallel, then
+    // patch the table's Allowances/Net Pay cells in place once each
+    // resolves — no need to block or re-render the whole table for this.
+    payrollStaffAllowanceTotals = {};
+    payrollStaffCache.forEach(s => {
+        PayrollAPI.getStaff(s.id).then(full => {
+            const total = (full.allowances || [])
+                .filter(a => a.type === 'recurring' || !a.appliedPayrollId)
+                .reduce((sum, a) => sum + a.amount, 0);
+            payrollStaffAllowanceTotals[s.id] = total;
+            patchPayrollStaffRowPay(s.id, s.baseSalary, total);
+        }).catch(() => { /* leave that row's Allowances/Net Pay showing base-only */ });
+    });
+}
+
+function renderPayrollStaffToolbar(body, status, roleType) {
+    const toolbar = document.createElement('div');
+    toolbar.className = 'bg-white border border-slate-200 rounded-2xl shadow-xs mb-4';
+    toolbar.innerHTML = `
+        <div class="flex flex-wrap items-center gap-2.5 p-4">
+            <select id="payroll-staff-status-filter" onchange="loadPayrollStaffList()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700">
+                <option value="">All Statuses</option>
+                <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
+                <option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactive</option>
+            </select>
+            <select id="payroll-staff-role-filter" onchange="loadPayrollStaffList()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700">
+                <option value="">All Roles</option>
+                <option value="teaching" ${roleType === 'teaching' ? 'selected' : ''}>Teaching</option>
+                <option value="non-teaching" ${roleType === 'non-teaching' ? 'selected' : ''}>Non-Teaching</option>
+            </select>
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
+                <input type="text" id="payroll-staff-search" value="${escapeHTML(payrollStaffSearchTerm)}" oninput="renderPayrollStaffTable()" placeholder="Search staff&hellip;" class="pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 placeholder-slate-400 w-40 sm:w-52">
+            </div>
+            <div class="ml-auto flex items-center gap-2.5">
+                <button onclick="openBulkSalaryModal()" class="inline-flex items-center gap-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition"><i class="fa-solid fa-arrows-rotate text-[10px]"></i>Bulk Salary Update</button>
+                <button onclick="openStaffFormModal()" class="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus text-[10px]"></i>Add Staff</button>
+            </div>
+        </div>
+        <div id="payroll-staff-table-wrap"></div>
     `;
+    body.innerHTML = '';
+    body.appendChild(toolbar);
+}
+
+// Renders (or re-renders) just the table/empty-state portion, applying the
+// client-side search box on top of payrollStaffCache — called on every
+// keystroke in #payroll-staff-search without refetching from the server.
+function renderPayrollStaffTable() {
+    const wrap = document.getElementById('payroll-staff-table-wrap');
+    if (!wrap) return;
+    const searchInput = document.getElementById('payroll-staff-search');
+    const term = (searchInput ? searchInput.value : payrollStaffSearchTerm).trim().toLowerCase();
+    payrollStaffSearchTerm = term ? (searchInput ? searchInput.value : payrollStaffSearchTerm) : '';
+    const rows = payrollStaffCache.filter(s => !term || s.name.toLowerCase().includes(term));
+
+    if (!rows.length) {
+        wrap.innerHTML = `
+            <div class="flex flex-col items-center text-center py-14 px-6 border-t border-slate-100">
+                <div class="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                    <i class="fa-solid fa-users-slash text-slate-400 text-lg"></i>
+                </div>
+                <p class="text-sm font-bold text-slate-700">No staff profiles found.</p>
+                <p class="text-xs text-slate-400 mt-1 max-w-xs">Try adjusting your filters, or add a new staff member to get started.</p>
+                <button onclick="openStaffFormModal()" class="mt-5 inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus text-[10px]"></i>Add Staff</button>
+            </div>`;
+        return;
+    }
+
+    wrap.innerHTML = `
+        <div class="overflow-x-auto border-t border-slate-100">
+            <table class="w-full text-left text-xs text-slate-700 min-w-[820px]">
+                <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
+                    <th class="p-3">Staff Name</th><th class="p-3">Role</th><th class="p-3">Phone</th>
+                    <th class="p-3 text-right">Base Salary</th><th class="p-3 text-right">Allowances</th>
+                    <th class="p-3 text-right">Net Pay</th><th class="p-3 text-center">Actions</th>
+                </tr></thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${rows.map(s => {
+                        const total = payrollStaffAllowanceTotals[s.id];
+                        return `
+                        <tr data-staff-row="${s.id}">
+                            <td class="p-3">
+                                <button onclick="openStaffDetailModal(${s.id})" class="font-extrabold text-slate-800 hover:text-teal-600 hover:underline block">${escapeHTML(s.name)}</button>
+                                <span class="inline-flex items-center gap-1 text-[10.5px] font-bold mt-0.5 ${s.status === 'active' ? 'text-emerald-600' : 'text-slate-400'}"><span class="w-1.5 h-1.5 rounded-full ${s.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'}"></span>${s.status === 'active' ? 'Active' : 'Inactive'}</span>
+                            </td>
+                            <td class="p-3">${s.roleType === 'teaching'
+                                ? `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-teal-50 text-teal-700 border border-teal-100">Teaching</span>`
+                                : `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">Non-Teaching</span>`}
+                            </td>
+                            <td class="p-3 text-slate-500 font-semibold">${s.phone ? escapeHTML(s.phone) : '&mdash;'}</td>
+                            <td class="p-3 text-right font-bold">${formatUGX(s.baseSalary)}</td>
+                            <td class="p-3 text-right font-bold text-slate-500" data-cell="allowances">${total == null ? '<i class="fa-solid fa-circle-notch fa-spin text-slate-300"></i>' : formatUGX(total)}</td>
+                            <td class="p-3 text-right font-extrabold text-teal-700" data-cell="netpay">${total == null ? formatUGX(s.baseSalary) : formatUGX(s.baseSalary + total)}</td>
+                            <td class="p-3">
+                                <div class="flex items-center justify-center gap-1">
+                                    <button onclick="openStaffDetailModal(${s.id})" title="View" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-teal-600 flex items-center justify-center transition"><i class="fa-solid fa-eye text-[11px]"></i></button>
+                                    <button onclick="openStaffFormModal(${s.id})" title="Edit" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 flex items-center justify-center transition"><i class="fa-solid fa-pen text-[11px]"></i></button>
+                                    <button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>
+                                </div>
+                            </td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+        <div class="px-4 py-3 border-t border-slate-100 text-[11px] font-semibold text-slate-400">
+            ${rows.length} of ${payrollStaffCache.length} staff member${payrollStaffCache.length === 1 ? '' : 's'} shown
+        </div>
+    `;
+}
+
+// Patches one row's Allowances/Net Pay cells once its total resolves,
+// instead of re-rendering the whole (possibly search-filtered) table.
+function patchPayrollStaffRowPay(staffId, baseSalary, allowanceTotal) {
+    const row = document.querySelector(`[data-staff-row="${staffId}"]`);
+    if (!row) return;
+    const allowanceCell = row.querySelector('[data-cell="allowances"]');
+    const netPayCell = row.querySelector('[data-cell="netpay"]');
+    if (allowanceCell) allowanceCell.textContent = formatUGX(allowanceTotal);
+    if (netPayCell) netPayCell.textContent = formatUGX(baseSalary + allowanceTotal);
 }
 
 // openStaffFormModal(id) — id omitted = Add, provided = Edit. Payment
