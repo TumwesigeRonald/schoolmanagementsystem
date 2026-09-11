@@ -41,6 +41,8 @@ let financeMethodChart = null;    // cleanly whenever its section reloads (term/
 let financeFlowChart = null;      // Chart.js throwing on a re-init of a canvas still attached to a chart.
 let financeExpenseCatChart = null;
 let financeRevenueCatChart = null;
+let financeSummaryDataCache = null; // last-fetched getSummary() result, kept only so exportFinanceSummaryPDF() can rebuild the report without refetching
+let financeSummaryFlowCache = null; // last-fetched getFinanceFlow() result, same reason (null if it failed/had nothing to show)
 
 // Small fixed color set for chart series — kept in one place so every
 // donut/pie on the finance pages reads the same palette.
@@ -100,6 +102,7 @@ function renderFinanceModule() {
                 <button id="fin-tab-revenue" onclick="switchFinanceSection('revenue')" class="finance-section-tab">Revenue</button>
                 <button id="fin-tab-summary" onclick="switchFinanceSection('summary')" class="finance-section-tab">Termly Summary</button>
                 <button id="fin-tab-defaulters" onclick="switchFinanceSection('defaulters')" class="finance-section-tab">Defaulters</button>
+                ${payrollCanAccess() ? `<button id="fin-tab-payroll" onclick="switchFinanceSection('payroll')" class="finance-section-tab">Payroll</button>` : ''}
             </div>
             <style>
                 .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; }
@@ -118,7 +121,7 @@ function initFinanceModule() {
 
 function switchFinanceSection(section) {
     financeActiveSection = section;
-    ['payments', 'fees', 'expenses', 'revenue', 'summary', 'defaulters'].forEach(s => {
+    ['payments', 'fees', 'expenses', 'revenue', 'summary', 'defaulters', 'payroll'].forEach(s => {
         const tabEl = document.getElementById(`fin-tab-${s}`);
         if (tabEl) tabEl.classList.toggle('active', s === section);
     });
@@ -131,6 +134,7 @@ function loadFinanceActiveSection() {
     if (financeActiveSection === 'revenue') return loadFinanceLedger('revenue');
     if (financeActiveSection === 'summary') return loadFinanceSummary();
     if (financeActiveSection === 'defaulters') return loadFinanceDefaulters();
+    if (financeActiveSection === 'payroll') return loadFinancePayrollSection();
     return loadFinancePayments();
 }
 
@@ -553,9 +557,12 @@ async function loadFinanceSummary() {
     }
 
     const collectionRate = data.totals.billed > 0 ? (data.totals.collected / data.totals.billed) * 100 : 0;
+    financeSummaryDataCache = data;
+    financeSummaryFlowCache = flowData;
 
     body.innerHTML = `
-        <div class="flex justify-end mb-3">
+        <div class="flex justify-end gap-2 mb-3">
+            <button id="fin-summary-export-btn" onclick="exportFinanceSummaryPDF()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-pdf mr-1.5"></i>Export PDF</button>
             <button onclick="printFinanceSummary()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print</button>
         </div>
 
@@ -994,6 +1001,210 @@ function printFinanceSummary() {
     if (!preview || !printArea) return;
     printArea.innerHTML = preview.outerHTML;
     window.print();
+}
+
+/* ---------------------------------------------------------
+   EXPORT TERMLY SUMMARY TO PDF (direct download, separate from
+   Print). Same html2canvas + jsPDF technique as
+   class-summaries.js -> exportClassSummaryPDF(): render a
+   letterheaded report off-screen, rasterize it, slice it into
+   successive Portrait-A4-height pages if it's taller than one page.
+   Chart images are grabbed via canvas.toDataURL() straight off the
+   already-rendered on-screen Chart.js canvases (financeSummaryDataCache/
+   financeSummaryFlowCache + those canvases are only available while the
+   Termly Summary section is on screen, which is exactly when this
+   button is visible) rather than re-created off-screen.
+   --------------------------------------------------------- */
+async function exportFinanceSummaryPDF() {
+    if (!financeSummaryDataCache) return;
+    if (typeof html2canvas === 'undefined' || !window.jspdf) {
+        alert('PDF export couldn\'t load its required library (no internet connection?). Please use the Print button and choose "Save as PDF" instead.');
+        return;
+    }
+    const data = financeSummaryDataCache;
+    const flowData = financeSummaryFlowCache;
+    const { term, year } = getFinanceViewedTermYear();
+    const collectionRate = data.totals.billed > 0 ? (data.totals.collected / data.totals.billed) * 100 : 0;
+
+    const grabChart = (id) => {
+        const el = document.getElementById(id);
+        try { return el ? el.toDataURL('image/png') : null; } catch (e) { return null; }
+    };
+    const charts = {
+        collected: grabChart('fin-collected-chart'),
+        method: grabChart('fin-method-chart'),
+        flow: grabChart('fin-flow-chart'),
+        expenseCat: grabChart('fin-expense-cat-chart'),
+        revenueCat: grabChart('fin-revenue-cat-chart')
+    };
+
+    const html = buildFinanceSummaryReportHTML(data, flowData, collectionRate, term, year, charts);
+
+    const holder = document.createElement('div');
+    holder.style.position = 'fixed';
+    holder.style.top = '0';
+    holder.style.left = '-10000px';
+    holder.style.width = '900px';
+    holder.style.background = '#ffffff';
+    holder.innerHTML = html;
+    document.body.appendChild(holder);
+
+    const exportBtn = document.getElementById('fin-summary-export-btn');
+    const originalBtnHTML = exportBtn ? exportBtn.innerHTML : null;
+    if (exportBtn) {
+        exportBtn.disabled = true;
+        exportBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Preparing PDF&hellip;';
+    }
+
+    try {
+        const target = holder.querySelector('.fin-report-page');
+        const canvas = await html2canvas(target, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4'); // Portrait A4
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const imgFullHeight = (canvas.height * pageWidth) / canvas.width;
+        const pxPerPage = Math.floor((pageHeight / imgFullHeight) * canvas.height);
+
+        if (imgFullHeight <= pageHeight || pxPerPage <= 0) {
+            pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, imgFullHeight);
+        } else {
+            // Report is taller than one page (lots of chart panels) —
+            // slice into successive full-width, page-height strips, one
+            // PDF page per strip, same as the General Mark Sheet export.
+            let renderedPx = 0;
+            let pageIndex = 0;
+            while (renderedPx < canvas.height) {
+                const sliceHeightPx = Math.min(pxPerPage, canvas.height - renderedPx);
+                const sliceCanvas = document.createElement('canvas');
+                sliceCanvas.width = canvas.width;
+                sliceCanvas.height = sliceHeightPx;
+                const ctx = sliceCanvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+                ctx.drawImage(canvas, 0, renderedPx, canvas.width, sliceHeightPx, 0, 0, canvas.width, sliceHeightPx);
+                const sliceHeightMM = (sliceHeightPx * pageWidth) / canvas.width;
+                if (pageIndex > 0) pdf.addPage();
+                pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, sliceHeightMM);
+                renderedPx += sliceHeightPx;
+                pageIndex++;
+            }
+        }
+
+        const fileName = `TermlySummary_${term}_${year}`.replace(/\s+/g, '').replace(/[^\w-]/g, '');
+        pdf.save(`${fileName}.pdf`);
+    } catch (err) {
+        console.error('Termly Summary PDF export failed:', err);
+        alert('Could not generate the PDF. Please try the Print button instead, then choose "Save as PDF".');
+    } finally {
+        document.body.removeChild(holder);
+        if (exportBtn) {
+            exportBtn.disabled = false;
+            exportBtn.innerHTML = originalBtnHTML;
+        }
+    }
+}
+
+// Letterheaded report body for exportFinanceSummaryPDF() — plain CSS
+// (not Tailwind utility classes) via an embedded <style> block, same
+// choice class-summaries.js's buildClassSummaryPrintHTML() makes, so
+// nothing here depends on the Tailwind CDN's runtime class scanner
+// having seen these class names before this off-screen render.
+function buildFinanceSummaryReportHTML(data, flowData, collectionRate, term, year, charts) {
+    const chartPanel = (title, dataUrl) => dataUrl ? `
+        <div class="fin-report-chart-box">
+            <p class="fin-report-chart-title">${escapeHTML(title)}</p>
+            <img src="${dataUrl}" class="fin-report-chart-img">
+        </div>` : '';
+    const now = new Date();
+
+    return `
+        <style>
+            .fin-report-page { width: 900px; padding: 40px; font-family: Arial, Helvetica, sans-serif; color: #1e293b; background: #fff; }
+            .fin-report-header { text-align: center; border-bottom: 3px solid #0f766e; padding-bottom: 14px; margin-bottom: 20px; }
+            .fin-report-header img { height: 64px; margin-bottom: 8px; }
+            .fin-report-header h1 { margin: 0; font-size: 18px; letter-spacing: 0.03em; }
+            .fin-report-header p { margin: 2px 0; font-size: 11px; color: #475569; }
+            .fin-report-title { text-align: center; margin: 0 0 4px; font-size: 15px; letter-spacing: 0.06em; text-transform: uppercase; }
+            .fin-report-subtitle { text-align: center; margin: 0 0 20px; font-size: 12px; color: #64748b; }
+            .fin-report-stats { display: flex; gap: 12px; margin-bottom: 22px; }
+            .fin-report-stat { flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; text-align: center; }
+            .fin-report-stat .val { font-size: 18px; font-weight: 800; color: #0f172a; }
+            .fin-report-stat .lbl { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-top: 3px; }
+            .fin-report-charts-row { display: flex; gap: 14px; margin-bottom: 18px; }
+            .fin-report-chart-box { flex: 1; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px; }
+            .fin-report-chart-title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin: 0 0 6px; }
+            .fin-report-chart-img { width: 100%; display: block; }
+            .fin-report-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+            .fin-report-table th { background: #f8fafc; color: #64748b; text-transform: uppercase; font-size: 9px; font-weight: 800; letter-spacing: 0.05em; text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; }
+            .fin-report-table td { padding: 8px; border-bottom: 1px solid #f1f5f9; }
+            .fin-report-table tfoot td { font-weight: 800; background: #f8fafc; border-top: 2px solid #e2e8f0; }
+            .fin-report-footer { margin-top: 24px; font-size: 9px; color: #94a3b8; text-align: center; }
+        </style>
+        <div class="fin-report-page">
+            <div class="fin-report-header">
+                <img src="school_badge.jpg" alt="School Badge">
+                <h1>LUWEERO COMMUNITY SECONDARY SCHOOL</h1>
+                <p>P.O BOX 29540, KAMPALA-UGANDA</p>
+                <p>TEL: 0772620552 / 0782572120 / 0740773771</p>
+            </div>
+            <p class="fin-report-title">Termly Financial Summary</p>
+            <p class="fin-report-subtitle">${escapeHTML(term)}, ${escapeHTML(String(year))}</p>
+
+            <div class="fin-report-stats">
+                <div class="fin-report-stat"><div class="val">${formatUGX(data.totals.billed)}</div><div class="lbl">Expected (Billed)</div></div>
+                <div class="fin-report-stat"><div class="val">${formatUGX(data.totals.collected)}</div><div class="lbl">Collected</div></div>
+                <div class="fin-report-stat"><div class="val">${formatUGX(data.totals.outstanding)}</div><div class="lbl">Outstanding</div></div>
+                <div class="fin-report-stat"><div class="val">${collectionRate.toFixed(1)}%</div><div class="lbl">Collection Rate</div></div>
+            </div>
+
+            ${(charts.collected || charts.method) ? `
+            <div class="fin-report-charts-row">
+                ${chartPanel('Fees Collected vs Outstanding', charts.collected)}
+                ${chartPanel('Collections by Payment Method', charts.method)}
+            </div>` : ''}
+
+            ${charts.flow ? `
+            <div class="fin-report-charts-row">
+                <div class="fin-report-chart-box" style="flex:1;">
+                    <p class="fin-report-chart-title">Finance Flow &mdash; ${year}${flowData ? ` (Net: ${formatUGX(flowData.totals.net)})` : ''}</p>
+                    <img src="${charts.flow}" class="fin-report-chart-img">
+                </div>
+            </div>` : ''}
+
+            ${(charts.expenseCat || charts.revenueCat) ? `
+            <div class="fin-report-charts-row">
+                ${chartPanel(`Expenses by Category (${year})`, charts.expenseCat)}
+                ${chartPanel(`Other Revenue by Category (${year})`, charts.revenueCat)}
+            </div>` : ''}
+
+            <table class="fin-report-table">
+                <thead><tr>
+                    <th>Class</th><th>Students</th><th>Avg Fee/Student</th><th>Billed</th><th>Collected</th><th>Outstanding</th>
+                </tr></thead>
+                <tbody>
+                    ${data.byClass.map(c => `
+                        <tr>
+                            <td><strong>${escapeHTML(c.class)}</strong></td>
+                            <td>${c.studentCount}</td>
+                            <td>${formatUGX(c.studentCount ? c.billed / c.studentCount : 0)}</td>
+                            <td>${formatUGX(c.billed)}</td>
+                            <td>${formatUGX(c.collected)}</td>
+                            <td>${formatUGX(c.outstanding)}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+                <tfoot><tr>
+                    <td colspan="3">TOTAL</td>
+                    <td>${formatUGX(data.totals.billed)}</td>
+                    <td>${formatUGX(data.totals.collected)}</td>
+                    <td>${formatUGX(data.totals.outstanding)}</td>
+                </tr></tfoot>
+            </table>
+
+            <p class="fin-report-footer">Generated on ${escapeHTML(now.toLocaleString())} by ${escapeHTML((currentUser && currentUser.username) || '')} &mdash; system-generated, not valid without an official school stamp.</p>
+        </div>
+    `;
 }
 
 /* ---------------------------------------------------------

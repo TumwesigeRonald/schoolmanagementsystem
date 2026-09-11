@@ -473,3 +473,115 @@ CREATE TABLE IF NOT EXISTS revenues (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_revenues_date ON revenues(revenue_date);
+
+-- -------------------------------------------------------------
+-- Staff Payroll, Allowances & Salary Advances
+-- Mounted at /api/finance/payroll (routes/payroll.routes.js), behind the
+-- same Finance-password gate as the rest of finance.routes.js, but with
+-- NO view-only tier — every route there is Admin + Bursar only.
+-- -------------------------------------------------------------
+
+-- staff_profiles — one row per staff member on payroll (teaching or
+-- non-teaching). Deliberately separate from `teachers`: not every staff
+-- member on payroll has a teaching/login account, and salary data has no
+-- reason to live next to the lesson-planning/scores side of the system.
+CREATE TABLE IF NOT EXISTS staff_profiles (
+  id              SERIAL PRIMARY KEY,
+  name            TEXT NOT NULL,
+  role_type       TEXT NOT NULL CHECK (role_type IN ('teaching', 'non-teaching')),
+  base_salary     NUMERIC(12,2) NOT NULL CHECK (base_salary >= 0),
+  phone           TEXT,
+  payment_details JSONB NOT NULL DEFAULT '{}'::jsonb,  -- bank/mobile-money details; shape is frontend's to define
+  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_profiles_status ON staff_profiles(status);
+
+-- allowances — recurring allowances apply to every payroll run until
+-- removed; one-time allowances apply once, then applied_payroll_id is
+-- stamped by the run that consumed them so they're never paid twice and
+-- stay part of that run's audit trail (see DELETE /allowances/:id).
+CREATE TABLE IF NOT EXISTS allowances (
+  id                 SERIAL PRIMARY KEY,
+  staff_id           INTEGER NOT NULL REFERENCES staff_profiles(id) ON DELETE CASCADE,
+  title              TEXT NOT NULL,
+  amount             NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  type               TEXT NOT NULL CHECK (type IN ('recurring', 'one-time')),
+  date_added         DATE NOT NULL DEFAULT CURRENT_DATE,
+  applied_payroll_id INTEGER,  -- FK added below, after payroll_records exists
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_allowances_staff ON allowances(staff_id);
+
+-- salary_advances — issuing (not just requesting) immediately creates the
+-- tracking balance and sets status = 'active', so the next payroll run(s)
+-- start deducting repayment_amount_per_month until balance_remaining hits
+-- 0, at which point a run flips status to 'cleared'. There's no separate
+-- 'pending' approval step enforced here — see routes/payroll.routes.js.
+CREATE TABLE IF NOT EXISTS salary_advances (
+  id                         SERIAL PRIMARY KEY,
+  staff_id                   INTEGER NOT NULL REFERENCES staff_profiles(id) ON DELETE CASCADE,
+  requested_amount           NUMERIC(12,2) NOT NULL CHECK (requested_amount > 0),
+  repayment_amount_per_month NUMERIC(12,2) NOT NULL CHECK (repayment_amount_per_month > 0),
+  balance_remaining          NUMERIC(12,2) NOT NULL CHECK (balance_remaining >= 0),
+  status                     TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active', 'cleared')),
+  request_date               DATE NOT NULL DEFAULT CURRENT_DATE,
+  issued_by                  TEXT,
+  created_at                 TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_salary_advances_staff ON salary_advances(staff_id);
+CREATE INDEX IF NOT EXISTS idx_salary_advances_status ON salary_advances(status);
+
+-- payroll_records — one row per staff member per month/year, produced by
+-- POST /api/finance/payroll/generate. UNIQUE(staff_id, month, year) is the
+-- real idempotency guard (the route's dupe-check query is just there for a
+-- friendly message instead of a raw 23505). expense_id/paid_by/paid_at are
+-- filled in by the "Financial Integration" step: marking a record "paid"
+-- writes a matching entry to `expenses` and stamps the link back here.
+CREATE TABLE IF NOT EXISTS payroll_records (
+  id                SERIAL PRIMARY KEY,
+  staff_id          INTEGER NOT NULL REFERENCES staff_profiles(id) ON DELETE CASCADE,
+  month             INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+  year              INTEGER NOT NULL,
+  base_salary       NUMERIC(12,2) NOT NULL,
+  total_allowances  NUMERIC(12,2) NOT NULL DEFAULT 0,
+  advance_deduction NUMERIC(12,2) NOT NULL DEFAULT 0,
+  net_pay           NUMERIC(12,2) NOT NULL,
+  status            TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid')),
+  generated_by      TEXT,
+  paid_by           TEXT,
+  paid_at           TIMESTAMPTZ,
+  expense_id        INTEGER REFERENCES expenses(id),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (staff_id, month, year)
+);
+CREATE INDEX IF NOT EXISTS idx_payroll_records_month_year ON payroll_records(month, year);
+CREATE INDEX IF NOT EXISTS idx_payroll_records_staff ON payroll_records(staff_id);
+
+-- Deferred FK: allowances.applied_payroll_id -> payroll_records.id.
+-- Added after payroll_records exists (it's forward-referenced above).
+DO $$
+BEGIN
+  ALTER TABLE allowances
+    ADD CONSTRAINT allowances_applied_payroll_id_fkey
+    FOREIGN KEY (applied_payroll_id) REFERENCES payroll_records(id);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- staff_salary_history — one row per base_salary change (single edits via
+-- PUT /staff/:id, and every row touched by POST /staff/bulk-salary-update).
+-- Append-only audit trail: nothing here is ever updated or deleted, and a
+-- change is only ever recorded when old_salary actually differs from
+-- new_salary, so re-saving a profile with an unchanged salary logs nothing.
+CREATE TABLE IF NOT EXISTS staff_salary_history (
+  id         SERIAL PRIMARY KEY,
+  staff_id   INTEGER NOT NULL REFERENCES staff_profiles(id) ON DELETE CASCADE,
+  old_salary NUMERIC(12,2) NOT NULL,
+  new_salary NUMERIC(12,2) NOT NULL,
+  changed_by TEXT NOT NULL,
+  reason     TEXT,
+  changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_salary_history_staff ON staff_salary_history(staff_id);

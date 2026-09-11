@@ -140,7 +140,20 @@ const ENDPOINTS = {
     FINANCE_SUMMARY: "/finance/summary",
     FINANCE_EXPENSES: "/finance/expenses",
     FINANCE_REVENUES: "/finance/revenues",
-    FINANCE_FLOW: "/finance/finance-flow"
+    FINANCE_FLOW: "/finance/finance-flow",
+
+    // --- Staff Payroll, Allowances & Salary Advances (also behind the
+    // Finance gate above; Admin + Bursar only, no Teacher access at all —
+    // see routes/payroll.routes.js) ---
+    PAYROLL_STAFF: "/finance/payroll/staff",
+    PAYROLL_STAFF_BY_ID: (id) => `/finance/payroll/staff/${encodeURIComponent(id)}`,
+    PAYROLL_ALLOWANCES: (staffId) => `/finance/payroll/staff/${encodeURIComponent(staffId)}/allowances`,
+    PAYROLL_ALLOWANCE_BY_ID: (id) => `/finance/payroll/allowances/${encodeURIComponent(id)}`,
+    PAYROLL_ADVANCES: (staffId) => `/finance/payroll/staff/${encodeURIComponent(staffId)}/advances`,
+    PAYROLL_RECORDS: "/finance/payroll/records",
+    PAYROLL_GENERATE: "/finance/payroll/generate",
+    PAYROLL_MARK_PAID: (recordId) => `/finance/payroll/records/${encodeURIComponent(recordId)}/mark-paid`,
+    PAYROLL_BULK_SALARY_UPDATE: "/finance/payroll/staff/bulk-salary-update"
 };
 
 /* ---------------------------------------------------------
@@ -589,6 +602,93 @@ const FinanceAPI = {
     // --- Finance Flow (Jan-Dec revenue vs expenses for a calendar year) ---
     async getFinanceFlow(year) {
         return apiRequest(`${ENDPOINTS.FINANCE_FLOW}?year=${encodeURIComponent(year)}`);
+    }
+};
+
+/* ---------------------------------------------------------
+   5b. STAFF PAYROLL, ALLOWANCES & SALARY ADVANCES
+   Talks to routes/payroll.routes.js, mounted under /api/finance/payroll —
+   every call here already carries the Finance-scoped token automatically,
+   the same way FinanceAPI's calls do (see apiRequest()'s "/finance/"
+   check above), since these paths start with "/finance/" too.
+   --------------------------------------------------------- */
+const PayrollAPI = {
+    // --- Staff profiles ---
+    async listStaff({ status, roleType } = {}) {
+        const params = new URLSearchParams();
+        if (status) params.set("status", status);
+        if (roleType) params.set("roleType", roleType);
+        const qs = params.toString();
+        return apiRequest(qs ? `${ENDPOINTS.PAYROLL_STAFF}?${qs}` : ENDPOINTS.PAYROLL_STAFF);
+    },
+    // Returns { ...profile, allowances: [...], advances: [...] } — the
+    // staff detail screen's single data source.
+    async getStaff(id) {
+        return apiRequest(ENDPOINTS.PAYROLL_STAFF_BY_ID(id));
+    },
+    async createStaff({ name, roleType, baseSalary, phone, paymentDetails, status }) {
+        return apiRequest(ENDPOINTS.PAYROLL_STAFF, {
+            method: "POST",
+            body: { name, roleType, baseSalary, phone, paymentDetails, status }
+        });
+    },
+    async updateStaff(id, patch) {
+        return apiRequest(ENDPOINTS.PAYROLL_STAFF_BY_ID(id), { method: "PUT", body: patch });
+    },
+    async deleteStaff(id) {
+        return apiRequest(ENDPOINTS.PAYROLL_STAFF_BY_ID(id), { method: "DELETE" });
+    },
+
+    // --- Allowances ---
+    async addAllowance(staffId, { title, amount, type, dateAdded }) {
+        return apiRequest(ENDPOINTS.PAYROLL_ALLOWANCES(staffId), {
+            method: "POST",
+            body: { title, amount, type, dateAdded }
+        });
+    },
+    async deleteAllowance(id) {
+        return apiRequest(ENDPOINTS.PAYROLL_ALLOWANCE_BY_ID(id), { method: "DELETE" });
+    },
+
+    // --- Salary advances ---
+    // Issuing immediately creates the tracking balance server-side —
+    // there's no separate "approve" step (see routes/payroll.routes.js).
+    async issueAdvance(staffId, { requestedAmount, repaymentAmountPerMonth, requestDate }) {
+        return apiRequest(ENDPOINTS.PAYROLL_ADVANCES(staffId), {
+            method: "POST",
+            body: { requestedAmount, repaymentAmountPerMonth, requestDate }
+        });
+    },
+
+    // --- Payroll runs ---
+    async listRecords({ month, year, staffId } = {}) {
+        const params = new URLSearchParams({ month, year });
+        if (staffId) params.set("staffId", staffId);
+        return apiRequest(`${ENDPOINTS.PAYROLL_RECORDS}?${params.toString()}`);
+    },
+    // Omit staffIds to run payroll for every active staff member.
+    async generate(month, year, staffIds) {
+        return apiRequest(ENDPOINTS.PAYROLL_GENERATE, {
+            method: "POST",
+            body: { month, year, ...(staffIds ? { staffIds } : {}) }
+        });
+    },
+    async markPaid(recordId) {
+        return apiRequest(ENDPOINTS.PAYROLL_MARK_PAID(recordId), { method: "PUT" });
+    },
+
+    // --- Bulk salary update ---
+    // Target EITHER an explicit staffIds array OR a { roleType, status }
+    // filter (server-side default status is "active" when neither
+    // staffIds nor status is given) — never both; staffIds wins if present.
+    // mode is "percent" or "flat"; value can be negative (a pay cut) but
+    // never 0. Returns { updated: [...], skipped: [...] } — skipped staff
+    // are the ones a change would have pushed negative, not an error.
+    async bulkUpdateSalary({ staffIds, roleType, status, mode, value, reason }) {
+        return apiRequest(ENDPOINTS.PAYROLL_BULK_SALARY_UPDATE, {
+            method: "POST",
+            body: { staffIds, roleType, status, mode, value, reason }
+        });
     }
 };
 

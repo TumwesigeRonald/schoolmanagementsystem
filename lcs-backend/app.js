@@ -18,6 +18,7 @@ const remarksRoutes = require('./routes/remarks.routes');
 const aiRoutes = require('./routes/ai.routes');
 const financeAuthRoutes = require('./routes/finance-auth.routes');
 const financeRoutes = require('./routes/finance.routes');
+const payrollRoutes = require('./routes/payroll.routes');
 
 const app = express();
 
@@ -92,6 +93,10 @@ app.use('/api/remarks', remarksRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/finance-auth', financeAuthRoutes);
 app.use('/api/finance', financeRoutes);
+// Mounted under /api/finance/* too — routes inside require BOTH the login
+// JWT and the Finance-scope token, same gate as financeRoutes, so nesting
+// it here doesn't loosen anything.
+app.use('/api/finance/payroll', payrollRoutes);
 
 // --- 404 for unmatched /api routes ---
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));
