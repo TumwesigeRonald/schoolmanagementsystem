@@ -355,8 +355,13 @@ img {
        meant removing the toggle class on mobile had no visible effect and the
        hamburger menu appeared to do nothing. */
     transform: translateX(0);
-    transition: transform 0.3s ease;
+    /* width/min-width/padding/border are also transitioned so the desktop
+       collapse (.sidebar-collapsed, below) shrinks smoothly instead of
+       snapping; overflow:hidden keeps the nav/footer padding from
+       spilling out while that width animates down to 0. */
+    transition: transform 0.3s ease, width 0.3s ease, min-width 0.3s ease, padding 0.3s ease, border-width 0.3s ease;
     box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+    overflow: hidden;
 }
 .sidebar.-translate-x-full {
     transform: translateX(-100%);
@@ -389,9 +394,20 @@ img {
     }
 }
 @media (min-width: 768px) {
-    /* Sidebar is always docked open on desktop, regardless of the toggle class. */
+    /* Sidebar is docked (not an overlay) on desktop, so the mobile
+       slide-out transform never applies here — the open/closed state is
+       instead expressed by collapsing its width, below, which lets
+       .main-content (its flex sibling in .app-body) grow to fill the
+       freed space automatically. */
     .sidebar { position: relative; transform: translateX(0) !important; }
     .sidebar-backdrop { display: none !important; }
+    .sidebar.sidebar-collapsed {
+        width: 0;
+        min-width: 0;
+        max-width: 0;
+        border: 0;
+        box-shadow: none;
+    }
 }
 .sidebar-brand {
     padding: 20px;

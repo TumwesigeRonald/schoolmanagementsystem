@@ -144,7 +144,7 @@
         </div>
     </header>
     <div class="app-body">
-        <div id="sidebar-backdrop" onclick="toggleSidebar()" class="sidebar-backdrop hidden"></div>
+        <div id="sidebar-backdrop" onclick="closeSidebar()" class="sidebar-backdrop hidden"></div>
         <aside id="sidebar" class="sidebar -translate-x-full">
             <div class="sidebar-brand">
                 <div class="sidebar-brand-inner">
@@ -154,7 +154,7 @@
                         <p>Portal Dashboard</p>
                     </div>
                 </div>
-                <button onclick="toggleSidebar()" class="sidebar-close">&#10005;</button>
+                <button onclick="closeSidebar()" class="sidebar-close">&#10005;</button>
             </div>
             <!-- Academic Term / Year switcher — Admin & Teacher only (see
                  renderTermSwitcher in script.js, which shows/hides and
