@@ -7,11 +7,13 @@
  * password gate in finance-auth.routes.js). As of the FINANCE_ROLES
  * change in finance-auth.routes.js, Teachers can no longer set or
  * verify a Finance password at all, so they can never obtain that
- * finance-scoped token and never reach any route below — Admin and
- * Bursar are the only roles that get here now. Write routes still
- * additionally require `requireRole(...EDIT_ROLES)` so Bursar stays
- * scoped to record/edit while Admin retains full access; there is no
- * remaining "view-only" role on this file.
+ * finance-scoped token and never reach any route below — Administrator,
+ * Bursar, Human Resource, and Director are the only roles that get here
+ * now, and ALL FOUR get full read/write access to this module (General
+ * Finance & Student Fees) — write routes require `requireRole(...EDIT_ROLES)`
+ * purely as defense-in-depth alongside the finance-scope gate; there is
+ * no view-only tier on this file. (Payroll, in payroll.routes.js, is the
+ * one place Bursar is excluded — see EDIT_ROLES there.)
  */
 const express = require('express');
 const db = require('../db');
@@ -21,7 +23,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
-const EDIT_ROLES = ['Administrator', 'Bursar'];
+const EDIT_ROLES = ['Administrator', 'Bursar', 'Human Resource', 'Director'];
 
 router.use(authenticate, requireFinanceScope);
 

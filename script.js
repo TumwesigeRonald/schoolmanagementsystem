@@ -656,7 +656,10 @@ async function applySessionUser(user) {
         const greetings = {
             [ROLES.ADMIN]: `Full administrative access &mdash; classes, students, subjects, term dates, user roles, and system-wide records.`,
             [ROLES.TEACHER]: `You have view access across the system, with permission to add and update learner scores.`,
-            [ROLES.STUDENT]: `This view is limited to your own dashboard summary, report card, and shared learning resources.`
+            [ROLES.STUDENT]: `This view is limited to your own dashboard summary, report card, and shared learning resources.`,
+            [ROLES.BURSAR]: `Your access is limited to School Finance &mdash; student fees, expenses, and revenues.`,
+            [ROLES.HR]: `Your access covers School Finance and Staff Payroll.`,
+            [ROLES.DIRECTOR]: `Your access covers School Finance and Staff Payroll.`
         };
         banner.innerHTML = `Welcome back, <span class="text-yellow-400">${currentUser.name || currentUser.username}</span><span class="banner-subtext">${greetings[currentUser.role] || ''}</span>`;
         banner.classList.add('visible');
@@ -728,7 +731,12 @@ function renderSidebarNav() {
         // other item, so it's routed and styled through the exact same path
         // as "School Finance" and "Activity Log" — no separate disabled/
         // reduced-opacity treatment.
-        { id: 'aitoolbox', label: 'Teacher Toolbox', icon: 'fa-wand-magic-sparkles', group: 'admin-tools' }
+        { id: 'aitoolbox', label: 'Teacher Toolbox', icon: 'fa-wand-magic-sparkles', group: 'admin-tools' },
+        // New nav entry only — Admin Staff Management feature
+        // (staff-management.js). Administrator-only, gated by
+        // ROLE_PERMISSIONS.tabs in api.js exactly like every other item
+        // here (only Administrator's tabs[] includes 'staffmanagement').
+        { id: 'staffmanagement', label: 'Staff Management', icon: 'fa-users-gear', group: 'admin-tools' }
     ].filter(item => allowedTabs.includes(item.id));
     // NOTE ON COLORS: the sidebar's background is dark navy (--navy-900, see
     // styles.css), so unselected items use a light slate (#e2e8f0) instead of
@@ -769,12 +777,26 @@ const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-whi
 // "School Finance" is intentionally NOT part of the tabs/RBAC routing array
 // above — it's a placeholder entry that never actually navigates, so it's
 // kept fully separate from switchTab()'s real routing logic. Shown to
-// Admin & Bursar only (Teacher access was removed — see FINANCE_ROLES in
-// routes/finance-auth.routes.js; Teachers can no longer set or verify a
-// Finance password, so showing them a nav item that just 403s isn't useful),
-// matching the existing left-aligned style and high-visibility text color.
+// Administrator, Bursar, Human Resource, and Director (Teacher access was
+// removed — see FINANCE_ROLES in routes/finance-auth.routes.js; Teachers
+// can no longer set or verify a Finance password, so showing them a nav
+// item that just 403s isn't useful), matching the existing left-aligned
+// style and high-visibility text color.
+//
+// SECURITY NOTE: the popup behind this nav item (showFinancePasswordModal/
+// submitFinancePasswordForm below) asks ONLY for the Finance password —
+// there is deliberately no role selector. The backend already knows the
+// caller's true role from their signed login JWT (req.user.role, set at
+// /api/auth/login and never touched again) and uses that alone to decide
+// what the resulting finance-scoped token can reach (see FINANCE_ROLES in
+// finance-auth.routes.js and EDIT_ROLES in finance.routes.js /
+// payroll.routes.js). A client-side dropdown letting the user assert which
+// role to authenticate as would let a Bursar simply select "Director" and
+// pick up Payroll access that the strict Bursar exclusion (EDIT_ROLES in
+// payroll.routes.js) exists specifically to prevent — so no such control
+// is ever added here, no matter which of these four roles is logged in.
 function renderFinanceNavItem() {
-    if (currentUser.role !== ROLES.ADMIN && currentUser.role !== ROLES.BURSAR) return '';
+    if (![ROLES.ADMIN, ROLES.BURSAR, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role)) return '';
     return `
         <button id="nav-finance" onclick="openFinanceGate(); closeMobileSidebar();" class="${SIDEBAR_NAV_INACTIVE_CLASS}">
             <i class="fa-solid fa-sack-dollar w-4 text-center"></i><span>School Finance</span>
@@ -816,7 +838,7 @@ function showFinancePanel() {
     currentTabName = 'finance';
     const titleElem = document.getElementById('page-title');
     if (titleElem) titleElem.innerText = 'School Finance';
-    const allNavIds = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox', 'finance'];
+    const allNavIds = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox', 'staffmanagement', 'finance'];
     allNavIds.forEach(id => {
         const el = document.getElementById(`nav-${id}`);
         if (el) el.className = id === 'finance' ? SIDEBAR_NAV_ACTIVE_CLASS : SIDEBAR_NAV_INACTIVE_CLASS;
@@ -1013,7 +1035,7 @@ function switchTab(tabName) {
     // leaving them visible across the whole portal.
     const bannerElem = document.getElementById('welcome-banner');
     if (bannerElem) bannerElem.classList.toggle('visible', tabName === 'dashboard');
-    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox'];
+    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox', 'staffmanagement'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
@@ -1046,6 +1068,7 @@ function switchTab(tabName) {
         case 'activitylog': titleText = "Admin Activity Log"; break;
         case 'classsummaries': titleText = "Class Score Summaries"; break;
         case 'aitoolbox': titleText = "Teacher Toolbox"; break;
+        case 'staffmanagement': titleText = "Staff Management (Bursar / HR / Director)"; break;
     }
     if (titleElem) titleElem.innerText = titleText;
     const contentElem = document.getElementById('tab-content');
@@ -1126,6 +1149,13 @@ function switchTab(tabName) {
             // separate teacher-toolbox.js file — isolated feature module.
             contentElem.innerHTML = renderTeacherToolboxModule();
             initTeacherToolboxModule();
+            break;
+        case 'staffmanagement':
+            // renderStaffManagementModule/initStaffManagementModule live in
+            // the separate staff-management.js file — isolated feature
+            // module, same pattern as class-summaries.js / teacher-toolbox.js.
+            contentElem.innerHTML = renderStaffManagementModule();
+            initStaffManagementModule();
             break;
     }
     updateDashboardStats();

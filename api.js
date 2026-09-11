@@ -128,6 +128,14 @@ const ENDPOINTS = {
     AI_ITEMS: "/ai/items",
     AI_ITEM_BY_ID: (id) => `/ai/items/${encodeURIComponent(id)}`,
 
+    // --- Admin: Bursar/Human Resource/Director account management
+    // (Administrator only, separate from the Finance password gate —
+    // see routes/admin-staff.routes.js) ---
+    ADMIN_STAFF_LIST: "/admin/staff",
+    ADMIN_STAFF_CREATE: "/admin/create-staff",
+    ADMIN_STAFF_BY_USERNAME: (username) => `/admin/staff/${encodeURIComponent(username)}`,
+    ADMIN_STAFF_RESET_PASSWORD: (username) => `/admin/staff/${encodeURIComponent(username)}/reset-password`,
+
     // --- School Finance access gate (second password, see
     // routes/finance-auth.routes.js on the backend) ---
     FINANCE_AUTH_STATUS: "/finance-auth/status",
@@ -293,7 +301,9 @@ const ROLES = {
     ADMIN: "Administrator",
     TEACHER: "Teacher",
     STUDENT: "Student",
-    BURSAR: "Bursar"
+    BURSAR: "Bursar",
+    HR: "Human Resource",
+    DIRECTOR: "Director"
 };
 
 const ROLE_PERMISSIONS = {
@@ -305,7 +315,7 @@ const ROLE_PERMISSIONS = {
         // filter (`allowedTabs.includes(item.id)`) drops the Teacher Toolbox
         // nav item entirely, which is why it never picked up the same
         // active/hover styling as the rest of the menu.
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "classsummaries", "aitoolbox"],
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "classsummaries", "aitoolbox", "staffmanagement"],
         defaultTab: "dashboard",
         canManageStudents: true,
         canManageScores: true,
@@ -317,7 +327,8 @@ const ROLE_PERMISSIONS = {
         canViewAllReports: true,
         canSwitchTerm: true,        // can browse a past term/year instead of only the live one
         canManageNotices: true,     // post/delete school bulletin notices
-        canPrintWholeClass: true    // bulk "Print / Save PDF (Whole Class)" report-card export
+        canPrintWholeClass: true,   // bulk "Print / Save PDF (Whole Class)" report-card export
+        canManageStaff: true        // Administrator-only: create/edit/reset Bursar/HR/Director accounts (staff-management.js)
     },
     [ROLES.TEACHER]: {
         // "classsummaries" and "aitoolbox" appended here — same tab ids as above.
@@ -333,12 +344,17 @@ const ROLE_PERMISSIONS = {
         canViewAllReports: true,
         canSwitchTerm: true,        // can browse a past term/year instead of only the live one
         canManageNotices: false,    // can read the bulletin, not post to it
-        canPrintWholeClass: false   // whole-class bulk PDF export is Administrator-only
+        canPrintWholeClass: false,  // whole-class bulk PDF export is Administrator-only
+        canManageStaff: false
     },
     [ROLES.BURSAR]: {
         // No academic tabs — Bursar's whole job lives behind the "School
         // Finance" gate (renderFinanceNavItem), which isn't part of this
-        // tabs array (same as how Admin/Teacher reach it).
+        // tabs array (same as how Admin/Teacher/HR/Director reach it).
+        // Bursar gets the General Finance / Student Fees section of that
+        // gated module, but NOT Payroll — see payrollCanAccess() in
+        // payroll.js and EDIT_ROLES in payroll.routes.js (strict exclusion,
+        // enforced server-side; this frontend flag just keeps the UI honest).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -351,7 +367,50 @@ const ROLE_PERMISSIONS = {
         canViewAllReports: false,
         canSwitchTerm: false,
         canManageNotices: false,
-        canPrintWholeClass: false
+        canPrintWholeClass: false,
+        canManageStaff: false,
+        canAccessPayroll: false
+    },
+    [ROLES.HR]: {
+        // Same shape as Bursar — whole job lives behind the Finance gate
+        // — but Human Resource gets Payroll access that Bursar does not
+        // (see payrollCanAccess() in payroll.js / EDIT_ROLES in
+        // payroll.routes.js), on top of the same General Finance access.
+        tabs: ["dashboard"],
+        defaultTab: "dashboard",
+        canManageStudents: false,
+        canManageScores: false,
+        canManageAttendance: false,
+        canManageResources: false,
+        canDeleteAnyResource: false,
+        canManageTeachers: false,
+        canManageTerm: false,
+        canViewAllReports: false,
+        canSwitchTerm: false,
+        canManageNotices: false,
+        canPrintWholeClass: false,
+        canManageStaff: false,
+        canAccessPayroll: true
+    },
+    [ROLES.DIRECTOR]: {
+        // Same shape as Human Resource: General Finance + Payroll behind
+        // the Finance gate, no academic tabs, no staff-account management
+        // (that stays Administrator-only).
+        tabs: ["dashboard"],
+        defaultTab: "dashboard",
+        canManageStudents: false,
+        canManageScores: false,
+        canManageAttendance: false,
+        canManageResources: false,
+        canDeleteAnyResource: false,
+        canManageTeachers: false,
+        canManageTerm: false,
+        canViewAllReports: false,
+        canSwitchTerm: false,
+        canManageNotices: false,
+        canPrintWholeClass: false,
+        canManageStaff: false,
+        canAccessPayroll: true
     },
     [ROLES.STUDENT]: {
         tabs: ["dashboard", "reports", "resources"],
@@ -371,7 +430,9 @@ const ROLE_PERMISSIONS = {
         // *view*, never whose data they can see.
         canSwitchTerm: true,
         canManageNotices: false,
-        canPrintWholeClass: false
+        canPrintWholeClass: false,
+        canManageStaff: false,
+        canAccessPayroll: false
     }
 };
 
@@ -842,6 +903,61 @@ const TeachersAPI = {
                 return true;
             }
         );
+    }
+};
+
+/* ---------------------------------------------------------
+   6b. ADMIN STAFF MANAGEMENT DATA-ACCESS LAYER (Bursar / Human
+   Resource / Director accounts). Administrator-only — see
+   routes/admin-staff.routes.js. This is a distinct concern from
+   TeachersAPI (Teacher accounts) and StudentsAPI (Student accounts):
+   those two provision their own login as a side effect of creating a
+   domain record (a teacher profile / a student record); a staff
+   account here has no such domain record — it's the account itself.
+
+   No local-fallback "demo" list is offered beyond an in-memory mirror
+   of whatever the server last returned, since there's no meaningful
+   offline stand-in for real Administrator-managed credentials.
+   --------------------------------------------------------- */
+let staffAccountsList = []; // in-memory mirror of the last-fetched staff list, so the table can re-render without refetching after a local list() call
+
+const StaffAPI = {
+    // { username, name, role, createdAt }[]
+    async list() {
+        const remote = await apiRequest(ENDPOINTS.ADMIN_STAFF_LIST);
+        if (Array.isArray(remote)) staffAccountsList = remote;
+        return staffAccountsList;
+    },
+    // { username, password, fullName, role } -> role must be one of
+    // ROLES.BURSAR / ROLES.HR / ROLES.DIRECTOR.
+    async create({ username, password, fullName, role }) {
+        const created = await apiRequest(ENDPOINTS.ADMIN_STAFF_CREATE, {
+            method: "POST",
+            body: { username, password, fullName, role }
+        });
+        staffAccountsList.push(created);
+        return created;
+    },
+    // Partial update — pass only the fields changing, e.g. { fullName } or { role }.
+    async update(username, updates) {
+        const updated = await apiRequest(ENDPOINTS.ADMIN_STAFF_BY_USERNAME(username), {
+            method: "PUT",
+            body: updates
+        });
+        const idx = staffAccountsList.findIndex(s => s.username.toLowerCase() === username.toLowerCase());
+        if (idx !== -1) staffAccountsList[idx] = updated;
+        return updated;
+    },
+    async resetPassword(username, newPassword) {
+        return apiRequest(ENDPOINTS.ADMIN_STAFF_RESET_PASSWORD(username), {
+            method: "POST",
+            body: { newPassword }
+        });
+    },
+    async remove(username) {
+        const result = await apiRequest(ENDPOINTS.ADMIN_STAFF_BY_USERNAME(username), { method: "DELETE" });
+        staffAccountsList = staffAccountsList.filter(s => s.username.toLowerCase() !== username.toLowerCase());
+        return result;
     }
 };
 

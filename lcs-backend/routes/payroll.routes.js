@@ -4,9 +4,17 @@
  * Mounted at /api/finance/payroll. Every route here requires BOTH a valid
  * login (`authenticate`) AND an unlocked Finance session
  * (`requireFinanceScope`), same as routes/finance.routes.js. Unlike that
- * file, Teachers get NO access here at all (not even read-only) — payroll
- * is staff salary data, not the school-fees data Teachers are allowed to
- * view, so every route below is Admin + Bursar only.
+ * file, there is a STRICT EXCLUSION here: Bursar gets NO access at all,
+ * not even read-only — payroll is staff salary data, not the school-fees
+ * data Bursar is allowed to touch. Administrator, Human Resource, and
+ * Director are the only roles with any access to this file, and it's
+ * full read/write for all three — there is no view-only tier.
+ *
+ * A Bursar CAN still pass the Finance gate (see FINANCE_ROLES in
+ * finance-auth.routes.js) to reach the General Finance module, but
+ * `requireRole(...EDIT_ROLES)` below rejects them with a 403 on every
+ * single route in this file regardless of that finance-scoped token —
+ * the Finance gate alone is never sufficient to reach Payroll.
  *
  * NOT included yet (next step — Financial Integration): marking a payroll
  * record "paid" and writing the matching entry to the `expenses` ledger.
@@ -21,11 +29,11 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
-const EDIT_ROLES = ['Administrator', 'Bursar'];
+const EDIT_ROLES = ['Administrator', 'Human Resource', 'Director'];
 
 // Everything in this file needs both a valid login, an unlocked Finance
 // session, AND (unlike finance.routes.js) one of EDIT_ROLES — there is no
-// view-only tier for payroll.
+// view-only tier for payroll, and Bursar is never in EDIT_ROLES here.
 router.use(authenticate, requireFinanceScope, requireRole(...EDIT_ROLES));
 
 const STAFF_COLUMNS = `

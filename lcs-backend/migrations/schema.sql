@@ -26,6 +26,14 @@ END $$;
 -- wrapper needed) and is safe outside a transaction on PG 12+.
 ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'Bursar';
 
+-- "Human Resource" and "Director" — multi-tier Finance roles (see
+-- routes/admin-staff.routes.js, finance.routes.js, payroll.routes.js,
+-- finance-auth.routes.js). Both get the same School Finance (fees)
+-- access as Bursar, PLUS Staff Payroll access that Bursar is
+-- deliberately excluded from — see EDIT_ROLES in payroll.routes.js.
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'Human Resource';
+ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'Director';
+
 -- -------------------------------------------------------------
 -- students — the learner registry (Admin-managed)
 -- id uses the school's own format, e.g. "LCS/001"

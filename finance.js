@@ -26,10 +26,11 @@
    No existing array, function body, route, or DB model was changed
    to do this.
 
-   Roles: Admin + Bursar can record payments and set fee structures
-   (EDIT_ROLES, enforced server-side too — see finance.routes.js).
-   Teacher gets the same views but every edit control is hidden/
-   disabled, since the backend would reject the write anyway.
+   Roles: Admin, Bursar, Human Resource, and Director can all record
+   payments and set fee structures (EDIT_ROLES, enforced server-side too
+   — see finance.routes.js). Teacher gets the same views but every edit
+   control is hidden/disabled, since the backend would reject the write
+   anyway.
    ========================================================= */
 
 const FINANCE_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
@@ -54,8 +55,11 @@ const FINANCE_CHART_COLORS = ['#0f766e', '#2563eb', '#f59e0b', '#a855f7', '#ec48
 const FINANCE_EXPENSE_CATEGORIES = ['Salaries', 'Utilities', 'Maintenance & Repairs', 'Transport', 'Teaching Supplies', 'Boarding & Meals', 'Administration', 'Other'];
 const FINANCE_REVENUE_CATEGORIES = ['Donations', 'Grants', 'Rent Income', 'Fundraising', 'Other Income'];
 
+// All four Finance-gated roles get full read/write on this module (see
+// EDIT_ROLES in finance.routes.js) — Payroll is the one place Bursar is
+// excluded (see payrollCanAccess() in payroll.js).
 function financeCanEdit() {
-    return currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.BURSAR;
+    return [ROLES.ADMIN, ROLES.BURSAR, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
 }
 function formatUGX(amount) {
     const n = Number(amount) || 0;

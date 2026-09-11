@@ -7,16 +7,18 @@
    talks only to PayrollAPI (api.js), which itself talks to
    routes/payroll.routes.js on the backend.
 
-   Unlike the rest of Finance, there is NO view-only tier here: the
-   backend rejects every /finance/payroll/* route for anyone who isn't
-   Admin/Bursar (see EDIT_ROLES in payroll.routes.js), so this module
-   hides the "Payroll" tab entirely for Teachers rather than showing a
-   read-only view that would just 403 on load — see payrollCanAccess().
+   STRICT EXCLUSION: Bursar gets ZERO access here, not even read-only —
+   the backend rejects every /finance/payroll/* route for anyone who
+   isn't Administrator/Human Resource/Director (see EDIT_ROLES in
+   payroll.routes.js), so this module hides the "Payroll" tab entirely
+   for Bursar (and Teacher) rather than showing a read-only view that
+   would just 403 on load — see payrollCanAccess().
 
    Wiring into the rest of the app required exactly 2 minimal,
    additive touch-points in finance.js:
      1. renderFinanceModule()   -> one more <button> in the section-tab
-                                    bar (only rendered for Admin/Bursar).
+                                    bar (only rendered for
+                                    Admin/HR/Director).
      2. loadFinanceActiveSection() -> one more branch, calling
                                     loadFinancePayrollSection() below.
    Plus 1 touch-point in index.html: this file added as a <script> tag,
@@ -35,8 +37,11 @@ const PAYROLL_STAFF_PAGE_SIZE = 25;
 let payrollStaffTotal = 0;
 let payrollStaffTotalPages = 1;
 
+// STRICT EXCLUSION: Bursar is deliberately NOT in this list — matches
+// EDIT_ROLES in payroll.routes.js exactly, so the "Payroll" tab is never
+// shown to an account that would just get a 403 from every route behind it.
 function payrollCanAccess() {
-    return currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.BURSAR;
+    return [ROLES.ADMIN, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
 }
 
 /* ---------------------------------------------------------

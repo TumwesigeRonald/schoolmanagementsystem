@@ -19,6 +19,7 @@ const aiRoutes = require('./routes/ai.routes');
 const financeAuthRoutes = require('./routes/finance-auth.routes');
 const financeRoutes = require('./routes/finance.routes');
 const payrollRoutes = require('./routes/payroll.routes');
+const adminStaffRoutes = require('./routes/admin-staff.routes');
 
 const app = express();
 
@@ -97,6 +98,9 @@ app.use('/api/finance', financeRoutes);
 // JWT and the Finance-scope token, same gate as financeRoutes, so nesting
 // it here doesn't loosen anything.
 app.use('/api/finance/payroll', payrollRoutes);
+// Administrator-only Bursar/HR/Director account management — a separate
+// gate from the Finance password above (see routes/admin-staff.routes.js).
+app.use('/api/admin', adminStaffRoutes);
 
 // --- 404 for unmatched /api routes ---
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));
