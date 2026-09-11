@@ -614,10 +614,16 @@ const FinanceAPI = {
    --------------------------------------------------------- */
 const PayrollAPI = {
     // --- Staff profiles ---
-    async listStaff({ status, roleType } = {}) {
+    // No page -> old behavior: full plain array. Pass page/pageSize for
+    // { data, total, page, pageSize, totalPages } — used by the Staff
+    // Profiles table only.
+    async listStaff({ status, roleType, search, page, pageSize } = {}) {
         const params = new URLSearchParams();
         if (status) params.set("status", status);
         if (roleType) params.set("roleType", roleType);
+        if (search) params.set("search", search);
+        if (page) params.set("page", page);
+        if (pageSize) params.set("pageSize", pageSize);
         const qs = params.toString();
         return apiRequest(qs ? `${ENDPOINTS.PAYROLL_STAFF}?${qs}` : ENDPOINTS.PAYROLL_STAFF);
     },
@@ -693,6 +699,26 @@ const PayrollAPI = {
 };
 
 /* ---------------------------------------------------------
+   5c. DEBOUNCE — shared utility for search/filter inputs.
+   Delays calling `fn` until `wait` ms have passed with no further
+   calls, so typing in a search box fires ONE request after the user
+   pauses instead of one request per keystroke. Defined here (api.js
+   loads first, before script.js/payroll.js) so every module can use
+   it without its own copy.
+
+   Usage:
+     const debouncedSearch = debounce(() => loadStudentData(), 350);
+     // wire an input's oninput/addEventListener to debouncedSearch
+   --------------------------------------------------------- */
+function debounce(fn, wait = 300) {
+    let timer = null;
+    return function debounced(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), wait);
+    };
+}
+
+/* ---------------------------------------------------------
    6. GENERIC "REMOTE-FIRST, LOCAL-FALLBACK" CRUD HELPER
    Wraps a REST call; on network failure it runs localFn() instead
    so every module keeps working without the backend deployed.
@@ -710,10 +736,45 @@ async function remoteFirst(requestFn, localFn) {
    7. STUDENTS DATA-ACCESS LAYER
    --------------------------------------------------------- */
 const StudentsAPI = {
-    async list() {
+    // No args -> old behavior: full plain array (used by dropdowns, the
+    // Scores/Attendance student pickers, refreshStudentsList(), etc).
+    // Pass { class, search, page, pageSize } for the paginated shape:
+    // { data, total, page, pageSize, totalPages } — used by the Student
+    // Records admin table only.
+    async list(params = {}) {
+        const qs = new URLSearchParams();
+        if (params.class && params.class !== 'ALL') qs.set('class', params.class);
+        if (params.search) qs.set('search', params.search);
+        if (params.page) qs.set('page', params.page);
+        if (params.pageSize) qs.set('pageSize', params.pageSize);
+        const query = qs.toString();
         return remoteFirst(
-            () => apiRequest(ENDPOINTS.STUDENTS),
-            () => studentsList
+            () => apiRequest(query ? `${ENDPOINTS.STUDENTS}?${query}` : ENDPOINTS.STUDENTS),
+            () => {
+                // Best-effort local fallback so the admin table still works
+                // in offline/local-demo mode: filter + slice studentsList
+                // the same way the server would.
+                if (!params.page) return studentsList;
+                let filtered = studentsList;
+                if (params.class && params.class !== 'ALL') filtered = filtered.filter(s => s.class === params.class);
+                if (params.search) {
+                    const term = params.search.toLowerCase();
+                    filtered = filtered.filter(s =>
+                        (s.id && s.id.toLowerCase().includes(term)) ||
+                        (s.name && s.name.toLowerCase().includes(term))
+                    );
+                }
+                const pageSize = params.pageSize || 25;
+                const page = params.page || 1;
+                const start = (page - 1) * pageSize;
+                return {
+                    data: filtered.slice(start, start + pageSize),
+                    total: filtered.length,
+                    page,
+                    pageSize,
+                    totalPages: Math.max(1, Math.ceil(filtered.length / pageSize))
+                };
+            }
         );
     },
     async create(student) {

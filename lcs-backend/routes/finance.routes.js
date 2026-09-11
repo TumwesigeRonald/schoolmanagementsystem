@@ -4,11 +4,14 @@
  *
  * Every route here requires BOTH a valid login (`authenticate`) AND an
  * unlocked Finance session (`requireFinanceScope` — the separate
- * password gate in finance-auth.routes.js). Admin, Bursar and Teacher
- * can all reach these for reading; write routes additionally require
- * `requireRole(...EDIT_ROLES)` so Teachers stay view-only, matching
- * what was agreed for the feature (Admin + Bursar can record/edit,
- * Teacher can view only).
+ * password gate in finance-auth.routes.js). As of the FINANCE_ROLES
+ * change in finance-auth.routes.js, Teachers can no longer set or
+ * verify a Finance password at all, so they can never obtain that
+ * finance-scoped token and never reach any route below — Admin and
+ * Bursar are the only roles that get here now. Write routes still
+ * additionally require `requireRole(...EDIT_ROLES)` so Bursar stays
+ * scoped to record/edit while Admin retains full access; there is no
+ * remaining "view-only" role on this file.
  */
 const express = require('express');
 const db = require('../db');

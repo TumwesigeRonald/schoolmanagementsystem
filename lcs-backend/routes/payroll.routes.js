@@ -36,19 +36,53 @@ const STAFF_COLUMNS = `
 
 /* ============================== Staff Profiles ============================== */
 
-// GET /api/finance/payroll/staff?status=&roleType=
+// GET /api/finance/payroll/staff?status=&roleType=&search=&page=&pageSize=
+// Pagination is OPT-IN via `page`, same convention as GET /api/students:
+// omit it and this returns the old plain array (unchanged for any caller
+// that isn't the Staff Profiles table). Pass `page` to get back
+// { data, total, page, pageSize, totalPages } instead.
 router.get('/staff', asyncHandler(async (req, res) => {
-  const { status, roleType } = req.query;
+  const { status, roleType, search, page: rawPage, pageSize: rawPageSize } = req.query;
   const params = [];
   const filters = [];
   if (status) { params.push(status); filters.push(`status = $${params.length}`); }
   if (roleType) { params.push(roleType); filters.push(`role_type = $${params.length}`); }
+  if (search) { params.push(`%${search}%`); filters.push(`name ILIKE $${params.length}`); }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+  if (rawPage === undefined) {
+    const { rows } = await db.query(
+      `SELECT ${STAFF_COLUMNS} FROM staff_profiles ${where} ORDER BY name`,
+      params
+    );
+    return res.json(rows);
+  }
+
+  const page = Math.max(1, parseInt(rawPage, 10) || 1);
+  const pageSize = Math.min(200, Math.max(1, parseInt(rawPageSize, 10) || 25));
+  const offset = (page - 1) * pageSize;
+
+  params.push(pageSize, offset);
+  const limitParam = params.length - 1;
+  const offsetParam = params.length;
   const { rows } = await db.query(
-    `SELECT ${STAFF_COLUMNS} FROM staff_profiles ${where} ORDER BY name`,
+    `SELECT ${STAFF_COLUMNS}, COUNT(*) OVER()::int AS "totalCount"
+     FROM staff_profiles ${where}
+     ORDER BY name
+     LIMIT $${limitParam} OFFSET $${offsetParam}`,
     params
   );
-  res.json(rows);
+
+  const total = rows.length ? rows[0].totalCount : 0;
+  const data = rows.map(({ totalCount, ...rest }) => rest);
+
+  res.json({
+    data,
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize))
+  });
 }));
 
 // GET /api/finance/payroll/staff/:id — profile + allowances + advances,

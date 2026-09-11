@@ -585,3 +585,47 @@ CREATE TABLE IF NOT EXISTS staff_salary_history (
   changed_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_staff_salary_history_staff ON staff_salary_history(staff_id);
+
+-- =============================================================
+-- MIGRATION: performance indexes (composite/partial), added after
+-- the original schema — see routes/scores.routes.js, attendance
+-- queries, and routes/payroll.routes.js's POST /generate for the
+-- exact WHERE clauses these were sized for.
+-- NOTE: this was originally handed out as a standalone
+-- 002_add_performance_indexes.sql file, but scripts/migrate.js only
+-- ever reads THIS file (migrations/schema.sql) — a separate file was
+-- never actually wired up to run. Moved in here so `npm run migrate`
+-- actually applies it. Idempotent / safe to re-run, same as
+-- everything else in this file.
+-- =============================================================
+CREATE INDEX IF NOT EXISTS idx_scores_student_term_year
+  ON scores (student_id, term, year);
+CREATE INDEX IF NOT EXISTS idx_scores_term_year_class_subject
+  ON scores (term, year, class_level, subject);
+CREATE INDEX IF NOT EXISTS idx_attendance_student_term_year
+  ON attendance (student_id, term, year);
+CREATE INDEX IF NOT EXISTS idx_attendance_term_year_class
+  ON attendance (term, year, class_level);
+CREATE INDEX IF NOT EXISTS idx_allowances_staff_type
+  ON allowances (staff_id, type);
+CREATE INDEX IF NOT EXISTS idx_allowances_onetime_unapplied
+  ON allowances (staff_id)
+  WHERE type = 'one-time' AND applied_payroll_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_salary_advances_staff_active
+  ON salary_advances (staff_id)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_report_remarks_term_year
+  ON report_card_remarks (term, year);
+
+-- =============================================================
+-- MIGRATION: clear any Finance password already set on Teacher
+-- accounts. Teachers can no longer set OR verify a Finance password
+-- at all (see FINANCE_ROLES in routes/finance-auth.routes.js) — the
+-- gate rejects them before the handler even runs, so a leftover hash
+-- here is inert either way, but there's no reason to keep it sitting
+-- in the database once the role can never use it again. Naturally
+-- idempotent: after the first run no Teacher row has a non-null
+-- finance_password_hash left to clear, so re-running this is a no-op.
+-- =============================================================
+UPDATE users SET finance_password_hash = NULL
+  WHERE role = 'Teacher' AND finance_password_hash IS NOT NULL;

@@ -28,11 +28,16 @@ const HASH_ROUNDS = 10;
 // second all-day pass.
 const FINANCE_TOKEN_EXPIRES_IN = '4h';
 
-// Admin, Bursar, and Teacher (view-only once past this gate — see
-// EDIT_ROLES in finance.routes.js) all see the "School Finance" nav
-// item (renderFinanceNavItem() in script.js) — mirror that here so a
-// Student token can never reach this endpoint even directly.
-const FINANCE_ROLES = ['Administrator', 'Bursar', 'Teacher'];
+// Only Administrator and Bursar can reach the Finance gate at all now —
+// Teachers used to be able to self-serve their own Finance password
+// (see FINANCE_ROLES history below) but that's been removed: setting a
+// Finance password, and therefore ever unlocking Finance, is now an
+// Admin/Bursar-only capability. There's no "view-only" path left for
+// Teachers here, since without ever being able to set a password they
+// can never pass verify-password either — this route file rejects them
+// outright (403) rather than leaving a create/verify flow that could
+// never actually succeed for that role.
+const FINANCE_ROLES = ['Administrator', 'Bursar'];
 
 // POST /api/finance-auth/verify-password
 // Body: { password }

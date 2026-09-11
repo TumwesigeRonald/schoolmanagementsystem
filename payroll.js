@@ -25,10 +25,15 @@
    ========================================================= */
 
 let payrollActiveView = 'staff'; // 'staff' | 'runs' — sub-tab inside the Payroll tab
-let payrollStaffCache = [];      // last-fetched staff list, so modals can look up a name without refetching
+let payrollStaffCache = [];      // last-fetched staff list (current page only), so modals can look up a name without refetching
 let payrollRecordsCache = [];    // last-fetched payroll_records for the selected month/year
 let payrollStaffAllowanceTotals = {}; // staffId -> current total allowances, for the Staff Profiles table's Allowances/Net Pay columns (see loadPayrollStaffAllowanceTotals())
-let payrollStaffSearchTerm = ''; // client-side name filter on top of the Status/Role Type server filters
+let payrollStaffSearchTerm = ''; // now a SERVER-side filter (was client-side) — see loadPayrollStaffList()
+// Pagination state for the Staff Profiles table.
+let payrollStaffPage = 1;
+const PAYROLL_STAFF_PAGE_SIZE = 25;
+let payrollStaffTotal = 0;
+let payrollStaffTotalPages = 1;
 
 function payrollCanAccess() {
     return currentUser.role === ROLES.ADMIN || currentUser.role === ROLES.BURSAR;
@@ -71,6 +76,13 @@ function switchPayrollView(view) {
    STAFF PROFILES — list, add/edit, delete, and the detail modal
    where allowances are assigned and salary advances are issued.
    --------------------------------------------------------- */
+// Debounced so a keystroke in #payroll-staff-search waits 350ms of no
+// further typing before it hits the server — see debounce() in api.js.
+const debouncedPayrollStaffSearch = debounce(() => {
+    payrollStaffPage = 1; // a new search always starts back at page 1
+    loadPayrollStaffList();
+}, 350);
+
 async function loadPayrollStaffList() {
     const body = document.getElementById('payroll-section-body');
     if (!body) return;
@@ -79,18 +91,28 @@ async function loadPayrollStaffList() {
     const searchInput = document.getElementById('payroll-staff-search');
     const status = statusFilter ? statusFilter.value : '';
     const roleType = roleFilter ? roleFilter.value : '';
-    // Preserve whatever the user was typing across a full re-render (the
-    // search box itself doesn't trigger a refetch — see the oninput handler).
+    // Preserve whatever the user was typing across a full re-render.
     if (searchInput) payrollStaffSearchTerm = searchInput.value;
 
     body.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading staff&hellip;</div>`;
 
+    let result;
     try {
-        payrollStaffCache = await PayrollAPI.listStaff({ status, roleType });
+        result = await PayrollAPI.listStaff({
+            status, roleType,
+            search: payrollStaffSearchTerm.trim() || undefined,
+            page: payrollStaffPage,
+            pageSize: PAYROLL_STAFF_PAGE_SIZE
+        });
     } catch (err) {
         body.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-rose-500 text-xs font-semibold">${escapeHTML(err.message || "Couldn't load staff profiles.")}</div>`;
         return;
     }
+
+    // { data, total, page, pageSize, totalPages } from the paginated route.
+    payrollStaffCache = result.data || [];
+    payrollStaffTotal = result.total ?? payrollStaffCache.length;
+    payrollStaffTotalPages = result.totalPages || 1;
 
     renderPayrollStaffToolbar(body, status, roleType);
     renderPayrollStaffTable();
@@ -117,19 +139,19 @@ function renderPayrollStaffToolbar(body, status, roleType) {
     toolbar.className = 'bg-white border border-slate-200 rounded-2xl shadow-xs mb-4';
     toolbar.innerHTML = `
         <div class="flex flex-wrap items-center gap-2.5 p-4">
-            <select id="payroll-staff-status-filter" onchange="loadPayrollStaffList()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700">
+            <select id="payroll-staff-status-filter" onchange="payrollStaffPage = 1; loadPayrollStaffList();" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700">
                 <option value="">All Statuses</option>
                 <option value="active" ${status === 'active' ? 'selected' : ''}>Active</option>
                 <option value="inactive" ${status === 'inactive' ? 'selected' : ''}>Inactive</option>
             </select>
-            <select id="payroll-staff-role-filter" onchange="loadPayrollStaffList()" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700">
+            <select id="payroll-staff-role-filter" onchange="payrollStaffPage = 1; loadPayrollStaffList();" class="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold text-slate-700">
                 <option value="">All Roles</option>
                 <option value="teaching" ${roleType === 'teaching' ? 'selected' : ''}>Teaching</option>
                 <option value="non-teaching" ${roleType === 'non-teaching' ? 'selected' : ''}>Non-Teaching</option>
             </select>
             <div class="relative">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs"></i>
-                <input type="text" id="payroll-staff-search" value="${escapeHTML(payrollStaffSearchTerm)}" oninput="renderPayrollStaffTable()" placeholder="Search staff&hellip;" class="pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 placeholder-slate-400 w-40 sm:w-52">
+                <input type="text" id="payroll-staff-search" value="${escapeHTML(payrollStaffSearchTerm)}" oninput="debouncedPayrollStaffSearch()" placeholder="Search staff&hellip;" class="pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 placeholder-slate-400 w-40 sm:w-52">
             </div>
             <div class="ml-auto flex items-center gap-2.5">
                 <button onclick="openBulkSalaryModal()" class="inline-flex items-center gap-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition"><i class="fa-solid fa-arrows-rotate text-[10px]"></i>Bulk Salary Update</button>
@@ -142,16 +164,13 @@ function renderPayrollStaffToolbar(body, status, roleType) {
     body.appendChild(toolbar);
 }
 
-// Renders (or re-renders) just the table/empty-state portion, applying the
-// client-side search box on top of payrollStaffCache — called on every
-// keystroke in #payroll-staff-search without refetching from the server.
+// Renders the table/empty-state for whatever page is currently in
+// payrollStaffCache. Search/status/role filtering all happen server-side
+// now (see loadPayrollStaffList()) — this just draws the page it got back.
 function renderPayrollStaffTable() {
     const wrap = document.getElementById('payroll-staff-table-wrap');
     if (!wrap) return;
-    const searchInput = document.getElementById('payroll-staff-search');
-    const term = (searchInput ? searchInput.value : payrollStaffSearchTerm).trim().toLowerCase();
-    payrollStaffSearchTerm = term ? (searchInput ? searchInput.value : payrollStaffSearchTerm) : '';
-    const rows = payrollStaffCache.filter(s => !term || s.name.toLowerCase().includes(term));
+    const rows = payrollStaffCache;
 
     if (!rows.length) {
         wrap.innerHTML = `
@@ -203,10 +222,23 @@ function renderPayrollStaffTable() {
                 </tbody>
             </table>
         </div>
-        <div class="px-4 py-3 border-t border-slate-100 text-[11px] font-semibold text-slate-400">
-            ${rows.length} of ${payrollStaffCache.length} staff member${payrollStaffCache.length === 1 ? '' : 's'} shown
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-slate-100">
+            <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                Showing ${payrollStaffTotal === 0 ? 0 : (payrollStaffPage - 1) * PAYROLL_STAFF_PAGE_SIZE + 1}&ndash;${Math.min(payrollStaffPage * PAYROLL_STAFF_PAGE_SIZE, payrollStaffTotal)} of ${payrollStaffTotal}
+            </p>
+            <div class="flex items-center gap-2">
+                <button onclick="changePayrollStaffPage(-1)" ${payrollStaffPage <= 1 ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><i class="fa-solid fa-chevron-left mr-1"></i>Prev</button>
+                <span class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider px-1">Page ${payrollStaffPage} of ${payrollStaffTotalPages}</span>
+                <button onclick="changePayrollStaffPage(1)" ${payrollStaffPage >= payrollStaffTotalPages ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg text-[11px] font-extrabold uppercase tracking-wider border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">Next<i class="fa-solid fa-chevron-right ml-1"></i></button>
+            </div>
         </div>
     `;
+}
+function changePayrollStaffPage(delta) {
+    const next = payrollStaffPage + delta;
+    if (next < 1 || next > payrollStaffTotalPages) return;
+    payrollStaffPage = next;
+    loadPayrollStaffList();
 }
 
 // Patches one row's Allowances/Net Pay cells once its total resolves,
