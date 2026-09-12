@@ -107,14 +107,20 @@ function getFinanceViewedTermYear() {
    shared by all views (including Payroll).
    --------------------------------------------------------- */
 /* ---------------------------------------------------------
-   HYBRID NAVIGATION — category tabs (top level, 2-3 per role) with an
-   accordion section list inside each category. Replaces the old flat
-   row of up to 9 tabs. Two problems this solves at once:
+   STRICT TWO-TIER NAVIGATION — primary category pills (2-3 per role)
+   with a horizontal secondary sub-tab bar inside each category.
+   Replaces the old flat row of up to 9 tabs (and, before that, an
+   accordion where every section's header stayed on screen at once).
+   Only the active sub-tab's markup is ever mounted into
+   #fin-section-body — switching sections replaces that one div's
+   content instead of stacking sections vertically. Two problems this
+   solves at once:
 
-   1. CLUTTER — Bursar now sees 2 category tabs instead of 5 flat ones;
+   1. CLUTTER — Bursar sees 2 category tabs instead of 5 flat ones;
       Admin/HR/Director see 3 instead of up to 8. Every existing
       section (Fees & Payments, Fee Structure, etc.) still exists
-      exactly as before — nothing lost, just grouped.
+      exactly as before — nothing lost, just grouped, and each one
+      renders alone rather than piling up under the last.
 
    2. LAYOUT JUMPING — switching sections used to also silently re-run
       loadFinanceOverviewMetrics(), wiping the metric cards back to
@@ -123,7 +129,7 @@ function getFinanceViewedTermYear() {
       real, unnecessary source of top-of-page flicker. It's now called
       only on initial mount and on term/year change (see
       handleFinanceTermYearChange()). Combined with a reserved
-      min-height on the accordion panel and an intentional scroll-into-
+      min-height on #fin-section-body and an intentional scroll-into-
       view on every nav action (see switchFinanceCategory/
       switchFinanceSection), navigating the module no longer produces
       an unpredictable jump.
@@ -159,7 +165,7 @@ function getFinanceCategories() {
             sections: [
                 ...(payrollCanAccess() ? ['payroll'] : []),
                 'parttimepayroll',
-                // Salary Advances only gets its own accordion row for Bursar —
+                // Salary Advances only gets its own sub-tab for Bursar —
                 // Admin/HR/Director already reach the same screen via the
                 // Staff Detail modal inside the Payroll section (payroll.js).
                 ...(currentUser.role === ROLES.BURSAR && financeCanAccessSalaryAdvances() ? ['advances'] : [])
@@ -173,10 +179,18 @@ function getFinanceCategories() {
     return categories.filter(c => c.sections.length > 0);
 }
 
-// Renders the category tab row + the accordion for whichever category
-// is active. Also resolves financeActiveCategory/financeActiveSection
-// to a valid pair if either is stale (e.g. leftover state from before
-// a role check changed which sections exist).
+// Renders the primary category pills + a horizontal secondary sub-tab
+// bar for whichever category is active, plus the single card that the
+// active sub-tab's content mounts into. Also resolves
+// financeActiveCategory/financeActiveSection to a valid pair if either
+// is stale (e.g. leftover state from before a role check changed which
+// sections exist).
+//
+// STRICT TWO-TIER NAV: switching a primary tab (Student Fees / Payroll /
+// Ledger) swaps the whole workspace. Within a category, the secondary
+// sub-tab bar shows every sibling section as a horizontal pill row —
+// only the active one's markup is ever mounted into #fin-section-body,
+// so sections never stack vertically underneath one another.
 function renderFinanceCategoryNav() {
     const categories = getFinanceCategories();
     if (!financeActiveCategory || !categories.find(c => c.id === financeActiveCategory)) {
@@ -195,19 +209,18 @@ function renderFinanceCategoryNav() {
                 </button>
             `).join('')}
         </div>
-        <div class="fin-accordion">
-            ${currentCategory ? currentCategory.sections.map(sectionId => `
-                <div class="fin-accordion-item">
-                    <button type="button" class="fin-accordion-header ${sectionId === financeActiveSection ? 'open' : ''}" onclick="switchFinanceSection('${sectionId}')">
-                        <span>${FINANCE_SECTION_META[sectionId].label}</span>
-                        <i class="fa-solid fa-chevron-down fin-accordion-chevron"></i>
+        ${currentCategory ? `
+            ${currentCategory.sections.length > 1 ? `
+            <div class="fin-subtabs">
+                ${currentCategory.sections.map(sectionId => `
+                    <button type="button" class="fin-subtab ${sectionId === financeActiveSection ? 'active' : ''}" onclick="switchFinanceSection('${sectionId}')">
+                        ${FINANCE_SECTION_META[sectionId].label}
                     </button>
-                    <div class="fin-accordion-panel ${sectionId === financeActiveSection ? 'open' : ''}">
-                        ${sectionId === financeActiveSection ? '<div id="fin-section-body"></div>' : ''}
-                    </div>
-                </div>
-            `).join('') : '<p class="text-slate-400 text-xs font-medium p-4">No sections available for your role.</p>'}
-        </div>
+                `).join('')}
+            </div>
+            ` : ''}
+            <div id="fin-section-body"></div>
+        ` : '<p class="text-slate-400 text-xs font-medium p-4">No sections available for your role.</p>'}
     `;
 }
 
@@ -218,8 +231,8 @@ function rerenderFinanceNav() {
 
 // Intentional, controlled scroll on every nav action — rather than
 // leaving the browser's natural (unpredictable) scroll position after
-// content height changes, which is what produced the disorienting
-// "jump" when a shorter section replaced a taller one.
+// content height changes, which is what produces a disorienting "jump"
+// when a shorter section replaces a taller one.
 function scrollFinanceNavIntoView() {
     const wrapper = document.getElementById('fin-nav-wrapper');
     if (wrapper && wrapper.scrollIntoView) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -251,9 +264,39 @@ function renderFinanceModule() {
     return `
         <div class="space-y-6">
 
-            <!-- Financial Overview Dashboard — note: deliberately NOT using the
-                 dashboard's .metrics-grid/.metric-card classes here, even though
-                 they look identical. script.js's updateDashboardStats() does a
+            <!-- PERSISTENT TOOLBAR — Term/Year selectors + Lock switch, kept
+                 right at the top of the module (directly under the "School
+                 Finance" page header) so they're always reachable regardless
+                 of which category/sub-tab is active below. Only these two
+                 controls affect every view at once, which is why they live
+                 here rather than inside any one section. -->
+            <div class="fin-toolbar">
+                <div class="flex flex-wrap items-end gap-4">
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Term</label>
+                        <select id="fin-term-select" onchange="handleFinanceTermYearChange()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                            <option value="Term 1" ${t.term === 'Term 1' ? 'selected' : ''}>Term 1</option>
+                            <option value="Term 2" ${t.term === 'Term 2' ? 'selected' : ''}>Term 2</option>
+                            <option value="Term 3" ${t.term === 'Term 3' ? 'selected' : ''}>Term 3</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Year</label>
+                        <input type="number" id="fin-year-input" value="${t.year}" onchange="handleFinanceTermYearChange()" class="w-24 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                    </div>
+                </div>
+                <label class="fin-lock-toggle" title="Lock Finance and return to the main dashboard">
+                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-500">Lock Finance</span>
+                    <span class="fin-lock-switch" onclick="lockFinancePanel()">
+                        <i class="fa-solid fa-lock-open"></i>
+                    </span>
+                </label>
+            </div>
+
+            <!-- Financial Overview Dashboard — only financial KPIs, in a single
+                 responsive row. Deliberately NOT using the dashboard's
+                 .metrics-grid/.metric-card classes here, even though they look
+                 identical. script.js's updateDashboardStats() does a
                  document.querySelector('.metrics-grid') and hides whatever it
                  finds whenever currentTabName !== 'dashboard', which runs after
                  almost every data change app-wide — reusing that class would
@@ -322,46 +365,36 @@ function renderFinanceModule() {
                 `}
             </div>
 
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
-                <div class="flex flex-wrap items-end gap-4">
-                    <div>
-                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Term</label>
-                        <select id="fin-term-select" onchange="handleFinanceTermYearChange()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
-                            <option value="Term 1" ${t.term === 'Term 1' ? 'selected' : ''}>Term 1</option>
-                            <option value="Term 2" ${t.term === 'Term 2' ? 'selected' : ''}>Term 2</option>
-                            <option value="Term 3" ${t.term === 'Term 3' ? 'selected' : ''}>Term 3</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Year</label>
-                        <input type="number" id="fin-year-input" value="${t.year}" onchange="handleFinanceTermYearChange()" class="w-24 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
-                    </div>
-                </div>
-                <label class="fin-lock-toggle" title="Lock Finance and return to the main dashboard">
-                    <span class="text-xs font-extrabold uppercase tracking-wider text-slate-500">Lock Finance</span>
-                    <span class="fin-lock-switch" onclick="lockFinancePanel()">
-                        <i class="fa-solid fa-lock-open"></i>
-                    </span>
-                </label>
-            </div>
-
-            <!-- HYBRID NAV: category tabs + accordion, built by
-                 renderFinanceCategoryNav() (see above renderFinanceModule).
+            <!-- PRIMARY + SECONDARY NAV — category pills (Student Fees /
+                 Payroll / Ledger) with a horizontal sub-tab bar underneath for
+                 whichever category is active, built by renderFinanceCategoryNav()
+                 (see above renderFinanceModule). Only the active sub-tab's
+                 content is ever mounted into #fin-section-body, wrapped in its
+                 own card — switching sub-tabs replaces that div's content
+                 instead of stacking every section on the page.
                  This wrapper's own content never gets replaced by
                  renderFinanceModule() again after the initial mount —
                  only rerenderFinanceNav() touches it from here on, which
-                 keeps the rest of the panel (metrics, term/year, lock
-                 toggle) completely undisturbed while navigating. -->
+                 keeps the rest of the panel (toolbar, metrics) completely
+                 undisturbed while navigating. -->
             <div id="fin-nav-wrapper"></div>
             <style>
+                /* Persistent Term/Year + Lock toolbar, pinned at the very top
+                   of the module (see renderFinanceModule above). */
+                .fin-toolbar {
+                    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+                    gap: 16px; background: #fff; border: 1px solid var(--slate-100); padding: 16px 20px;
+                    border-radius: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+                }
+
                 /* Still used by payroll.js's own internal sub-tabs (Staff
-                   Profiles / Payroll Runs, inside the Payroll accordion
-                   panel) — NOT used by the top-level nav above anymore
-                   (that's .fin-category-tab / .fin-accordion-header now). */
+                   Profiles / Payroll Runs, inside the Payroll sub-tab body). */
                 .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
                 .finance-section-tab:hover { color: #0f766e; }
                 .finance-section-tab.active { color: #0f766e; border-bottom-color: #0f766e; }
 
+                /* PRIMARY TABS — Student Fees / Payroll / Ledger. Switching
+                   these swaps the whole active workspace view. */
                 .fin-category-tabs { display: flex; gap: 8px; overflow-x: auto; flex-wrap: wrap; margin-bottom: 14px; }
                 .fin-category-tab {
                     display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px;
@@ -373,27 +406,25 @@ function renderFinanceModule() {
                 .fin-category-tab.active { color: #fff; background: #0f766e; border-color: #0f766e; }
                 .fin-category-tab i { font-size: 12px; }
 
-                .fin-accordion { border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background: #fff; }
-                .fin-accordion-item { border-bottom: 1px solid #e2e8f0; }
-                .fin-accordion-item:last-child { border-bottom: none; }
-                .fin-accordion-header {
-                    width: 100%; display: flex; align-items: center; justify-content: space-between;
-                    padding: 14px 18px; font-size: 12px; font-weight: 800; color: #334155;
-                    background: #fff; text-align: left; transition: background .12s;
+                /* SECONDARY SUB-TABS — a clean horizontal tab bar under each
+                   category (e.g. Fees & Payments / Fee Structure / Termly
+                   Summary / Defaulters, under Student Fees). Only the active
+                   sub-tab's section is ever mounted below — no accordion, no
+                   vertical stacking of every section at once. */
+                .fin-subtabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 2px solid #e2e8f0; margin-bottom: 18px; }
+                .fin-subtab {
+                    padding: 11px 18px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+                    letter-spacing: 0.05em; color: #64748b; background: transparent; border: none;
+                    border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap;
+                    transition: color .15s, border-color .15s; cursor: pointer;
                 }
-                .fin-accordion-header:hover { background: #f8fafc; }
-                .fin-accordion-header.open { color: #0f766e; background: #f0fdfa; }
-                .fin-accordion-chevron { transition: transform .15s ease; color: #94a3b8; }
-                .fin-accordion-header.open .fin-accordion-chevron { transform: rotate(180deg); color: #0f766e; }
-                .fin-accordion-panel { display: none; padding: 16px; border-top: 1px solid #e2e8f0; }
-                .fin-accordion-panel.open {
-                    display: block;
-                    /* Reserves space so the brief "loading…" tick right after
-                       a section is opened doesn't collapse this panel to
-                       near-zero height and then snap back once data
-                       arrives — a direct fix for the layout-jump report. */
-                    min-height: 220px;
-                }
+                .fin-subtab:hover { color: #0f766e; }
+                .fin-subtab.active { color: #0f766e; border-bottom-color: #0f766e; }
+
+                /* Reserves space so the brief "loading…" tick right after a
+                   sub-tab is opened doesn't collapse the card to near-zero
+                   height and then snap back once data arrives. */
+                #fin-section-body { min-height: 220px; }
 
                 /* Financial Overview Dashboard — self-contained styles (see the
                    comment above #fin-overview-metrics for why these aren't the
@@ -425,6 +456,19 @@ function renderFinanceModule() {
                     color: #71717a; font-size: 10px; transition: background .15s ease;
                 }
                 .fin-lock-switch:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
+
+                /* DATA TABLES — applied to every Finance/Payroll/Ledger table
+                   (see finance.js/payroll.js load*() functions). Proper row
+                   padding, alternating row colors, right-aligned/tabular
+                   currency columns (.fin-num), and a right-aligned actions
+                   column (.fin-actions) so buttons/icons stay neatly lined up. */
+                .fin-table { width: 100%; border-collapse: collapse; }
+                .fin-table th, .fin-table td { padding: 12px 16px; }
+                .fin-table tbody tr:nth-child(even) { background: #f8fafc; }
+                .fin-table tbody tr:hover { background: #f0fdfa; }
+                .fin-table td.fin-num, .fin-table th.fin-num { text-align: right; font-variant-numeric: tabular-nums; }
+                .fin-table td.fin-actions, .fin-table th.fin-actions { text-align: right; }
+                .fin-table td.fin-actions { white-space: nowrap; }
             </style>
         </div>
     `;
@@ -534,26 +578,28 @@ async function loadFinanceFeeStructure() {
     const canEdit = financeCanEdit();
 
     body.innerHTML = `
-        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-            <p class="text-[11px] font-semibold text-slate-400 p-4 border-b border-slate-100">Expected fee per student, by class, for <span class="font-extrabold text-slate-600">${escapeHTML(term)}, ${escapeHTML(String(year))}</span>. ${canEdit ? 'Update an amount and click Save.' : 'View only — Admin/Bursar can update these.'}</p>
-            <table class="w-full text-left text-xs text-slate-700">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+            <p class="text-[11px] font-semibold text-slate-400 pb-4 mb-2 border-b border-slate-100">Expected fee per student, by class, for <span class="font-extrabold text-slate-600">${escapeHTML(term)}, ${escapeHTML(String(year))}</span>. ${canEdit ? 'Update an amount and click Save.' : 'View only — Admin/Bursar can update these.'}</p>
+            <div class="overflow-x-auto">
+            <table class="fin-table w-full text-left text-xs text-slate-700">
                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
-                    <th class="p-3">Class</th><th class="p-3">Fee Amount (UGX)</th>${canEdit ? '<th class="p-3"></th>' : ''}
+                    <th>Class</th><th class="fin-num">Fee Amount (UGX)</th>${canEdit ? '<th class="fin-actions"></th>' : ''}
                 </tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     ${FINANCE_CLASSES.map(c => `
                         <tr>
-                            <td class="p-3 font-extrabold">${c}</td>
-                            <td class="p-3">
+                            <td class="font-extrabold">${c}</td>
+                            <td class="fin-num">
                                 ${canEdit
-                                    ? `<input type="number" min="0" id="fin-fee-${c}" value="${byClass[c] != null ? byClass[c] : ''}" placeholder="0" class="w-32 p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold">`
+                                    ? `<input type="number" min="0" id="fin-fee-${c}" value="${byClass[c] != null ? byClass[c] : ''}" placeholder="0" class="w-32 p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-right">`
                                     : formatUGX(byClass[c] || 0)}
                             </td>
-                            ${canEdit ? `<td class="p-3"><button onclick="saveFinanceFeeAmount('${c}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Save</button> <span id="fin-fee-saved-${c}" class="text-emerald-600 text-[11px] font-bold ml-1 hidden"><i class="fa-solid fa-check"></i></span></td>` : ''}
+                            ${canEdit ? `<td class="fin-actions"><span class="inline-flex items-center gap-2"><button onclick="saveFinanceFeeAmount('${c}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Save</button> <span id="fin-fee-saved-${c}" class="text-emerald-600 text-[11px] font-bold hidden"><i class="fa-solid fa-check"></i></span></span></td>` : ''}
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
+            </div>
         </div>
     `;
 }
@@ -590,7 +636,7 @@ async function loadFinancePayments() {
     const searchValue = searchBox ? searchBox.value : '';
 
     body.innerHTML = `
-        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-wrap items-end gap-4 mb-4">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-wrap items-end gap-4 mb-4">
             <div>
                 <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Class</label>
                 <select id="fin-payments-class-select" onchange="loadFinancePayments()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
@@ -606,7 +652,7 @@ async function loadFinancePayments() {
                 </div>
             </div>
         </div>
-        <div id="fin-payments-table-wrapper" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading balances&hellip;</div>
+        <div id="fin-payments-table-wrapper" class="bg-white rounded-xl shadow-sm border border-slate-100 p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading balances&hellip;</div>
     `;
     // Re-apply filter values after the re-render above wiped them
     // (innerHTML replace resets <select>/<input> state).
@@ -642,19 +688,20 @@ function applyFinancePaymentsFilter() {
         : financePaymentsCache;
 
     if (!financePaymentsCache.length) {
-        wrapper.outerHTML = `<div id="fin-payments-table-wrapper" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">No students found.</div>`;
+        wrapper.outerHTML = `<div id="fin-payments-table-wrapper" class="bg-white rounded-xl shadow-sm border border-slate-100 p-10 text-center text-slate-400 text-xs font-medium">No students found.</div>`;
         return;
     }
     if (!filtered.length) {
-        wrapper.outerHTML = `<div id="fin-payments-table-wrapper" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">No student matches &ldquo;${escapeHTML(searchBox.value.trim())}&rdquo;.</div>`;
+        wrapper.outerHTML = `<div id="fin-payments-table-wrapper" class="bg-white rounded-xl shadow-sm border border-slate-100 p-10 text-center text-slate-400 text-xs font-medium">No student matches &ldquo;${escapeHTML(searchBox.value.trim())}&rdquo;.</div>`;
         return;
     }
 
     wrapper.outerHTML = `
-        <div id="fin-payments-table-wrapper" class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-auto max-h-[65vh]">
-            <table class="w-full text-left text-xs text-slate-700">
+        <div id="fin-payments-table-wrapper" class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+            <div class="overflow-auto max-h-[65vh]">
+            <table class="fin-table w-full text-left text-xs text-slate-700">
                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider sticky top-0"><tr>
-                    <th class="p-3">Student</th><th class="p-3">Class</th><th class="p-3">Billed</th><th class="p-3">Paid</th><th class="p-3">Balance</th><th class="p-3"></th>
+                    <th>Student</th><th>Class</th><th class="fin-num">Billed</th><th class="fin-num">Paid</th><th class="fin-num">Balance</th><th class="fin-actions"></th>
                 </tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     ${filtered.map(s => {
@@ -663,23 +710,26 @@ function applyFinancePaymentsFilter() {
                         const reasonEsc = escapeHTML(s.customFeeReason || '').replace(/'/g, "\\'");
                         return `
                         <tr>
-                            <td class="p-3 font-extrabold">${escapeHTML(s.name)}</td>
-                            <td class="p-3">${escapeHTML(s.class)}</td>
-                            <td class="p-3">
+                            <td class="font-extrabold">${escapeHTML(s.name)}</td>
+                            <td>${escapeHTML(s.class)}</td>
+                            <td class="fin-num">
                                 ${formatUGX(s.billed)}
                                 ${s.hasCustomFee ? `<span title="${s.customFeeReason ? escapeHTML(s.customFeeReason) : 'Custom fee set for this student'}" class="ml-1 text-[9px] font-extrabold uppercase bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Custom</span>` : ''}
                                 ${financeCanEdit() ? `<button onclick="openFeeOverrideModal('${s.id}', '${nameEsc}', '${classEsc}', ${s.billed}, ${s.hasCustomFee}, '${reasonEsc}')" class="ml-1 text-slate-400 hover:text-teal-600"><i class="fa-solid fa-pen text-[10px]"></i></button>` : ''}
                             </td>
-                            <td class="p-3 text-emerald-600 font-bold">${formatUGX(s.paid)}</td>
-                            <td class="p-3 font-extrabold ${s.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}">${formatUGX(s.balance)}</td>
-                            <td class="p-3 whitespace-nowrap">
-                                <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase mr-3">History</button>
-                                ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                            <td class="fin-num text-emerald-600 font-bold">${formatUGX(s.paid)}</td>
+                            <td class="fin-num font-extrabold ${s.balance > 0 ? 'text-rose-600' : 'text-emerald-600'}">${formatUGX(s.balance)}</td>
+                            <td class="fin-actions">
+                                <span class="inline-flex items-center gap-3 justify-end">
+                                    <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase">History</button>
+                                    ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                                </span>
                             </td>
                         </tr>
                     `; }).join('')}
                 </tbody>
             </table>
+            </div>
         </div>
     `;
 }
@@ -995,34 +1045,36 @@ async function loadFinanceSummary() {
         </div>
         ` : ''}
 
-        <div id="fin-summary-preview" class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden">
-            <div class="p-5 border-b border-slate-100">
+        <div id="fin-summary-preview" class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+            <div class="pb-4 mb-2 border-b border-slate-100">
                 <h3 class="text-sm font-black text-slate-800 uppercase tracking-wide">Termly Financial Summary</h3>
                 <p class="text-[11px] font-semibold text-slate-400">${escapeHTML(term)}, ${escapeHTML(String(year))}</p>
             </div>
-            <table class="w-full text-left text-xs text-slate-700">
+            <div class="overflow-x-auto">
+            <table class="fin-table w-full text-left text-xs text-slate-700">
                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
-                    <th class="p-3">Class</th><th class="p-3">Students</th><th class="p-3">Avg Fee/Student</th><th class="p-3">Billed</th><th class="p-3">Collected</th><th class="p-3">Outstanding</th>
+                    <th>Class</th><th class="fin-num">Students</th><th class="fin-num">Avg Fee/Student</th><th class="fin-num">Billed</th><th class="fin-num">Collected</th><th class="fin-num">Outstanding</th>
                 </tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     ${data.byClass.map(c => `
                         <tr>
-                            <td class="p-3 font-extrabold">${escapeHTML(c.class)}</td>
-                            <td class="p-3">${c.studentCount}</td>
-                            <td class="p-3">${formatUGX(c.studentCount ? c.billed / c.studentCount : 0)}</td>
-                            <td class="p-3">${formatUGX(c.billed)}</td>
-                            <td class="p-3 text-emerald-600 font-bold">${formatUGX(c.collected)}</td>
-                            <td class="p-3 font-extrabold ${c.outstanding > 0 ? 'text-rose-600' : 'text-emerald-600'}">${formatUGX(c.outstanding)}</td>
+                            <td class="font-extrabold">${escapeHTML(c.class)}</td>
+                            <td class="fin-num">${c.studentCount}</td>
+                            <td class="fin-num">${formatUGX(c.studentCount ? c.billed / c.studentCount : 0)}</td>
+                            <td class="fin-num">${formatUGX(c.billed)}</td>
+                            <td class="fin-num text-emerald-600 font-bold">${formatUGX(c.collected)}</td>
+                            <td class="fin-num font-extrabold ${c.outstanding > 0 ? 'text-rose-600' : 'text-emerald-600'}">${formatUGX(c.outstanding)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
                 <tfoot class="bg-slate-50 font-extrabold text-slate-800 border-t-2 border-slate-200"><tr>
-                    <td class="p-3" colspan="3">TOTAL</td>
-                    <td class="p-3">${formatUGX(data.totals.billed)}</td>
-                    <td class="p-3 text-emerald-700">${formatUGX(data.totals.collected)}</td>
-                    <td class="p-3 text-rose-700">${formatUGX(data.totals.outstanding)}</td>
+                    <td colspan="3">TOTAL</td>
+                    <td class="fin-num">${formatUGX(data.totals.billed)}</td>
+                    <td class="fin-num text-emerald-700">${formatUGX(data.totals.collected)}</td>
+                    <td class="fin-num text-rose-700">${formatUGX(data.totals.outstanding)}</td>
                 </tr></tfoot>
             </table>
+            </div>
         </div>
     `;
 
@@ -1250,7 +1302,7 @@ async function loadFinanceLedger(type) {
         ${!entries.length
             ? `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">No ${escapeHTML(cfg.title.toLowerCase())} recorded for ${year} yet.</div>`
             : `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-auto max-h-[55vh]">
-                <table class="w-full text-left text-xs text-slate-700">
+                <table class="fin-table w-full text-left text-xs text-slate-700">
                     <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider sticky top-0"><tr>
                         <th class="p-3">Date</th><th class="p-3">Category</th><th class="p-3">Amount</th><th class="p-3">Note</th><th class="p-3">Recorded By</th>${financeCanEdit() ? '<th class="p-3"></th>' : ''}
                     </tr></thead>
@@ -1331,13 +1383,14 @@ async function loadFinanceDefaulters() {
     }
 
     body.innerHTML = `
-        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 mb-4 flex flex-wrap items-center justify-between gap-2">
             <p class="text-xs font-semibold text-slate-600"><span class="font-extrabold text-rose-600">${defaulters.length}</span> student${defaulters.length === 1 ? '' : 's'} owing a total of <span class="font-extrabold text-rose-600">${formatUGX(totalOwed)}</span> for ${escapeHTML(term)}, ${escapeHTML(String(year))}.</p>
         </div>
-        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-auto max-h-[65vh]">
-            <table class="w-full text-left text-xs text-slate-700">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+            <div class="overflow-auto max-h-[65vh]">
+            <table class="fin-table w-full text-left text-xs text-slate-700">
                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider sticky top-0"><tr>
-                    <th class="p-3">Student</th><th class="p-3">Class</th><th class="p-3">Billed</th><th class="p-3">Paid</th><th class="p-3">Balance</th><th class="p-3"></th>
+                    <th>Student</th><th>Class</th><th class="fin-num">Billed</th><th class="fin-num">Paid</th><th class="fin-num">Balance</th><th class="fin-actions"></th>
                 </tr></thead>
                 <tbody class="divide-y divide-slate-100">
                     ${defaulters.map(s => {
@@ -1345,19 +1398,22 @@ async function loadFinanceDefaulters() {
                         const classEsc = escapeHTML(s.class).replace(/'/g, "\\'");
                         return `
                         <tr>
-                            <td class="p-3 font-extrabold">${escapeHTML(s.name)}</td>
-                            <td class="p-3">${escapeHTML(s.class)}</td>
-                            <td class="p-3">${formatUGX(s.billed)}</td>
-                            <td class="p-3 text-emerald-600 font-bold">${formatUGX(s.paid)}</td>
-                            <td class="p-3 font-extrabold text-rose-600">${formatUGX(s.balance)}</td>
-                            <td class="p-3 whitespace-nowrap">
-                                <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase mr-3">History</button>
-                                ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                            <td class="font-extrabold">${escapeHTML(s.name)}</td>
+                            <td>${escapeHTML(s.class)}</td>
+                            <td class="fin-num">${formatUGX(s.billed)}</td>
+                            <td class="fin-num text-emerald-600 font-bold">${formatUGX(s.paid)}</td>
+                            <td class="fin-num font-extrabold text-rose-600">${formatUGX(s.balance)}</td>
+                            <td class="fin-actions">
+                                <span class="inline-flex items-center gap-3 justify-end">
+                                    <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase">History</button>
+                                    ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                                </span>
                             </td>
                         </tr>
                     `; }).join('')}
                 </tbody>
             </table>
+            </div>
         </div>
     `;
 }
@@ -1624,7 +1680,7 @@ function printFinanceReceipt(payment, student) {
 }
 
 /* ---------------------------------------------------------
-   SALARY ADVANCES (Bursar-facing) — see the "advances" accordion row
+   SALARY ADVANCES (Bursar-facing) — see the "advances" sub-tab
    above, only ever rendered for Bursar (financeCanAccessSalaryAdvances()
    is also true for Admin/HR/Director, but they already reach the same
    capability via the Staff Detail modal inside the Payroll tab —
@@ -1720,7 +1776,7 @@ async function loadFinanceAdvanceDetail() {
             <h5 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Salary Advance History</h5>
             ${advances.length ? `
                 <div class="overflow-x-auto mb-4">
-                    <table class="w-full text-left text-xs text-slate-700">
+                    <table class="fin-table w-full text-left text-xs text-slate-700">
                         <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
                             <th class="p-2">Requested</th><th class="p-2">Repay/mo</th><th class="p-2">Balance</th><th class="p-2">Status</th><th class="p-2">Date</th>
                         </tr></thead>
