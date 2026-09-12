@@ -61,6 +61,11 @@ const FINANCE_REVENUE_CATEGORIES = ['Donations', 'Grants', 'Rent Income', 'Fundr
 // excluded (see payrollCanAccess() in payroll.js); Expenses/Revenues is
 // another (see below) — those two exclusions are independent of each
 // other (HR/Director have both; Bursar has neither).
+// All four Finance-gated roles get full read/write on Student Fees (see
+// EDIT_ROLES in finance.routes.js) — Payroll is one place Bursar is
+// excluded (see payrollCanAccess() in payroll.js); Expenses/Revenues is
+// another (see below) — those two exclusions are independent of each
+// other (HR/Director have both; Bursar has neither).
 function financeCanEdit() {
     return [ROLES.ADMIN, ROLES.BURSAR, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
 }
@@ -268,7 +273,19 @@ function renderFinanceModule() {
                  leak a number Bursar isn't supposed to see, so
                  loadFinanceOverviewMetrics() never even calls getFinanceFlow
                  for Bursar — see the role check there. -->
+                 make these cards randomly disappear while viewing Finance.
+
+                 Bursar gets a trimmed 2-card version (Fees Collected +
+                 Outstanding/Defaulters) instead of the full 4-card grid —
+                 Total Expenses and Net Balance are both derived from the
+                 Expenses/Revenues tables via GET /finance-flow, which is
+                 blocked for Bursar server-side (EXPENSE_REVENUE_ROLES in
+                 finance.routes.js); showing those cards would either 403 or
+                 leak a number Bursar isn't supposed to see, so
+                 loadFinanceOverviewMetrics() never even calls getFinanceFlow
+                 for Bursar — see the role check there. -->
             <div class="fin-metrics-grid" id="fin-overview-metrics">
+                ${financeCanViewExpensesRevenues() ? `
                 ${financeCanViewExpensesRevenues() ? `
                 <div class="fin-metric-card">
                     <div class="fin-metric-label">Revenue Collected</div>
@@ -302,6 +319,24 @@ function renderFinanceModule() {
                     </div>
                     <p class="text-[11px] font-bold text-slate-400 mt-2">Revenue minus expenses, year to date</p>
                 </div>
+                ` : `
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Fees Collected</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value" id="fin-metric-revenue">&hellip;</span>
+                        <span class="fin-metric-icon"><i class="fa-solid fa-sack-dollar"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-emerald-600 mt-2"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Selected term</p>
+                </div>
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Outstanding / Defaulters</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value text-rose-600" id="fin-metric-outstanding">&hellip;</span>
+                        <span class="fin-metric-icon fin-metric-icon-danger"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-slate-400 mt-2"><span id="fin-metric-defaulters-count">&hellip;</span> &middot; selected term</p>
+                </div>
+                `}
                 ` : `
                 <div class="fin-metric-card">
                     <div class="fin-metric-label">Fees Collected</div>
@@ -462,10 +497,22 @@ function loadFinanceActiveSection() {
 // FinanceAPI.getPayments for the currently selected term either way
 // (same data loadFinanceDefaulters() uses), since student fee balances
 // are term-scoped rather than year-scoped.
+// Financial Overview Dashboard — headline metric cards shown above every
+// Finance section. For Admin/HR/Director: Revenue/Expenses/Net come from
+// FinanceAPI.getFinanceFlow (calendar-year totals, same source as the
+// Termly Summary flow chart). For Bursar: getFinanceFlow is never called
+// at all — it's blocked server-side (EXPENSE_REVENUE_ROLES in
+// finance.routes.js) — "Fees Collected" instead comes from
+// FinanceAPI.getSummary for the selected term/year, the same fees-only
+// totals the Termly Summary tab uses. Outstanding/Defaulters comes from
+// FinanceAPI.getPayments for the currently selected term either way
+// (same data loadFinanceDefaulters() uses), since student fee balances
+// are term-scoped rather than year-scoped.
 async function loadFinanceOverviewMetrics() {
     const grid = document.getElementById('fin-overview-metrics');
     if (!grid) return;
     const { term, year } = getFinanceViewedTermYear();
+    const canViewExpensesRevenues = financeCanViewExpensesRevenues();
     const canViewExpensesRevenues = financeCanViewExpensesRevenues();
 
     try {
@@ -476,7 +523,33 @@ async function loadFinanceOverviewMetrics() {
             ]);
             const defaulters = students.filter(s => s.balance > 0);
             const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
+        if (canViewExpensesRevenues) {
+            const [flow, students] = await Promise.all([
+                FinanceAPI.getFinanceFlow(year),
+                FinanceAPI.getPayments({ term, year })
+            ]);
+            const defaulters = students.filter(s => s.balance > 0);
+            const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
 
+            document.getElementById('fin-metric-revenue').textContent = formatUGX(flow.totals.revenue);
+            document.getElementById('fin-metric-expenses').textContent = formatUGX(flow.totals.expenses);
+            document.getElementById('fin-metric-net').textContent = formatUGX(flow.totals.net);
+            document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
+            document.getElementById('fin-metric-defaulters-count').textContent =
+                `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+        } else {
+            const [summary, students] = await Promise.all([
+                FinanceAPI.getSummary(term, year),
+                FinanceAPI.getPayments({ term, year })
+            ]);
+            const defaulters = students.filter(s => s.balance > 0);
+            const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
+
+            document.getElementById('fin-metric-revenue').textContent = formatUGX(summary.totals.collected);
+            document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
+            document.getElementById('fin-metric-defaulters-count').textContent =
+                `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+        }
             document.getElementById('fin-metric-revenue').textContent = formatUGX(flow.totals.revenue);
             document.getElementById('fin-metric-expenses').textContent = formatUGX(flow.totals.expenses);
             document.getElementById('fin-metric-net').textContent = formatUGX(flow.totals.net);

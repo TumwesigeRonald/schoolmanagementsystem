@@ -374,6 +374,12 @@ const ROLE_PERMISSIONS = {
         // in finance.js/payroll.js and the matching role lists in
         // payroll.routes.js/finance.routes.js (enforced server-side;
         // these frontend flags just keep the UI honest).
+        // gated module, and Salary Advances specifically, but NOT the
+        // general Payroll tab and NOT Expenses/Revenues at all (view or
+        // edit) — see payrollCanAccess()/financeCanViewExpensesRevenues()
+        // in finance.js/payroll.js and the matching role lists in
+        // payroll.routes.js/finance.routes.js (enforced server-side;
+        // these frontend flags just keep the UI honest).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -395,6 +401,9 @@ const ROLE_PERMISSIONS = {
     },
     [ROLES.HR]: {
         // Same shape as Bursar — whole job lives behind the Finance gate
+        // — but Human Resource gets full Payroll + Expenses/Revenues
+        // access that Bursar does not, on top of the same General
+        // Finance access (and Salary Advances, same as Bursar).
         // — but Human Resource gets full Payroll + Expenses/Revenues
         // access that Bursar does not, on top of the same General
         // Finance access (and Salary Advances, same as Bursar).
