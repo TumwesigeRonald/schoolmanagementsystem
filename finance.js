@@ -475,6 +475,20 @@ function renderFinanceModule() {
 }
 
 function initFinanceModule() {
+    // Belt-and-suspenders: the shared Dashboard-only .metrics-grid
+    // (Classes/Students/Subjects/Marks Recorded — defined in index.html,
+    // outside #tab-content) is normally hidden by script.js's
+    // updateDashboardStats() whenever currentTabName !== 'dashboard'.
+    // Finance is reached through its own entry point (showFinancePanel())
+    // rather than the generic switchTab() flow, so this module hides it
+    // directly too rather than depending on that call happening upstream —
+    // non-financial site-wide counts have no place above the Finance
+    // dashboard regardless of how this module was opened.
+    const sharedMetricsGrid = document.querySelector('.metrics-grid');
+    if (sharedMetricsGrid) sharedMetricsGrid.classList.add('hidden');
+    const bannerElem = document.getElementById('welcome-banner');
+    if (bannerElem) bannerElem.classList.remove('visible');
+
     loadFinanceOverviewMetrics();
     rerenderFinanceNav();
     loadFinanceActiveSection();

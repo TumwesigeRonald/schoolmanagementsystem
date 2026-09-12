@@ -845,6 +845,17 @@ function showFinancePanel() {
     });
     const bannerElem = document.getElementById('welcome-banner');
     if (bannerElem) bannerElem.classList.remove('visible');
+    // The shared Dashboard-only .metrics-grid (Classes/Students/Subjects/
+    // Marks Recorded — see index.html) lives outside #tab-content, so
+    // replacing contentElem.innerHTML below does NOT remove it. Every
+    // other tab hides it via switchTab()'s updateDashboardStats() call,
+    // but showFinancePanel() is reached through its own path (see
+    // switchTab()'s 'finance' branch above) and skipped that call —
+    // without this, those non-financial counts stayed stuck on screen
+    // above the Finance module whenever Finance was opened straight
+    // from the Dashboard tab. updateDashboardStats() re-checks
+    // currentTabName (already set to 'finance' above) and hides it.
+    updateDashboardStats();
     // renderFinanceModule()/initFinanceModule() live in the separate
     // finance.js file — isolated feature module, same pattern as
     // class-summaries.js / teacher-toolbox.js.
