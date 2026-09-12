@@ -36,6 +36,7 @@
 const FINANCE_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
 let financeReceiptCache = {}; // paymentId -> { payment, student } — populated whenever a receipt could be printed from, so print buttons don't need to re-fetch
 let financeActiveSection = 'payments'; // 'payments' | 'fees' | 'summary' | 'defaulters'
+let financeActiveCategory = null; // 'fees' | 'payroll' | 'ledger' — set on first render by getFinanceCategories()
 let financePaymentsCache = []; // last-fetched balances list for the active class/term/year, so the search box can filter instantly without refetching
 let financeCollectedChart = null; // Chart.js instances — kept so each canvas can be destroyed and redrawn
 let financeMethodChart = null;    // cleanly whenever its section reloads (term/year change), instead of
@@ -55,11 +56,38 @@ const FINANCE_CHART_COLORS = ['#0f766e', '#2563eb', '#f59e0b', '#a855f7', '#ec48
 const FINANCE_EXPENSE_CATEGORIES = ['Salaries', 'Utilities', 'Maintenance & Repairs', 'Transport', 'Teaching Supplies', 'Boarding & Meals', 'Administration', 'Other'];
 const FINANCE_REVENUE_CATEGORIES = ['Donations', 'Grants', 'Rent Income', 'Fundraising', 'Other Income'];
 
-// All four Finance-gated roles get full read/write on this module (see
-// EDIT_ROLES in finance.routes.js) — Payroll is the one place Bursar is
-// excluded (see payrollCanAccess() in payroll.js).
+// All four Finance-gated roles get full read/write on Student Fees (see
+// EDIT_ROLES in finance.routes.js) — Payroll is one place Bursar is
+// excluded (see payrollCanAccess() in payroll.js); Expenses/Revenues is
+// another (see below) — those two exclusions are independent of each
+// other (HR/Director have both; Bursar has neither).
 function financeCanEdit() {
     return [ROLES.ADMIN, ROLES.BURSAR, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
+}
+// Bursar is deliberately NOT in this list — matches EXPENSE_REVENUE_ROLES
+// in finance.routes.js exactly. Blocks VIEW too, not just edit, so the
+// Expenses/Revenue tabs (and the Financial Overview cards derived from
+// the same data) are hidden rather than shown read-only.
+function financeCanViewExpensesRevenues() {
+    return [ROLES.ADMIN, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
+}
+// Matches SALARY_ADVANCE_ROLES in payroll.routes.js — the one payroll-
+// adjacent capability Bursar DOES get, despite payrollCanAccess() (the
+// general Payroll tab) being false for them.
+function financeCanAccessSalaryAdvances() {
+    return [ROLES.ADMIN, ROLES.BURSAR, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
+}
+// Part-Time Weekly Payroll is a SEPARATE track from the general Payroll
+// tab (see routes/part-time-payroll.routes.js) — Full-Time staff are
+// paid monthly by Admin/HR/Director (unchanged, payrollCanAccess());
+// Part-Time staff are paid weekly at the Bursar's office with no
+// HR/Director approval step. All four finance roles can VIEW this tab
+// (matches VIEW_ROLES server-side); only Admin/Bursar can record
+// entries or mark them paid (matches EDIT_ROLES server-side) — HR/
+// Director get read-only oversight, same principle as Teacher's old
+// view-only tier elsewhere in this file.
+function partTimePayrollCanEdit() {
+    return [ROLES.ADMIN, ROLES.BURSAR].includes(currentUser.role);
 }
 function formatUGX(amount) {
     const n = Number(amount) || 0;
@@ -78,6 +106,146 @@ function getFinanceViewedTermYear() {
    SHELL — overview metrics + term/year selector + section tabs,
    shared by all views (including Payroll).
    --------------------------------------------------------- */
+/* ---------------------------------------------------------
+   HYBRID NAVIGATION — category tabs (top level, 2-3 per role) with an
+   accordion section list inside each category. Replaces the old flat
+   row of up to 9 tabs. Two problems this solves at once:
+
+   1. CLUTTER — Bursar now sees 2 category tabs instead of 5 flat ones;
+      Admin/HR/Director see 3 instead of up to 8. Every existing
+      section (Fees & Payments, Fee Structure, etc.) still exists
+      exactly as before — nothing lost, just grouped.
+
+   2. LAYOUT JUMPING — switching sections used to also silently re-run
+      loadFinanceOverviewMetrics(), wiping the metric cards back to
+      "…" and refetching them on every single tab click (see the
+      removed call in loadFinanceActiveSection() below) — that was a
+      real, unnecessary source of top-of-page flicker. It's now called
+      only on initial mount and on term/year change (see
+      handleFinanceTermYearChange()). Combined with a reserved
+      min-height on the accordion panel and an intentional scroll-into-
+      view on every nav action (see switchFinanceCategory/
+      switchFinanceSection), navigating the module no longer produces
+      an unpredictable jump.
+
+   load values below are wrapped in arrow functions (`() => fn()`)
+   rather than bare function references on purpose: finance.js loads
+   BEFORE payroll.js (see index.html), so a bare reference to
+   loadFinancePayrollSection here would be undefined at the time this
+   object is constructed. Wrapping defers the lookup until the button
+   is actually clicked, by which point every script has loaded.
+   --------------------------------------------------------- */
+const FINANCE_SECTION_META = {
+    payments:        { label: 'Fees &amp; Payments',   load: () => loadFinancePayments() },
+    fees:            { label: 'Fee Structure',         load: () => loadFinanceFeeStructure() },
+    summary:         { label: 'Termly Summary',        load: () => loadFinanceSummary() },
+    defaulters:      { label: 'Defaulters',            load: () => loadFinanceDefaulters() },
+    payroll:         { label: 'Payroll',               load: () => loadFinancePayrollSection() },
+    parttimepayroll: { label: 'Part-Time Payroll',     load: () => loadFinancePartTimePayrollSection() },
+    advances:        { label: 'Salary Advances',       load: () => loadFinanceSalaryAdvancesSection() },
+    expenses:        { label: 'Expenses',              load: () => loadFinanceLedger('expense') },
+    revenue:         { label: 'Revenue',               load: () => loadFinanceLedger('revenue') }
+};
+
+// Rebuilt on every render rather than cached — role can't change
+// mid-session, but this keeps the logic self-contained and easy to
+// read. A category with zero visible sections for the current role is
+// dropped entirely (e.g. "Ledger" never appears for Bursar).
+function getFinanceCategories() {
+    const categories = [
+        { id: 'fees', label: 'Student Fees', icon: 'fa-sack-dollar', sections: ['payments', 'fees', 'summary', 'defaulters'] },
+        {
+            id: 'payroll', label: 'Payroll', icon: 'fa-money-check-dollar',
+            sections: [
+                ...(payrollCanAccess() ? ['payroll'] : []),
+                'parttimepayroll',
+                // Salary Advances only gets its own accordion row for Bursar —
+                // Admin/HR/Director already reach the same screen via the
+                // Staff Detail modal inside the Payroll section (payroll.js).
+                ...(currentUser.role === ROLES.BURSAR && financeCanAccessSalaryAdvances() ? ['advances'] : [])
+            ]
+        },
+        {
+            id: 'ledger', label: 'Ledger', icon: 'fa-book',
+            sections: financeCanViewExpensesRevenues() ? ['expenses', 'revenue'] : []
+        }
+    ];
+    return categories.filter(c => c.sections.length > 0);
+}
+
+// Renders the category tab row + the accordion for whichever category
+// is active. Also resolves financeActiveCategory/financeActiveSection
+// to a valid pair if either is stale (e.g. leftover state from before
+// a role check changed which sections exist).
+function renderFinanceCategoryNav() {
+    const categories = getFinanceCategories();
+    if (!financeActiveCategory || !categories.find(c => c.id === financeActiveCategory)) {
+        financeActiveCategory = categories.length ? categories[0].id : null;
+    }
+    const currentCategory = categories.find(c => c.id === financeActiveCategory);
+    if (currentCategory && !currentCategory.sections.includes(financeActiveSection)) {
+        financeActiveSection = currentCategory.sections[0];
+    }
+
+    return `
+        <div class="fin-category-tabs">
+            ${categories.map(c => `
+                <button type="button" onclick="switchFinanceCategory('${c.id}')" id="fin-category-${c.id}" class="fin-category-tab ${c.id === financeActiveCategory ? 'active' : ''}">
+                    <i class="fa-solid ${c.icon}"></i><span>${c.label}</span>
+                </button>
+            `).join('')}
+        </div>
+        <div class="fin-accordion">
+            ${currentCategory ? currentCategory.sections.map(sectionId => `
+                <div class="fin-accordion-item">
+                    <button type="button" class="fin-accordion-header ${sectionId === financeActiveSection ? 'open' : ''}" onclick="switchFinanceSection('${sectionId}')">
+                        <span>${FINANCE_SECTION_META[sectionId].label}</span>
+                        <i class="fa-solid fa-chevron-down fin-accordion-chevron"></i>
+                    </button>
+                    <div class="fin-accordion-panel ${sectionId === financeActiveSection ? 'open' : ''}">
+                        ${sectionId === financeActiveSection ? '<div id="fin-section-body"></div>' : ''}
+                    </div>
+                </div>
+            `).join('') : '<p class="text-slate-400 text-xs font-medium p-4">No sections available for your role.</p>'}
+        </div>
+    `;
+}
+
+function rerenderFinanceNav() {
+    const wrapper = document.getElementById('fin-nav-wrapper');
+    if (wrapper) wrapper.innerHTML = renderFinanceCategoryNav();
+}
+
+// Intentional, controlled scroll on every nav action — rather than
+// leaving the browser's natural (unpredictable) scroll position after
+// content height changes, which is what produced the disorienting
+// "jump" when a shorter section replaced a taller one.
+function scrollFinanceNavIntoView() {
+    const wrapper = document.getElementById('fin-nav-wrapper');
+    if (wrapper && wrapper.scrollIntoView) wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function switchFinanceCategory(categoryId) {
+    if (categoryId === financeActiveCategory) return;
+    financeActiveCategory = categoryId;
+    const categories = getFinanceCategories();
+    const cat = categories.find(c => c.id === categoryId);
+    financeActiveSection = (cat && cat.sections[0]) || financeActiveSection;
+    rerenderFinanceNav();
+    loadFinanceActiveSection();
+    scrollFinanceNavIntoView();
+}
+
+function switchFinanceSection(sectionId) {
+    if (sectionId === financeActiveSection) return;
+    financeActiveSection = sectionId;
+    const owner = getFinanceCategories().find(c => c.sections.includes(sectionId));
+    if (owner) financeActiveCategory = owner.id;
+    rerenderFinanceNav();
+    loadFinanceActiveSection();
+    scrollFinanceNavIntoView();
+}
+
 function renderFinanceModule() {
     const t = termSettings;
     return `
@@ -89,8 +257,19 @@ function renderFinanceModule() {
                  document.querySelector('.metrics-grid') and hides whatever it
                  finds whenever currentTabName !== 'dashboard', which runs after
                  almost every data change app-wide — reusing that class would
-                 make these cards randomly disappear while viewing Finance. -->
+                 make these cards randomly disappear while viewing Finance.
+
+                 Bursar gets a trimmed 2-card version (Fees Collected +
+                 Outstanding/Defaulters) instead of the full 4-card grid —
+                 Total Expenses and Net Balance are both derived from the
+                 Expenses/Revenues tables via GET /finance-flow, which is
+                 blocked for Bursar server-side (EXPENSE_REVENUE_ROLES in
+                 finance.routes.js); showing those cards would either 403 or
+                 leak a number Bursar isn't supposed to see, so
+                 loadFinanceOverviewMetrics() never even calls getFinanceFlow
+                 for Bursar — see the role check there. -->
             <div class="fin-metrics-grid" id="fin-overview-metrics">
+                ${financeCanViewExpensesRevenues() ? `
                 <div class="fin-metric-card">
                     <div class="fin-metric-label">Revenue Collected</div>
                     <div class="fin-metric-row">
@@ -123,13 +302,31 @@ function renderFinanceModule() {
                     </div>
                     <p class="text-[11px] font-bold text-slate-400 mt-2">Revenue minus expenses, year to date</p>
                 </div>
+                ` : `
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Fees Collected</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value" id="fin-metric-revenue">&hellip;</span>
+                        <span class="fin-metric-icon"><i class="fa-solid fa-sack-dollar"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-emerald-600 mt-2"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Selected term</p>
+                </div>
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Outstanding / Defaulters</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value text-rose-600" id="fin-metric-outstanding">&hellip;</span>
+                        <span class="fin-metric-icon fin-metric-icon-danger"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-slate-400 mt-2"><span id="fin-metric-defaulters-count">&hellip;</span> &middot; selected term</p>
+                </div>
+                `}
             </div>
 
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                 <div class="flex flex-wrap items-end gap-4">
                     <div>
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Term</label>
-                        <select id="fin-term-select" onchange="loadFinanceActiveSection()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                        <select id="fin-term-select" onchange="handleFinanceTermYearChange()" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
                             <option value="Term 1" ${t.term === 'Term 1' ? 'selected' : ''}>Term 1</option>
                             <option value="Term 2" ${t.term === 'Term 2' ? 'selected' : ''}>Term 2</option>
                             <option value="Term 3" ${t.term === 'Term 3' ? 'selected' : ''}>Term 3</option>
@@ -137,7 +334,7 @@ function renderFinanceModule() {
                     </div>
                     <div>
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Year</label>
-                        <input type="number" id="fin-year-input" value="${t.year}" onchange="loadFinanceActiveSection()" class="w-24 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                        <input type="number" id="fin-year-input" value="${t.year}" onchange="handleFinanceTermYearChange()" class="w-24 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
                     </div>
                 </div>
                 <label class="fin-lock-toggle" title="Lock Finance and return to the main dashboard">
@@ -148,19 +345,55 @@ function renderFinanceModule() {
                 </label>
             </div>
 
-            <div class="flex gap-2 border-b border-slate-200 overflow-x-auto">
-                <button id="fin-tab-payments" onclick="switchFinanceSection('payments')" class="finance-section-tab">Fees &amp; Payments</button>
-                <button id="fin-tab-fees" onclick="switchFinanceSection('fees')" class="finance-section-tab">Fee Structure</button>
-                <button id="fin-tab-expenses" onclick="switchFinanceSection('expenses')" class="finance-section-tab">Expenses</button>
-                <button id="fin-tab-revenue" onclick="switchFinanceSection('revenue')" class="finance-section-tab">Revenue</button>
-                <button id="fin-tab-summary" onclick="switchFinanceSection('summary')" class="finance-section-tab">Termly Summary</button>
-                <button id="fin-tab-defaulters" onclick="switchFinanceSection('defaulters')" class="finance-section-tab">Defaulters</button>
-                ${payrollCanAccess() ? `<button id="fin-tab-payroll" onclick="switchFinanceSection('payroll')" class="finance-section-tab">Payroll</button>` : ''}
-            </div>
+            <!-- HYBRID NAV: category tabs + accordion, built by
+                 renderFinanceCategoryNav() (see above renderFinanceModule).
+                 This wrapper's own content never gets replaced by
+                 renderFinanceModule() again after the initial mount —
+                 only rerenderFinanceNav() touches it from here on, which
+                 keeps the rest of the panel (metrics, term/year, lock
+                 toggle) completely undisturbed while navigating. -->
+            <div id="fin-nav-wrapper"></div>
             <style>
+                /* Still used by payroll.js's own internal sub-tabs (Staff
+                   Profiles / Payroll Runs, inside the Payroll accordion
+                   panel) — NOT used by the top-level nav above anymore
+                   (that's .fin-category-tab / .fin-accordion-header now). */
                 .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
                 .finance-section-tab:hover { color: #0f766e; }
                 .finance-section-tab.active { color: #0f766e; border-bottom-color: #0f766e; }
+
+                .fin-category-tabs { display: flex; gap: 8px; overflow-x: auto; flex-wrap: wrap; margin-bottom: 14px; }
+                .fin-category-tab {
+                    display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px;
+                    font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+                    color: #64748b; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;
+                    white-space: nowrap; transition: all .15s;
+                }
+                .fin-category-tab:hover { color: #0f766e; border-color: #99f6e4; }
+                .fin-category-tab.active { color: #fff; background: #0f766e; border-color: #0f766e; }
+                .fin-category-tab i { font-size: 12px; }
+
+                .fin-accordion { border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background: #fff; }
+                .fin-accordion-item { border-bottom: 1px solid #e2e8f0; }
+                .fin-accordion-item:last-child { border-bottom: none; }
+                .fin-accordion-header {
+                    width: 100%; display: flex; align-items: center; justify-content: space-between;
+                    padding: 14px 18px; font-size: 12px; font-weight: 800; color: #334155;
+                    background: #fff; text-align: left; transition: background .12s;
+                }
+                .fin-accordion-header:hover { background: #f8fafc; }
+                .fin-accordion-header.open { color: #0f766e; background: #f0fdfa; }
+                .fin-accordion-chevron { transition: transform .15s ease; color: #94a3b8; }
+                .fin-accordion-header.open .fin-accordion-chevron { transform: rotate(180deg); color: #0f766e; }
+                .fin-accordion-panel { display: none; padding: 16px; border-top: 1px solid #e2e8f0; }
+                .fin-accordion-panel.open {
+                    display: block;
+                    /* Reserves space so the brief "loading…" tick right after
+                       a section is opened doesn't collapse this panel to
+                       near-zero height and then snap back once data
+                       arrives — a direct fix for the layout-jump report. */
+                    min-height: 220px;
+                }
 
                 /* Financial Overview Dashboard — self-contained styles (see the
                    comment above #fin-overview-metrics for why these aren't the
@@ -193,62 +426,76 @@ function renderFinanceModule() {
                 }
                 .fin-lock-switch:hover { background: #fee2e2; color: #dc2626; border-color: #fecaca; }
             </style>
-
-            <div id="fin-section-body"></div>
         </div>
     `;
 }
 
 function initFinanceModule() {
     loadFinanceOverviewMetrics();
-    switchFinanceSection(financeActiveSection);
+    rerenderFinanceNav();
+    loadFinanceActiveSection();
 }
 
-function switchFinanceSection(section) {
-    financeActiveSection = section;
-    ['payments', 'fees', 'expenses', 'revenue', 'summary', 'defaulters', 'payroll'].forEach(s => {
-        const tabEl = document.getElementById(`fin-tab-${s}`);
-        if (tabEl) tabEl.classList.toggle('active', s === section);
-    });
+// Term/Year change affects BOTH the overview metrics and whichever
+// section is open, so this is the only place that still calls both —
+// switchFinanceCategory()/switchFinanceSection() deliberately do NOT,
+// to stop the metric cards flickering back to "…" on every nav click.
+function handleFinanceTermYearChange() {
+    loadFinanceOverviewMetrics();
     loadFinanceActiveSection();
 }
 
 function loadFinanceActiveSection() {
-    loadFinanceOverviewMetrics();
-    if (financeActiveSection === 'fees') return loadFinanceFeeStructure();
-    if (financeActiveSection === 'expenses') return loadFinanceLedger('expense');
-    if (financeActiveSection === 'revenue') return loadFinanceLedger('revenue');
-    if (financeActiveSection === 'summary') return loadFinanceSummary();
-    if (financeActiveSection === 'defaulters') return loadFinanceDefaulters();
-    if (financeActiveSection === 'payroll') return loadFinancePayrollSection();
+    const meta = FINANCE_SECTION_META[financeActiveSection];
+    if (meta) return meta.load();
     return loadFinancePayments();
 }
 
-// Financial Overview Dashboard — 4 headline metric cards shown above every
-// Finance section. Revenue/Expenses/Net come from FinanceAPI.getFinanceFlow
-// (calendar-year totals, same source as the Termly Summary flow chart);
-// Outstanding/Defaulters comes from FinanceAPI.getPayments for the
-// currently selected term (same data loadFinanceDefaulters() uses), since
-// student fee balances are term-scoped rather than year-scoped.
+// Financial Overview Dashboard — headline metric cards shown above every
+// Finance section. For Admin/HR/Director: Revenue/Expenses/Net come from
+// FinanceAPI.getFinanceFlow (calendar-year totals, same source as the
+// Termly Summary flow chart). For Bursar: getFinanceFlow is never called
+// at all — it's blocked server-side (EXPENSE_REVENUE_ROLES in
+// finance.routes.js) — "Fees Collected" instead comes from
+// FinanceAPI.getSummary for the selected term/year, the same fees-only
+// totals the Termly Summary tab uses. Outstanding/Defaulters comes from
+// FinanceAPI.getPayments for the currently selected term either way
+// (same data loadFinanceDefaulters() uses), since student fee balances
+// are term-scoped rather than year-scoped.
 async function loadFinanceOverviewMetrics() {
     const grid = document.getElementById('fin-overview-metrics');
     if (!grid) return;
     const { term, year } = getFinanceViewedTermYear();
+    const canViewExpensesRevenues = financeCanViewExpensesRevenues();
 
     try {
-        const [flow, students] = await Promise.all([
-            FinanceAPI.getFinanceFlow(year),
-            FinanceAPI.getPayments({ term, year })
-        ]);
-        const defaulters = students.filter(s => s.balance > 0);
-        const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
+        if (canViewExpensesRevenues) {
+            const [flow, students] = await Promise.all([
+                FinanceAPI.getFinanceFlow(year),
+                FinanceAPI.getPayments({ term, year })
+            ]);
+            const defaulters = students.filter(s => s.balance > 0);
+            const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
 
-        document.getElementById('fin-metric-revenue').textContent = formatUGX(flow.totals.revenue);
-        document.getElementById('fin-metric-expenses').textContent = formatUGX(flow.totals.expenses);
-        document.getElementById('fin-metric-net').textContent = formatUGX(flow.totals.net);
-        document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
-        document.getElementById('fin-metric-defaulters-count').textContent =
-            `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+            document.getElementById('fin-metric-revenue').textContent = formatUGX(flow.totals.revenue);
+            document.getElementById('fin-metric-expenses').textContent = formatUGX(flow.totals.expenses);
+            document.getElementById('fin-metric-net').textContent = formatUGX(flow.totals.net);
+            document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
+            document.getElementById('fin-metric-defaulters-count').textContent =
+                `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+        } else {
+            const [summary, students] = await Promise.all([
+                FinanceAPI.getSummary(term, year),
+                FinanceAPI.getPayments({ term, year })
+            ]);
+            const defaulters = students.filter(s => s.balance > 0);
+            const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
+
+            document.getElementById('fin-metric-revenue').textContent = formatUGX(summary.totals.collected);
+            document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
+            document.getElementById('fin-metric-defaulters-count').textContent =
+                `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+        }
     } catch (err) {
         // Non-fatal — the active section below still loads/shows its own
         // error state; the overview cards just stay blank on failure.
@@ -1374,4 +1621,363 @@ function printFinanceReceipt(payment, student) {
         </div>
     `;
     window.print();
+}
+
+/* ---------------------------------------------------------
+   SALARY ADVANCES (Bursar-facing) — see the "advances" accordion row
+   above, only ever rendered for Bursar (financeCanAccessSalaryAdvances()
+   is also true for Admin/HR/Director, but they already reach the same
+   capability via the Staff Detail modal inside the Payroll tab —
+   payroll.js's openStaffDetailModal()/renderStaffDetailModal() — so
+   there's no separate top-level tab for them here).
+
+   Deliberately built on ONLY two endpoints, both allowed for Bursar
+   server-side (SALARY_ADVANCE_ROLES in payroll.routes.js):
+     - GET  /finance/payroll/advance-lookup  (id/name/roleType only)
+     - GET/POST /finance/payroll/staff/:staffId/advances
+   This screen never calls PayrollAPI.listStaff()/getStaff() — those
+   hit PAYROLL_EDIT_ROLES-only endpoints that include base salary, so
+   Bursar's browser never even requests that data, let alone displays it.
+   --------------------------------------------------------- */
+let financeAdvancesSelectedStaff = null; // { id, name, roleType } | null
+
+async function loadFinanceSalaryAdvancesSection() {
+    const body = document.getElementById('fin-section-body');
+    if (!body) return;
+    body.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="lg:col-span-1 bg-white border border-slate-200 rounded-2xl shadow-xs p-4">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Find a Staff Member</h4>
+                <input type="text" id="fin-advance-search" oninput="searchFinanceAdvanceStaff(this.value)" placeholder="Search by name&hellip;" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 mb-3">
+                <div id="fin-advance-staff-list" class="space-y-1.5 max-h-96 overflow-y-auto"></div>
+            </div>
+            <div class="lg:col-span-2" id="fin-advance-detail">
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">
+                    Search for a staff member on the left to view or issue a salary advance.
+                </div>
+            </div>
+        </div>
+    `;
+    searchFinanceAdvanceStaff('');
+}
+
+let financeAdvanceSearchDebounce = null;
+function searchFinanceAdvanceStaff(search) {
+    clearTimeout(financeAdvanceSearchDebounce);
+    financeAdvanceSearchDebounce = setTimeout(async () => {
+        const listEl = document.getElementById('fin-advance-staff-list');
+        if (!listEl) return;
+        listEl.innerHTML = `<p class="text-center text-slate-400 text-xs font-medium py-4"><i class="fa-solid fa-circle-notch fa-spin mr-1.5"></i>Searching&hellip;</p>`;
+        let staff;
+        try {
+            staff = await PayrollAPI.lookupAdvanceStaff(search.trim());
+        } catch (err) {
+            listEl.innerHTML = `<p class="text-center text-rose-500 text-xs font-semibold py-4">${escapeHTML(err.message || "Couldn't load staff.")}</p>`;
+            return;
+        }
+        if (!staff.length) {
+            listEl.innerHTML = `<p class="text-center text-slate-400 text-xs font-medium py-4">No active staff match that search.</p>`;
+            return;
+        }
+        listEl.innerHTML = staff.map(s => `
+            <button onclick="selectFinanceAdvanceStaff(${s.id}, '${escapeHTML(s.name)}', '${escapeHTML(s.roleType)}')"
+                class="w-full text-left p-2.5 rounded-xl border ${financeAdvancesSelectedStaff && financeAdvancesSelectedStaff.id === s.id ? 'border-teal-400 bg-teal-50' : 'border-slate-200 hover:bg-slate-50'} transition-colors">
+                <p class="text-xs font-bold text-slate-800">${escapeHTML(s.name)}</p>
+                <p class="text-[10px] font-semibold text-slate-400 uppercase">${escapeHTML(s.roleType)}</p>
+            </button>
+        `).join('');
+    }, 250);
+}
+
+async function selectFinanceAdvanceStaff(id, name, roleType) {
+    financeAdvancesSelectedStaff = { id, name, roleType };
+    // Re-render the left list so the selected row highlights.
+    const searchInput = document.getElementById('fin-advance-search');
+    searchFinanceAdvanceStaff(searchInput ? searchInput.value : '');
+    await loadFinanceAdvanceDetail();
+}
+
+async function loadFinanceAdvanceDetail() {
+    const detailEl = document.getElementById('fin-advance-detail');
+    if (!detailEl || !financeAdvancesSelectedStaff) return;
+    const staff = financeAdvancesSelectedStaff;
+    detailEl.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading&hellip;</div>`;
+
+    let advances;
+    try {
+        advances = await PayrollAPI.getAdvances(staff.id);
+    } catch (err) {
+        detailEl.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-rose-500 text-xs font-semibold">${escapeHTML(err.message || "Couldn't load salary advances.")}</div>`;
+        return;
+    }
+
+    const activeAdvance = advances.find(a => a.status === 'active');
+    detailEl.innerHTML = `
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-5">
+            <h4 class="text-sm font-black text-slate-900 mb-0.5">${escapeHTML(staff.name)}</h4>
+            <p class="text-[11px] font-semibold text-slate-400 uppercase mb-4">${escapeHTML(staff.roleType)}</p>
+
+            <h5 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Salary Advance History</h5>
+            ${advances.length ? `
+                <div class="overflow-x-auto mb-4">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
+                            <th class="p-2">Requested</th><th class="p-2">Repay/mo</th><th class="p-2">Balance</th><th class="p-2">Status</th><th class="p-2">Date</th>
+                        </tr></thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${advances.map(a => `
+                                <tr>
+                                    <td class="p-2 font-bold">${formatUGX(a.requestedAmount)}</td>
+                                    <td class="p-2">${formatUGX(a.repaymentAmountPerMonth)}</td>
+                                    <td class="p-2">${formatUGX(a.balanceRemaining)}</td>
+                                    <td class="p-2"><span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-lg ${a.status === 'active' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${escapeHTML(a.status)}</span></td>
+                                    <td class="p-2 text-slate-400">${a.requestDate ? new Date(a.requestDate).toLocaleDateString() : '—'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : `<p class="text-xs text-slate-400 mb-4">No salary advances on record for this staff member yet.</p>`}
+
+            ${activeAdvance ? `
+                <p class="text-[11px] text-amber-600 font-semibold mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Already has an active advance — issuing another will deduct both every payroll run.</p>
+            ` : ''}
+            <h5 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Issue a New Advance</h5>
+            <div class="flex flex-wrap gap-2 items-start">
+                <input type="number" min="1" id="fin-advance-amount" placeholder="Requested amount" class="w-36 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                <input type="number" min="1" id="fin-advance-repayment" placeholder="Repay / month" class="w-36 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                <button onclick="issueFinanceSalaryAdvance(${staff.id})" class="bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition">Issue Advance</button>
+            </div>
+            <p id="fin-advance-error" class="text-rose-600 text-[11px] font-bold mt-1.5 hidden"></p>
+        </div>
+    `;
+}
+
+async function issueFinanceSalaryAdvance(staffId) {
+    const requestedAmount = Number(document.getElementById('fin-advance-amount').value);
+    const repaymentAmountPerMonth = Number(document.getElementById('fin-advance-repayment').value);
+    const errEl = document.getElementById('fin-advance-error');
+    if (errEl) errEl.classList.add('hidden');
+
+    if (!requestedAmount || requestedAmount <= 0 || !repaymentAmountPerMonth || repaymentAmountPerMonth <= 0) {
+        if (errEl) { errEl.textContent = 'Enter a valid requested amount and monthly repayment.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+    if (!confirm(`Issue an advance of ${formatUGX(requestedAmount)}, repaid at ${formatUGX(repaymentAmountPerMonth)}/month? This takes effect immediately, starting with the next payroll run.`)) return;
+
+    try {
+        await PayrollAPI.issueAdvance(staffId, { requestedAmount, repaymentAmountPerMonth });
+    } catch (err) {
+        if (errEl) { errEl.textContent = err.message || "Couldn't issue that advance."; errEl.classList.remove('hidden'); }
+        return;
+    }
+    loadFinanceAdvanceDetail();
+}
+
+/* ---------------------------------------------------------
+   PART-TIME WEEKLY PAYROLL — separate track from the general Payroll
+   tab (payroll.js), talking only to PartTimePayrollAPI (api.js), which
+   itself talks to routes/part-time-payroll.routes.js. Visible to all
+   four Finance-gated roles (server-side VIEW_ROLES); record-entry,
+   mark-paid, and delete controls only render/work for Admin/Bursar
+   (server-side EDIT_ROLES) — HR/Director see the same table read-only,
+   same principle finance.js already uses for Teacher's old view-only
+   tier: financeCanEdit() gates markup, the backend is the real guard.
+   --------------------------------------------------------- */
+let financePartTimePayrollWeek = null; // 'YYYY-MM-DD' (a Monday) | null until first load
+
+function getFinanceCurrentWeekStartISO() {
+    const d = new Date();
+    const day = d.getDay(); // 0=Sun..6=Sat
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+    d.setDate(d.getDate() + diffToMonday);
+    return d.toISOString().slice(0, 10);
+}
+
+function loadFinancePartTimePayrollSection() {
+    if (!financePartTimePayrollWeek) financePartTimePayrollWeek = getFinanceCurrentWeekStartISO();
+    const body = document.getElementById('fin-section-body');
+    if (!body) return;
+    const canEdit = partTimePayrollCanEdit();
+
+    body.innerHTML = `
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 rounded-2xl shadow-xs p-4 mb-4">
+            <div>
+                <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Week Starting (Monday)</label>
+                <input type="date" id="fin-ptp-week" value="${financePartTimePayrollWeek}" onchange="changeFinancePartTimePayrollWeek(this.value)" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+            </div>
+            ${canEdit ? `<button onclick="toggleFinancePartTimePayrollForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus mr-2"></i>Record Payment</button>` : ''}
+        </div>
+
+        ${canEdit ? `
+        <div id="fin-ptp-form-container" class="hidden bg-white border border-slate-200 rounded-2xl shadow-xs p-5 mb-4">
+            <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3">Record a Part-Time Payment for the Selected Week</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="sm:col-span-2">
+                    <input type="text" id="fin-ptp-staff-search" oninput="searchFinancePartTimeStaff(this.value)" placeholder="Search for a part-time staff member&hellip;" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                    <div id="fin-ptp-staff-results" class="mt-1.5 space-y-1"></div>
+                </div>
+                <input type="number" min="0" id="fin-ptp-amount" placeholder="Amount (UGX)" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold">
+                <input type="text" id="fin-ptp-note" placeholder="Note (optional)" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+            </div>
+            <p id="fin-ptp-selected-staff" class="text-[11px] font-bold text-teal-700 mt-2 hidden"></p>
+            <p id="fin-ptp-form-error" class="text-rose-600 text-[11px] font-bold mt-1.5 hidden"></p>
+            <div class="flex justify-end gap-2 mt-3">
+                <button type="button" onclick="toggleFinancePartTimePayrollForm()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2 px-4 rounded-xl">Cancel</button>
+                <button onclick="submitFinancePartTimePayrollEntry()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Save Entry</button>
+            </div>
+        </div>` : ''}
+
+        <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-slate-200">
+                        <th class="p-4">Staff Member</th><th class="p-4 text-right">Amount</th><th class="p-4">Status</th><th class="p-4">Note</th>
+                        ${canEdit ? '<th class="p-4 text-center">Actions</th>' : ''}
+                    </tr>
+                </thead>
+                <tbody id="fin-ptp-table-body" class="divide-y divide-slate-100 text-xs text-slate-700"></tbody>
+            </table>
+        </div>
+    `;
+    financePartTimeSelectedStaff = null;
+    loadFinancePartTimePayrollRecords();
+}
+
+function changeFinancePartTimePayrollWeek(value) {
+    financePartTimePayrollWeek = value;
+    loadFinancePartTimePayrollRecords();
+}
+
+async function loadFinancePartTimePayrollRecords() {
+    const tbody = document.getElementById('fin-ptp-table-body');
+    if (!tbody) return;
+    const canEdit = partTimePayrollCanEdit();
+    tbody.innerHTML = `<tr><td colspan="${canEdit ? 5 : 4}" class="p-6 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading&hellip;</td></tr>`;
+
+    let records;
+    try {
+        records = await PartTimePayrollAPI.getRecords({ weekStart: financePartTimePayrollWeek });
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="${canEdit ? 5 : 4}" class="p-6 text-center text-rose-500 text-xs font-semibold">${escapeHTML(err.message || "Couldn't load payroll records.")}</td></tr>`;
+        return;
+    }
+    if (!records.length) {
+        tbody.innerHTML = `<tr><td colspan="${canEdit ? 5 : 4}" class="p-6 text-center text-slate-400 text-xs font-medium">No part-time payroll entries recorded for this week yet.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = records.map(r => `
+        <tr>
+            <td class="p-4 font-bold text-slate-800">${escapeHTML(r.staffName)}</td>
+            <td class="p-4 text-right font-extrabold">${formatUGX(r.amount)}</td>
+            <td class="p-4"><span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-lg ${r.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}">${escapeHTML(r.status)}</span></td>
+            <td class="p-4 text-slate-500">${r.note ? escapeHTML(r.note) : '&mdash;'}</td>
+            ${canEdit ? `
+            <td class="p-4 text-center space-x-2">
+                ${r.status === 'pending' ? `<button onclick="markFinancePartTimePayrollPaid(${r.id})" class="text-emerald-700 hover:text-emerald-800 text-[11px] font-extrabold uppercase tracking-wider bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors"><i class="fa-solid fa-check mr-1"></i>Mark Paid</button>
+                <button onclick="deleteFinancePartTimePayrollRecord(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : '&mdash;'}
+            </td>` : ''}
+        </tr>
+    `).join('');
+}
+
+function toggleFinancePartTimePayrollForm() {
+    const el = document.getElementById('fin-ptp-form-container');
+    if (el) el.classList.toggle('hidden');
+}
+
+let financePartTimeSelectedStaff = null; // { id, name } | null
+let financePartTimeSearchDebounce = null;
+function searchFinancePartTimeStaff(search) {
+    clearTimeout(financePartTimeSearchDebounce);
+    financePartTimeSearchDebounce = setTimeout(async () => {
+        const resultsEl = document.getElementById('fin-ptp-staff-results');
+        if (!resultsEl) return;
+        if (!search.trim()) { resultsEl.innerHTML = ''; return; }
+        let staff;
+        try {
+            staff = await PartTimePayrollAPI.lookupStaff(search.trim());
+        } catch (err) {
+            resultsEl.innerHTML = `<p class="text-rose-500 text-[11px] font-semibold">${escapeHTML(err.message || "Couldn't search staff.")}</p>`;
+            return;
+        }
+        if (!staff.length) {
+            resultsEl.innerHTML = `<p class="text-slate-400 text-[11px] font-medium">No active part-time staff match that search.</p>`;
+            return;
+        }
+        resultsEl.innerHTML = staff.map(s => `
+            <button type="button" onclick="selectFinancePartTimeStaff(${s.id}, '${escapeHTML(s.name)}')" class="block w-full text-left p-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-semibold text-slate-700">${escapeHTML(s.name)}</button>
+        `).join('');
+    }, 250);
+}
+
+function selectFinancePartTimeStaff(id, name) {
+    financePartTimeSelectedStaff = { id, name };
+    const label = document.getElementById('fin-ptp-selected-staff');
+    if (label) { label.textContent = `Selected: ${name}`; label.classList.remove('hidden'); }
+    const resultsEl = document.getElementById('fin-ptp-staff-results');
+    if (resultsEl) resultsEl.innerHTML = '';
+    const searchInput = document.getElementById('fin-ptp-staff-search');
+    if (searchInput) searchInput.value = name;
+}
+
+async function submitFinancePartTimePayrollEntry() {
+    const errEl = document.getElementById('fin-ptp-form-error');
+    if (errEl) errEl.classList.add('hidden');
+    const amount = Number(document.getElementById('fin-ptp-amount').value);
+    const note = document.getElementById('fin-ptp-note').value.trim();
+
+    if (!financePartTimeSelectedStaff) {
+        if (errEl) { errEl.textContent = 'Search for and select a staff member first.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+    if (!amount || amount <= 0) {
+        if (errEl) { errEl.textContent = 'Enter a valid amount.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+
+    try {
+        await PartTimePayrollAPI.addRecord({
+            staffId: financePartTimeSelectedStaff.id,
+            weekStartDate: financePartTimePayrollWeek,
+            amount,
+            note: note || undefined
+        });
+    } catch (err) {
+        if (errEl) { errEl.textContent = err.message || "Couldn't save that entry."; errEl.classList.remove('hidden'); }
+        return;
+    }
+    toggleFinancePartTimePayrollForm();
+    financePartTimeSelectedStaff = null;
+    const searchInput = document.getElementById('fin-ptp-staff-search');
+    if (searchInput) searchInput.value = '';
+    const amountInput = document.getElementById('fin-ptp-amount');
+    if (amountInput) amountInput.value = '';
+    const noteInput = document.getElementById('fin-ptp-note');
+    if (noteInput) noteInput.value = '';
+    const label = document.getElementById('fin-ptp-selected-staff');
+    if (label) label.classList.add('hidden');
+    loadFinancePartTimePayrollRecords();
+}
+
+async function markFinancePartTimePayrollPaid(id) {
+    if (!confirm('Mark this part-time payroll entry as paid? This logs a matching expense entry and cannot be undone.')) return;
+    try {
+        await PartTimePayrollAPI.markPaid(id);
+    } catch (err) {
+        alert(err.message || "Couldn't mark that entry paid.");
+        return;
+    }
+    loadFinancePartTimePayrollRecords();
+}
+
+async function deleteFinancePartTimePayrollRecord(id) {
+    if (!confirm('Delete this part-time payroll entry?')) return;
+    try {
+        await PartTimePayrollAPI.deleteRecord(id);
+    } catch (err) {
+        alert(err.message || "Couldn't delete that entry.");
+        return;
+    }
+    loadFinancePartTimePayrollRecords();
 }

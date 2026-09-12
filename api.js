@@ -158,6 +158,19 @@ const ENDPOINTS = {
     PAYROLL_ALLOWANCES: (staffId) => `/finance/payroll/staff/${encodeURIComponent(staffId)}/allowances`,
     PAYROLL_ALLOWANCE_BY_ID: (id) => `/finance/payroll/allowances/${encodeURIComponent(id)}`,
     PAYROLL_ADVANCES: (staffId) => `/finance/payroll/staff/${encodeURIComponent(staffId)}/advances`,
+    // Lightweight staff picker for Salary Advances (id/name/roleType only —
+    // never salary/payment data). Available to Bursar too, unlike every
+    // other PAYROLL_* endpoint above/below — see routes/payroll.routes.js.
+    PAYROLL_ADVANCE_LOOKUP: "/finance/payroll/advance-lookup",
+
+    // --- Part-Time Weekly Payroll (separate track — see
+    // routes/part-time-payroll.routes.js. Bursar has full access here,
+    // unlike every PAYROLL_* endpoint above, which is Admin/HR/Director
+    // only.) ---
+    PART_TIME_PAYROLL_STAFF: "/finance/part-time-payroll/staff",
+    PART_TIME_PAYROLL_RECORDS: "/finance/part-time-payroll/records",
+    PART_TIME_PAYROLL_RECORD_BY_ID: (id) => `/finance/part-time-payroll/records/${encodeURIComponent(id)}`,
+    PART_TIME_PAYROLL_MARK_PAID: (id) => `/finance/part-time-payroll/records/${encodeURIComponent(id)}/mark-paid`,
     PAYROLL_RECORDS: "/finance/payroll/records",
     PAYROLL_GENERATE: "/finance/payroll/generate",
     PAYROLL_MARK_PAID: (recordId) => `/finance/payroll/records/${encodeURIComponent(recordId)}/mark-paid`,
@@ -328,7 +341,10 @@ const ROLE_PERMISSIONS = {
         canSwitchTerm: true,        // can browse a past term/year instead of only the live one
         canManageNotices: true,     // post/delete school bulletin notices
         canPrintWholeClass: true,   // bulk "Print / Save PDF (Whole Class)" report-card export
-        canManageStaff: true        // Administrator-only: create/edit/reset Bursar/HR/Director accounts (staff-management.js)
+        canManageStaff: true,        // Administrator-only: create/edit/reset Bursar/HR/Director accounts (staff-management.js)
+        canAccessExpensesRevenues: true,
+        canAccessSalaryAdvances: true,
+        canAccessPartTimePayroll: true
     },
     [ROLES.TEACHER]: {
         // "classsummaries" and "aitoolbox" appended here — same tab ids as above.
@@ -352,9 +368,12 @@ const ROLE_PERMISSIONS = {
         // Finance" gate (renderFinanceNavItem), which isn't part of this
         // tabs array (same as how Admin/Teacher/HR/Director reach it).
         // Bursar gets the General Finance / Student Fees section of that
-        // gated module, but NOT Payroll — see payrollCanAccess() in
-        // payroll.js and EDIT_ROLES in payroll.routes.js (strict exclusion,
-        // enforced server-side; this frontend flag just keeps the UI honest).
+        // gated module, and Salary Advances specifically, but NOT the
+        // general Payroll tab and NOT Expenses/Revenues at all (view or
+        // edit) — see payrollCanAccess()/financeCanViewExpensesRevenues()
+        // in finance.js/payroll.js and the matching role lists in
+        // payroll.routes.js/finance.routes.js (enforced server-side;
+        // these frontend flags just keep the UI honest).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -369,13 +388,16 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: false
+        canAccessPayroll: false,
+        canAccessExpensesRevenues: false,
+        canAccessSalaryAdvances: true,
+        canAccessPartTimePayroll: true
     },
     [ROLES.HR]: {
         // Same shape as Bursar — whole job lives behind the Finance gate
-        // — but Human Resource gets Payroll access that Bursar does not
-        // (see payrollCanAccess() in payroll.js / EDIT_ROLES in
-        // payroll.routes.js), on top of the same General Finance access.
+        // — but Human Resource gets full Payroll + Expenses/Revenues
+        // access that Bursar does not, on top of the same General
+        // Finance access (and Salary Advances, same as Bursar).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -390,12 +412,16 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: true
+        canAccessPayroll: true,
+        canAccessExpensesRevenues: true,
+        canAccessSalaryAdvances: true,
+        canAccessPartTimePayroll: true
     },
     [ROLES.DIRECTOR]: {
-        // Same shape as Human Resource: General Finance + Payroll behind
-        // the Finance gate, no academic tabs, no staff-account management
-        // (that stays Administrator-only).
+        // Same shape as Human Resource: General Finance + Payroll +
+        // Expenses/Revenues + Salary Advances behind the Finance gate,
+        // no academic tabs, no staff-account management (that stays
+        // Administrator-only).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -410,7 +436,10 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: true
+        canAccessPayroll: true,
+        canAccessExpensesRevenues: true,
+        canAccessSalaryAdvances: true,
+        canAccessPartTimePayroll: true
     },
     [ROLES.STUDENT]: {
         tabs: ["dashboard", "reports", "resources"],
@@ -432,7 +461,10 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: false
+        canAccessPayroll: false,
+        canAccessExpensesRevenues: false,
+        canAccessSalaryAdvances: false,
+        canAccessPartTimePayroll: false
     }
 };
 
@@ -693,10 +725,10 @@ const PayrollAPI = {
     async getStaff(id) {
         return apiRequest(ENDPOINTS.PAYROLL_STAFF_BY_ID(id));
     },
-    async createStaff({ name, roleType, baseSalary, phone, paymentDetails, status }) {
+    async createStaff({ name, roleType, employmentType, baseSalary, phone, paymentDetails, status }) {
         return apiRequest(ENDPOINTS.PAYROLL_STAFF, {
             method: "POST",
-            body: { name, roleType, baseSalary, phone, paymentDetails, status }
+            body: { name, roleType, employmentType, baseSalary, phone, paymentDetails, status }
         });
     },
     async updateStaff(id, patch) {
@@ -725,6 +757,18 @@ const PayrollAPI = {
             method: "POST",
             body: { requestedAmount, repaymentAmountPerMonth, requestDate }
         });
+    },
+    // Standalone advances list for one staff member — used by the Bursar's
+    // dedicated Salary Advances screen, which (unlike the Admin/HR/Director
+    // Staff Detail modal) never calls getStaff()/PAYROLL_STAFF_BY_ID, since
+    // that endpoint is Admin/HR/Director only and returns base salary too.
+    async getAdvances(staffId) {
+        return apiRequest(ENDPOINTS.PAYROLL_ADVANCES(staffId));
+    },
+    // Bursar-safe staff picker for Salary Advances — id/name/roleType only.
+    async lookupAdvanceStaff(search) {
+        const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+        return apiRequest(`${ENDPOINTS.PAYROLL_ADVANCE_LOOKUP}${qs}`);
     },
 
     // --- Payroll runs ---
@@ -756,6 +800,44 @@ const PayrollAPI = {
             method: "POST",
             body: { staffIds, roleType, status, mode, value, reason }
         });
+    }
+};
+
+/* ---------------------------------------------------------
+   5b-2. PART-TIME WEEKLY PAYROLL — separate track from PayrollAPI above.
+   Talks to routes/part-time-payroll.routes.js, mounted under
+   /api/finance/part-time-payroll — carries the Finance-scoped token
+   automatically, same as PayrollAPI (paths start with "/finance/" too).
+   Bursar has full read/write access here (see EDIT_ROLES in that route
+   file); Human Resource/Director get read-only oversight; Bursar gets
+   NO access to PayrollAPI above at all — the two role sets are
+   deliberately inverted between these two API objects.
+   --------------------------------------------------------- */
+const PartTimePayrollAPI = {
+    // Minimal id/name list of active Part-Time staff — never salary/
+    // phone/payment data (same principle as PayrollAPI.lookupAdvanceStaff).
+    async lookupStaff(search) {
+        const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+        return apiRequest(`${ENDPOINTS.PART_TIME_PAYROLL_STAFF}${qs}`);
+    },
+    // At least one of weekStart/staffId is required by the backend.
+    async getRecords({ weekStart, staffId } = {}) {
+        const params = new URLSearchParams();
+        if (weekStart) params.set("weekStart", weekStart);
+        if (staffId) params.set("staffId", staffId);
+        return apiRequest(`${ENDPOINTS.PART_TIME_PAYROLL_RECORDS}?${params.toString()}`);
+    },
+    async addRecord({ staffId, weekStartDate, amount, note }) {
+        return apiRequest(ENDPOINTS.PART_TIME_PAYROLL_RECORDS, {
+            method: "POST",
+            body: { staffId, weekStartDate, amount, note }
+        });
+    },
+    async deleteRecord(id) {
+        return apiRequest(ENDPOINTS.PART_TIME_PAYROLL_RECORD_BY_ID(id), { method: "DELETE" });
+    },
+    async markPaid(id) {
+        return apiRequest(ENDPOINTS.PART_TIME_PAYROLL_MARK_PAID(id), { method: "PUT" });
     }
 };
 

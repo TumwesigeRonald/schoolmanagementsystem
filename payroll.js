@@ -210,6 +210,10 @@ function renderPayrollStaffTable() {
                             <td class="p-3">${s.roleType === 'teaching'
                                 ? `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-teal-50 text-teal-700 border border-teal-100">Teaching</span>`
                                 : `<span class="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">Non-Teaching</span>`}
+                                <br>
+                                ${s.employmentType === 'part-time'
+                                    ? `<span class="inline-flex items-center mt-1 px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-amber-50 text-amber-700 border border-amber-100">Part-Time &middot; Weekly</span>`
+                                    : `<span class="inline-flex items-center mt-1 px-2.5 py-1 rounded-md text-[10px] font-extrabold uppercase tracking-wide bg-blue-50 text-blue-700 border border-blue-100">Full-Time &middot; Monthly</span>`}
                             </td>
                             <td class="p-3 text-slate-500 font-semibold">${s.phone ? escapeHTML(s.phone) : '&mdash;'}</td>
                             <td class="p-3 text-right font-bold">${formatUGX(s.baseSalary)}</td>
@@ -277,6 +281,11 @@ function openStaffFormModal(id) {
                             <option value="teaching" ${staff && staff.roleType === 'teaching' ? 'selected' : ''}>Teaching</option>
                             <option value="non-teaching" ${staff && staff.roleType === 'non-teaching' ? 'selected' : ''}>Non-teaching</option>
                         </select>
+                        <select id="payroll-staff-employmenttype" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                            <option value="full-time" ${!staff || staff.employmentType === 'full-time' ? 'selected' : ''}>Full-Time &mdash; Monthly</option>
+                            <option value="part-time" ${staff && staff.employmentType === 'part-time' ? 'selected' : ''}>Part-Time &mdash; Weekly</option>
+                        </select>
+                        <p class="text-[10px] text-slate-400 px-1 -mt-1">Full-Time staff are paid monthly here in Payroll. Part-Time staff are paid weekly via the Bursar's separate "Part-Time Payroll" screen.</p>
                         <input type="number" min="0" id="payroll-staff-salary" placeholder="Base salary (UGX)" value="${staff ? staff.baseSalary : ''}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold">
                         <input type="text" id="payroll-staff-phone" placeholder="Phone (optional)" value="${staff && staff.phone ? escapeHTML(staff.phone) : ''}" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
                         <div class="flex gap-2">
@@ -308,6 +317,7 @@ function openStaffFormModal(id) {
 async function submitStaffForm(id) {
     const name = document.getElementById('payroll-staff-name').value.trim();
     const roleType = document.getElementById('payroll-staff-roletype').value;
+    const employmentType = document.getElementById('payroll-staff-employmenttype').value;
     const baseSalary = Number(document.getElementById('payroll-staff-salary').value);
     const phone = document.getElementById('payroll-staff-phone').value.trim();
     const method = document.getElementById('payroll-staff-pay-method').value;
@@ -322,7 +332,7 @@ async function submitStaffForm(id) {
         return;
     }
     const paymentDetails = (method || accountNumber) ? { method: method || undefined, accountNumber: accountNumber || undefined } : {};
-    const payload = { name, roleType, baseSalary, phone: phone || undefined, paymentDetails };
+    const payload = { name, roleType, employmentType, baseSalary, phone: phone || undefined, paymentDetails };
     if (statusEl) payload.status = statusEl.value;
 
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }

@@ -19,6 +19,7 @@ const aiRoutes = require('./routes/ai.routes');
 const financeAuthRoutes = require('./routes/finance-auth.routes');
 const financeRoutes = require('./routes/finance.routes');
 const payrollRoutes = require('./routes/payroll.routes');
+const partTimePayrollRoutes = require('./routes/part-time-payroll.routes');
 const adminStaffRoutes = require('./routes/admin-staff.routes');
 
 const app = express();
@@ -98,6 +99,11 @@ app.use('/api/finance', financeRoutes);
 // JWT and the Finance-scope token, same gate as financeRoutes, so nesting
 // it here doesn't loosen anything.
 app.use('/api/finance/payroll', payrollRoutes);
+// A separate, isolated track from payrollRoutes above — see the header
+// comment in routes/part-time-payroll.routes.js for why it's not a
+// shared table/route. Same finance-scope gate, different role split
+// (Bursar has full access here; Bursar has none in payrollRoutes).
+app.use('/api/finance/part-time-payroll', partTimePayrollRoutes);
 // Administrator-only Bursar/HR/Director account management — a separate
 // gate from the Finance password above (see routes/admin-staff.routes.js).
 app.use('/api/admin', adminStaffRoutes);

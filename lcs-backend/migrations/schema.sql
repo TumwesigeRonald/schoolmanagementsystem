@@ -594,6 +594,47 @@ CREATE TABLE IF NOT EXISTS staff_salary_history (
 );
 CREATE INDEX IF NOT EXISTS idx_staff_salary_history_staff ON staff_salary_history(staff_id);
 
+-- -------------------------------------------------------------
+-- Part-Time Weekly Payroll — a SEPARATE track from payroll_records
+-- above, by design. Full-Time staff are paid monthly, processed and
+-- disbursed by Administrator/Human Resource/Director only
+-- (payroll.routes.js, PAYROLL_EDIT_ROLES — completely unchanged by
+-- this addition). Part-Time staff are paid weekly and collect/sign for
+-- their pay directly at the Bursar's office, with no HR/Director
+-- approval step — see routes/part-time-payroll.routes.js.
+--
+-- employment_type is the field that decides which track a staff member
+-- is on. Defaulted to 'full-time' so every existing staff_profiles row
+-- keeps behaving exactly as it did before this column existed.
+--
+-- part_time_payroll_records is intentionally its own table rather than
+-- a `frequency` column on payroll_records: it has no allowances/salary-
+-- advance deduction logic (those stay full-time-only concepts) and its
+-- `amount` is entered fresh each week (hours worked vary for part-time
+-- staff) rather than derived from a fixed base_salary.
+-- -------------------------------------------------------------
+ALTER TABLE staff_profiles
+  ADD COLUMN IF NOT EXISTS employment_type TEXT NOT NULL DEFAULT 'full-time'
+    CHECK (employment_type IN ('full-time', 'part-time'));
+CREATE INDEX IF NOT EXISTS idx_staff_profiles_employment_type ON staff_profiles(employment_type);
+
+CREATE TABLE IF NOT EXISTS part_time_payroll_records (
+  id               SERIAL PRIMARY KEY,
+  staff_id         INTEGER NOT NULL REFERENCES staff_profiles(id) ON DELETE CASCADE,
+  week_start_date  DATE NOT NULL,
+  amount           NUMERIC(12,2) NOT NULL CHECK (amount >= 0),
+  status           TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid')),
+  note             TEXT,
+  recorded_by      TEXT,
+  paid_by          TEXT,
+  paid_at          TIMESTAMPTZ,
+  expense_id       INTEGER REFERENCES expenses(id),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (staff_id, week_start_date)
+);
+CREATE INDEX IF NOT EXISTS idx_part_time_payroll_week ON part_time_payroll_records(week_start_date);
+CREATE INDEX IF NOT EXISTS idx_part_time_payroll_staff ON part_time_payroll_records(staff_id);
+
 -- =============================================================
 -- MIGRATION: performance indexes (composite/partial), added after
 -- the original schema — see routes/scores.routes.js, attendance

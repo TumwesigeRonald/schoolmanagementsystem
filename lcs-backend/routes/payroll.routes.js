@@ -4,17 +4,27 @@
  * Mounted at /api/finance/payroll. Every route here requires BOTH a valid
  * login (`authenticate`) AND an unlocked Finance session
  * (`requireFinanceScope`), same as routes/finance.routes.js. Unlike that
- * file, there is a STRICT EXCLUSION here: Bursar gets NO access at all,
- * not even read-only — payroll is staff salary data, not the school-fees
- * data Bursar is allowed to touch. Administrator, Human Resource, and
- * Director are the only roles with any access to this file, and it's
- * full read/write for all three — there is no view-only tier.
+ * file, there is NO single role set for the whole file anymore — this
+ * file has TWO tiers, checked per-route (not via a blanket router.use):
+ *
+ *   - PAYROLL_EDIT_ROLES (Administrator, Human Resource, Director):
+ *     staff profiles, base salaries, allowances, payroll generation/
+ *     records, mark-paid. Bursar gets ZERO access to any of this —
+ *     not even read-only — same strict exclusion as before.
+ *
+ *   - SALARY_ADVANCE_ROLES (PAYROLL_EDIT_ROLES + Bursar): viewing and
+ *     issuing salary advances specifically. Bursar is allowed here on
+ *     purpose (school policy: the Bursar handles cash-advance requests
+ *     day to day), and gets a lightweight staff picker
+ *     (GET /advance-lookup) that returns id+name+roleType only — never
+ *     base_salary, phone, payment_details, allowances, or salary
+ *     history, which stay behind PAYROLL_EDIT_ROLES on GET /staff/:id.
  *
  * A Bursar CAN still pass the Finance gate (see FINANCE_ROLES in
  * finance-auth.routes.js) to reach the General Finance module, but
- * `requireRole(...EDIT_ROLES)` below rejects them with a 403 on every
- * single route in this file regardless of that finance-scoped token —
- * the Finance gate alone is never sufficient to reach Payroll.
+ * every route below still requires one of these two role lists via its
+ * own `requireRole(...)` call — the Finance gate alone is never
+ * sufficient to reach anything in this file, salary advances included.
  *
  * NOT included yet (next step — Financial Integration): marking a payroll
  * record "paid" and writing the matching entry to the `expenses` ledger.
@@ -29,15 +39,18 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
-const EDIT_ROLES = ['Administrator', 'Human Resource', 'Director'];
+const PAYROLL_EDIT_ROLES = ['Administrator', 'Human Resource', 'Director'];
+const SALARY_ADVANCE_ROLES = [...PAYROLL_EDIT_ROLES, 'Bursar'];
 
-// Everything in this file needs both a valid login, an unlocked Finance
-// session, AND (unlike finance.routes.js) one of EDIT_ROLES — there is no
-// view-only tier for payroll, and Bursar is never in EDIT_ROLES here.
-router.use(authenticate, requireFinanceScope, requireRole(...EDIT_ROLES));
+// Login + unlocked Finance session apply to every route below. The role
+// check is NOT included here on purpose (unlike the old single-tier
+// version of this file) — it's applied per-route below instead, since
+// this file now has two different role sets rather than one.
+router.use(authenticate, requireFinanceScope);
 
 const STAFF_COLUMNS = `
-  id, name, role_type AS "roleType", base_salary::float AS "baseSalary",
+  id, name, role_type AS "roleType", employment_type AS "employmentType",
+  base_salary::float AS "baseSalary",
   phone, payment_details AS "paymentDetails", status,
   created_at AS "createdAt", updated_at AS "updatedAt"
 `;
@@ -49,12 +62,13 @@ const STAFF_COLUMNS = `
 // omit it and this returns the old plain array (unchanged for any caller
 // that isn't the Staff Profiles table). Pass `page` to get back
 // { data, total, page, pageSize, totalPages } instead.
-router.get('/staff', asyncHandler(async (req, res) => {
-  const { status, roleType, search, page: rawPage, pageSize: rawPageSize } = req.query;
+router.get('/staff', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
+  const { status, roleType, employmentType, search, page: rawPage, pageSize: rawPageSize } = req.query;
   const params = [];
   const filters = [];
   if (status) { params.push(status); filters.push(`status = $${params.length}`); }
   if (roleType) { params.push(roleType); filters.push(`role_type = $${params.length}`); }
+  if (employmentType) { params.push(employmentType); filters.push(`employment_type = $${params.length}`); }
   if (search) { params.push(`%${search}%`); filters.push(`name ILIKE $${params.length}`); }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
@@ -95,7 +109,7 @@ router.get('/staff', asyncHandler(async (req, res) => {
 
 // GET /api/finance/payroll/staff/:id — profile + allowances + advances,
 // for the staff detail/edit screen.
-router.get('/staff/:id', asyncHandler(async (req, res) => {
+router.get('/staff/:id', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { rows } = await db.query(`SELECT ${STAFF_COLUMNS} FROM staff_profiles WHERE id = $1`, [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'Staff member not found.' });
 
@@ -124,23 +138,26 @@ router.get('/staff/:id', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/finance/payroll/staff — create a staff profile.
-router.post('/staff', asyncHandler(async (req, res) => {
-  const { name, roleType, baseSalary, phone, paymentDetails, status } = req.body || {};
+router.post('/staff', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
+  const { name, roleType, employmentType, baseSalary, phone, paymentDetails, status } = req.body || {};
   if (!name || !roleType || baseSalary == null) {
     return res.status(400).json({ message: 'name, roleType and baseSalary are required.' });
   }
   if (!['teaching', 'non-teaching'].includes(roleType)) {
     return res.status(400).json({ message: 'roleType must be "teaching" or "non-teaching".' });
   }
+  if (employmentType !== undefined && !['full-time', 'part-time'].includes(employmentType)) {
+    return res.status(400).json({ message: 'employmentType must be "full-time" or "part-time".' });
+  }
   if (baseSalary < 0) {
     return res.status(400).json({ message: 'baseSalary cannot be negative.' });
   }
 
   const { rows } = await db.query(
-    `INSERT INTO staff_profiles (name, role_type, base_salary, phone, payment_details, status)
-     VALUES ($1,$2,$3,$4,$5, COALESCE($6, 'active'))
+    `INSERT INTO staff_profiles (name, role_type, employment_type, base_salary, phone, payment_details, status)
+     VALUES ($1,$2, COALESCE($3, 'full-time'), $4,$5,$6, COALESCE($7, 'active'))
      RETURNING ${STAFF_COLUMNS}`,
-    [name, roleType, baseSalary, phone || null, JSON.stringify(paymentDetails || {}), status || null]
+    [name, roleType, employmentType || null, baseSalary, phone || null, JSON.stringify(paymentDetails || {}), status || null]
   );
   await logActivity(req.user.username, `Added staff profile for ${name} (payroll)`, req.ip);
   res.status(201).json(rows[0]);
@@ -153,10 +170,13 @@ router.post('/staff', asyncHandler(async (req, res) => {
 // recorded without the profile actually changing, or vice versa. An
 // optional `reason` in the body is attached to that history row; it's
 // silently ignored if baseSalary isn't actually changing.
-router.put('/staff/:id', asyncHandler(async (req, res) => {
-  const { name, roleType, baseSalary, phone, paymentDetails, status, reason } = req.body || {};
+router.put('/staff/:id', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
+  const { name, roleType, employmentType, baseSalary, phone, paymentDetails, status, reason } = req.body || {};
   if (roleType !== undefined && !['teaching', 'non-teaching'].includes(roleType)) {
     return res.status(400).json({ message: 'roleType must be "teaching" or "non-teaching".' });
+  }
+  if (employmentType !== undefined && !['full-time', 'part-time'].includes(employmentType)) {
+    return res.status(400).json({ message: 'employmentType must be "full-time" or "part-time".' });
   }
   if (baseSalary !== undefined && baseSalary < 0) {
     return res.status(400).json({ message: 'baseSalary cannot be negative.' });
@@ -170,6 +190,7 @@ router.put('/staff/:id', asyncHandler(async (req, res) => {
   let i = 1;
   if (name !== undefined) { fields.push(`name = $${i++}`); values.push(name); }
   if (roleType !== undefined) { fields.push(`role_type = $${i++}`); values.push(roleType); }
+  if (employmentType !== undefined) { fields.push(`employment_type = $${i++}`); values.push(employmentType); }
   if (baseSalary !== undefined) { fields.push(`base_salary = $${i++}`); values.push(baseSalary); }
   if (phone !== undefined) { fields.push(`phone = $${i++}`); values.push(phone); }
   if (paymentDetails !== undefined) { fields.push(`payment_details = $${i++}`); values.push(JSON.stringify(paymentDetails || {})); }
@@ -239,7 +260,7 @@ router.put('/staff/:id', asyncHandler(async (req, res) => {
 // larger than their current salary) is skipped, not aborted — the rest
 // of the batch still commits. Nothing here overlaps with PUT /staff/:id;
 // it just does the same update+history-row pairing, once per target.
-router.post('/staff/bulk-salary-update', asyncHandler(async (req, res) => {
+router.post('/staff/bulk-salary-update', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { staffIds, roleType, status, mode, value, reason } = req.body || {};
   if (!['percent', 'flat'].includes(mode)) {
     return res.status(400).json({ message: 'mode must be "percent" or "flat".' });
@@ -313,7 +334,7 @@ router.post('/staff/bulk-salary-update', asyncHandler(async (req, res) => {
 // silently lose their staff record. Otherwise, set status to "inactive"
 // instead (PUT /staff/:id) so they stop appearing in future payroll runs
 // while their history stays intact.
-router.delete('/staff/:id', asyncHandler(async (req, res) => {
+router.delete('/staff/:id', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { rows: existing } = await db.query('SELECT id, name FROM staff_profiles WHERE id = $1', [req.params.id]);
   if (!existing.length) return res.status(404).json({ message: 'Staff member not found.' });
 
@@ -329,10 +350,30 @@ router.delete('/staff/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-/* ================================ Allowances ================================ */
+/* ========================= Salary Advances staff picker ========================= */
+// GET /api/finance/payroll/advance-lookup?search= — a deliberately minimal
+// staff list (id, name, roleType only — NEVER baseSalary, phone,
+// paymentDetails, allowances, or salary history) so Bursar can pick a
+// staff member to issue/view a salary advance for, without exposing any
+// of the general payroll data that stays behind PAYROLL_EDIT_ROLES on
+// GET /staff and GET /staff/:id. Administrator/HR/Director can use this
+// too, but they also have the fuller /staff and /staff/:id endpoints.
+router.get('/advance-lookup', requireRole(...SALARY_ADVANCE_ROLES), asyncHandler(async (req, res) => {
+  const { search } = req.query;
+  const params = [];
+  let filter = `status = 'active'`;
+  if (search) { params.push(`%${search}%`); filter += ` AND name ILIKE $${params.length}`; }
+  const { rows } = await db.query(
+    `SELECT id, name, role_type AS "roleType" FROM staff_profiles WHERE ${filter} ORDER BY name`,
+    params
+  );
+  res.json(rows);
+}));
+
+/* ============================== Allowances ============================== */
 
 // GET /api/finance/payroll/staff/:staffId/allowances
-router.get('/staff/:staffId/allowances', asyncHandler(async (req, res) => {
+router.get('/staff/:staffId/allowances', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { rows } = await db.query(
     `SELECT id, title, amount::float AS amount, type, date_added AS "dateAdded",
             applied_payroll_id AS "appliedPayrollId"
@@ -343,7 +384,7 @@ router.get('/staff/:staffId/allowances', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/finance/payroll/staff/:staffId/allowances — assign an allowance.
-router.post('/staff/:staffId/allowances', asyncHandler(async (req, res) => {
+router.post('/staff/:staffId/allowances', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { staffId } = req.params;
   const { title, amount, type, dateAdded } = req.body || {};
   if (!title || amount == null || !type) {
@@ -371,7 +412,7 @@ router.post('/staff/:staffId/allowances', asyncHandler(async (req, res) => {
 // DELETE /api/finance/payroll/allowances/:id — only while it hasn't been
 // paid out yet. Once a payroll run has consumed it (applied_payroll_id is
 // set), it's part of that payroll record's audit trail and stays put.
-router.delete('/allowances/:id', asyncHandler(async (req, res) => {
+router.delete('/allowances/:id', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { rows: existing } = await db.query('SELECT applied_payroll_id AS "appliedPayrollId" FROM allowances WHERE id = $1', [req.params.id]);
   if (!existing.length) return res.status(404).json({ message: 'Allowance not found.' });
   if (existing[0].appliedPayrollId != null) {
@@ -386,7 +427,7 @@ router.delete('/allowances/:id', asyncHandler(async (req, res) => {
 /* ============================== Salary Advances ============================== */
 
 // GET /api/finance/payroll/staff/:staffId/advances
-router.get('/staff/:staffId/advances', asyncHandler(async (req, res) => {
+router.get('/staff/:staffId/advances', requireRole(...SALARY_ADVANCE_ROLES), asyncHandler(async (req, res) => {
   const { rows } = await db.query(
     `SELECT id, requested_amount::float AS "requestedAmount",
             repayment_amount_per_month::float AS "repaymentAmountPerMonth",
@@ -404,7 +445,7 @@ router.get('/staff/:staffId/advances', asyncHandler(async (req, res) => {
 // the next payroll run(s) start deducting the monthly repayment. There's
 // no separate "approve" step in this design — approval happens outside
 // the system (e.g. a conversation with the Bursar) before this is called.
-router.post('/staff/:staffId/advances', asyncHandler(async (req, res) => {
+router.post('/staff/:staffId/advances', requireRole(...SALARY_ADVANCE_ROLES), asyncHandler(async (req, res) => {
   const { staffId } = req.params;
   const { requestedAmount, repaymentAmountPerMonth, requestDate } = req.body || {};
   if (requestedAmount == null || repaymentAmountPerMonth == null) {
@@ -433,7 +474,7 @@ router.post('/staff/:staffId/advances', asyncHandler(async (req, res) => {
 /* ============================= Payroll Generation ============================= */
 
 // GET /api/finance/payroll/records?month=&year=&staffId=
-router.get('/records', asyncHandler(async (req, res) => {
+router.get('/records', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { month, year, staffId } = req.query;
   if (!month || !year) return res.status(400).json({ message: 'month and year are required.' });
 
@@ -473,7 +514,7 @@ router.get('/records', asyncHandler(async (req, res) => {
 // Everything for one staff member happens in a single transaction: the
 // payroll_records insert, stamping consumed one-time allowances, and
 // decrementing/clearing advance balances all succeed or fail together.
-router.post('/generate', asyncHandler(async (req, res) => {
+router.post('/generate', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { month, year, staffIds } = req.body || {};
   if (!month || !year || month < 1 || month > 12) {
     return res.status(400).json({ message: 'A valid month (1-12) and year are required.' });
@@ -595,7 +636,7 @@ router.post('/generate', asyncHandler(async (req, res) => {
 // two concurrent requests for the same record can't both create an expense
 // row — the second one's UPDATE simply matches 0 rows and is reported back
 // as a conflict instead.
-router.put('/records/:id/mark-paid', asyncHandler(async (req, res) => {
+router.put('/records/:id/mark-paid', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const client = await db.getClient();

@@ -3,50 +3,23 @@
    Theme: Professional Clean Light Design with Analytics Graph
    ========================================================= */
 /* ---------------------------------------------------------
-   0. SIDEBAR TOGGLE LOGIC (mobile drawer + desktop collapse)
+   0. MOBILE SIDEBAR TOGGLE LOGIC
    --------------------------------------------------------- */
-// Tracks whether the sidebar panel is visible. Defaults to open so the
-// dashboard looks the same as before on first load. Driving the sidebar
-// off a single state variable (rather than just flipping classes) keeps
-// the hamburger icon, the "X" close icon, and the nav-link auto-close
-// behavior all in sync.
-let isSidebarOpen = true;
-
-// Applies `isSidebarOpen` to the DOM. On mobile the sidebar is an
-// off-canvas drawer (slid away with `-translate-x-full`, with a
-// clickable backdrop). On desktop it's docked inline in the layout, so
-// the same state instead collapses its width via `sidebar-collapsed`
-// (see styles.css), letting .main-content expand into the freed space.
-function applySidebarState() {
+function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
-    if (sidebar) {
-        sidebar.classList.toggle('-translate-x-full', !isSidebarOpen);
-        sidebar.classList.toggle('sidebar-collapsed', !isSidebarOpen);
-    }
-    if (backdrop) backdrop.classList.toggle('hidden', !isSidebarOpen);
+    if (sidebar) sidebar.classList.toggle('-translate-x-full');
+    if (backdrop) backdrop.classList.toggle('hidden');
 }
-
-// Hamburger menu icon (always visible in the header): flips the sidebar
-// between open and closed, on mobile and desktop alike.
-function toggleSidebar() {
-    isSidebarOpen = !isSidebarOpen;
-    applySidebarState();
-}
-
-// "X" icon at the top right of the sidebar, and the mobile backdrop
-// click: explicitly closes the sidebar (rather than toggling it).
-function closeSidebar() {
-    isSidebarOpen = false;
-    applySidebarState();
-}
-
-// Auto-close after a module/nav-link click, so the main content area
-// gets the freed-up space on desktop, and the drawer gets out of the
-// way on mobile. Kept as its own name (used throughout renderSidebarNav)
-// even though it now just delegates to closeSidebar().
+// Auto-close the drawer after a menu/nav-link click (mobile only — the
+// docked desktop sidebar ignores this class via CSS, so this is a no-op
+// visually on desktop while still being harmless to call there).
 function closeMobileSidebar() {
-    closeSidebar();
+    if (window.innerWidth >= 768) return;
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    if (sidebar) sidebar.classList.add('-translate-x-full');
+    if (backdrop) backdrop.classList.add('hidden');
 }
 /* ---------------------------------------------------------
    1. GLOBAL STATE & DATA

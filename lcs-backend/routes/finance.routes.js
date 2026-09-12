@@ -9,11 +9,20 @@
  * verify a Finance password at all, so they can never obtain that
  * finance-scoped token and never reach any route below — Administrator,
  * Bursar, Human Resource, and Director are the only roles that get here
- * now, and ALL FOUR get full read/write access to this module (General
- * Finance & Student Fees) — write routes require `requireRole(...EDIT_ROLES)`
- * purely as defense-in-depth alongside the finance-scope gate; there is
- * no view-only tier on this file. (Payroll, in payroll.routes.js, is the
- * one place Bursar is excluded — see EDIT_ROLES there.)
+ * now, but NOT all four get the same access within this file:
+ *
+ *   - EDIT_ROLES (all four): Student Fees — fee structure, per-student
+ *     fee overrides, payments, termly summary. Full read/write.
+ *
+ *   - EXPENSE_REVENUE_ROLES (Administrator, Human Resource, Director —
+ *     Bursar EXCLUDED): Expenses, Revenues, and the combined
+ *     Finance-Flow report (GET /finance-flow), since that report's
+ *     category breakdowns and totals are themselves derived straight
+ *     from the expenses/revenues tables. This exclusion is BOTH view
+ *     and edit — GET routes are gated here too, not just writes.
+ *
+ * Write routes require `requireRole(...)` purely as defense-in-depth
+ * alongside the finance-scope gate.
  */
 const express = require('express');
 const db = require('../db');
@@ -24,6 +33,10 @@ const { logActivity } = require('../lib/activityLog');
 
 const router = express.Router();
 const EDIT_ROLES = ['Administrator', 'Bursar', 'Human Resource', 'Director'];
+// Bursar is deliberately NOT in this list — Expenses & Revenues (and the
+// Finance-Flow report built from them) are completely blocked for Bursar,
+// view included, not just edit.
+const EXPENSE_REVENUE_ROLES = ['Administrator', 'Human Resource', 'Director'];
 
 router.use(authenticate, requireFinanceScope);
 
@@ -241,7 +254,7 @@ router.get('/summary', asyncHandler(async (req, res) => {
 // line chart. Revenue = student fee payments + other recorded revenues.
 // Also returns category breakdowns for the year (expenses by category,
 // and "other" revenue by category) for pie/donut charts.
-router.get('/finance-flow', asyncHandler(async (req, res) => {
+router.get('/finance-flow', requireRole(...EXPENSE_REVENUE_ROLES), asyncHandler(async (req, res) => {
   const { year } = req.query;
   if (!year) return res.status(400).json({ message: 'year is required.' });
 
@@ -299,7 +312,7 @@ router.get('/finance-flow', asyncHandler(async (req, res) => {
 // the Finance Flow chart below.
 
 // GET /api/finance/expenses?year=2026&month=3 (month optional, 1-12)
-router.get('/expenses', asyncHandler(async (req, res) => {
+router.get('/expenses', requireRole(...EXPENSE_REVENUE_ROLES), asyncHandler(async (req, res) => {
   const { year, month } = req.query;
   if (!year) return res.status(400).json({ message: 'year is required.' });
   const params = [year];
@@ -316,7 +329,7 @@ router.get('/expenses', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/finance/expenses — Admin + Bursar only.
-router.post('/expenses', requireRole(...EDIT_ROLES), asyncHandler(async (req, res) => {
+router.post('/expenses', requireRole(...EXPENSE_REVENUE_ROLES), asyncHandler(async (req, res) => {
   const { category, amount, date, note } = req.body || {};
   if (!category || !amount || amount <= 0) {
     return res.status(400).json({ message: 'category and a positive amount are required.' });
@@ -333,7 +346,7 @@ router.post('/expenses', requireRole(...EDIT_ROLES), asyncHandler(async (req, re
 }));
 
 // DELETE /api/finance/expenses/:id — Admin + Bursar only.
-router.delete('/expenses/:id', requireRole(...EDIT_ROLES), asyncHandler(async (req, res) => {
+router.delete('/expenses/:id', requireRole(...EXPENSE_REVENUE_ROLES), asyncHandler(async (req, res) => {
   const { rows } = await db.query('DELETE FROM expenses WHERE id = $1 RETURNING category, amount::float AS amount', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'Expense not found.' });
   await logActivity(req.user.username, `Deleted an expense record (id ${req.params.id})`, req.ip);
@@ -346,7 +359,7 @@ router.delete('/expenses/:id', requireRole(...EDIT_ROLES), asyncHandler(async (r
 // route below, which combines both for the monthly chart.
 
 // GET /api/finance/revenues?year=2026&month=3 (month optional, 1-12)
-router.get('/revenues', asyncHandler(async (req, res) => {
+router.get('/revenues', requireRole(...EXPENSE_REVENUE_ROLES), asyncHandler(async (req, res) => {
   const { year, month } = req.query;
   if (!year) return res.status(400).json({ message: 'year is required.' });
   const params = [year];
@@ -363,7 +376,7 @@ router.get('/revenues', asyncHandler(async (req, res) => {
 }));
 
 // POST /api/finance/revenues — Admin + Bursar only.
-router.post('/revenues', requireRole(...EDIT_ROLES), asyncHandler(async (req, res) => {
+router.post('/revenues', requireRole(...EXPENSE_REVENUE_ROLES), asyncHandler(async (req, res) => {
   const { category, amount, date, note } = req.body || {};
   if (!category || !amount || amount <= 0) {
     return res.status(400).json({ message: 'category and a positive amount are required.' });
@@ -380,7 +393,7 @@ router.post('/revenues', requireRole(...EDIT_ROLES), asyncHandler(async (req, re
 }));
 
 // DELETE /api/finance/revenues/:id — Admin + Bursar only.
-router.delete('/revenues/:id', requireRole(...EDIT_ROLES), asyncHandler(async (req, res) => {
+router.delete('/revenues/:id', requireRole(...EXPENSE_REVENUE_ROLES), asyncHandler(async (req, res) => {
   const { rows } = await db.query('DELETE FROM revenues WHERE id = $1 RETURNING category, amount::float AS amount', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'Revenue not found.' });
   await logActivity(req.user.username, `Deleted a revenue record (id ${req.params.id})`, req.ip);
