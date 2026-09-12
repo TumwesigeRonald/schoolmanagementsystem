@@ -55,10 +55,25 @@ const FINANCE_CHART_COLORS = ['#0f766e', '#2563eb', '#f59e0b', '#a855f7', '#ec48
 const FINANCE_EXPENSE_CATEGORIES = ['Salaries', 'Utilities', 'Maintenance & Repairs', 'Transport', 'Teaching Supplies', 'Boarding & Meals', 'Administration', 'Other'];
 const FINANCE_REVENUE_CATEGORIES = ['Donations', 'Grants', 'Rent Income', 'Fundraising', 'Other Income'];
 
-// All four Finance-gated roles get full read/write on this module (see
-// EDIT_ROLES in finance.routes.js) — Payroll is the one place Bursar is
-// excluded (see payrollCanAccess() in payroll.js).
+// All four Finance-gated roles get full read/write on Student Fees (see
+// EDIT_ROLES in finance.routes.js) — Payroll is one place Bursar is
+// excluded (see payrollCanAccess() in payroll.js); Expenses/Revenues is
+// another (see below) — those two exclusions are independent of each
+// other (HR/Director have both; Bursar has neither).
 function financeCanEdit() {
+    return [ROLES.ADMIN, ROLES.BURSAR, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
+}
+// Bursar is deliberately NOT in this list — matches EXPENSE_REVENUE_ROLES
+// in finance.routes.js exactly. Blocks VIEW too, not just edit, so the
+// Expenses/Revenue tabs (and the Financial Overview cards derived from
+// the same data) are hidden rather than shown read-only.
+function financeCanViewExpensesRevenues() {
+    return [ROLES.ADMIN, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
+}
+// Matches SALARY_ADVANCE_ROLES in payroll.routes.js — the one payroll-
+// adjacent capability Bursar DOES get, despite payrollCanAccess() (the
+// general Payroll tab) being false for them.
+function financeCanAccessSalaryAdvances() {
     return [ROLES.ADMIN, ROLES.BURSAR, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
 }
 function formatUGX(amount) {
@@ -89,8 +104,19 @@ function renderFinanceModule() {
                  document.querySelector('.metrics-grid') and hides whatever it
                  finds whenever currentTabName !== 'dashboard', which runs after
                  almost every data change app-wide — reusing that class would
-                 make these cards randomly disappear while viewing Finance. -->
+                 make these cards randomly disappear while viewing Finance.
+
+                 Bursar gets a trimmed 2-card version (Fees Collected +
+                 Outstanding/Defaulters) instead of the full 4-card grid —
+                 Total Expenses and Net Balance are both derived from the
+                 Expenses/Revenues tables via GET /finance-flow, which is
+                 blocked for Bursar server-side (EXPENSE_REVENUE_ROLES in
+                 finance.routes.js); showing those cards would either 403 or
+                 leak a number Bursar isn't supposed to see, so
+                 loadFinanceOverviewMetrics() never even calls getFinanceFlow
+                 for Bursar — see the role check there. -->
             <div class="fin-metrics-grid" id="fin-overview-metrics">
+                ${financeCanViewExpensesRevenues() ? `
                 <div class="fin-metric-card">
                     <div class="fin-metric-label">Revenue Collected</div>
                     <div class="fin-metric-row">
@@ -123,6 +149,24 @@ function renderFinanceModule() {
                     </div>
                     <p class="text-[11px] font-bold text-slate-400 mt-2">Revenue minus expenses, year to date</p>
                 </div>
+                ` : `
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Fees Collected</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value" id="fin-metric-revenue">&hellip;</span>
+                        <span class="fin-metric-icon"><i class="fa-solid fa-sack-dollar"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-emerald-600 mt-2"><i class="fa-solid fa-arrow-trend-up mr-1"></i>Selected term</p>
+                </div>
+                <div class="fin-metric-card">
+                    <div class="fin-metric-label">Outstanding / Defaulters</div>
+                    <div class="fin-metric-row">
+                        <span class="fin-metric-value text-rose-600" id="fin-metric-outstanding">&hellip;</span>
+                        <span class="fin-metric-icon fin-metric-icon-danger"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    </div>
+                    <p class="text-[11px] font-bold text-slate-400 mt-2"><span id="fin-metric-defaulters-count">&hellip;</span> &middot; selected term</p>
+                </div>
+                `}
             </div>
 
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
@@ -151,11 +195,17 @@ function renderFinanceModule() {
             <div class="flex gap-2 border-b border-slate-200 overflow-x-auto">
                 <button id="fin-tab-payments" onclick="switchFinanceSection('payments')" class="finance-section-tab">Fees &amp; Payments</button>
                 <button id="fin-tab-fees" onclick="switchFinanceSection('fees')" class="finance-section-tab">Fee Structure</button>
-                <button id="fin-tab-expenses" onclick="switchFinanceSection('expenses')" class="finance-section-tab">Expenses</button>
-                <button id="fin-tab-revenue" onclick="switchFinanceSection('revenue')" class="finance-section-tab">Revenue</button>
+                ${financeCanViewExpensesRevenues() ? `<button id="fin-tab-expenses" onclick="switchFinanceSection('expenses')" class="finance-section-tab">Expenses</button>` : ''}
+                ${financeCanViewExpensesRevenues() ? `<button id="fin-tab-revenue" onclick="switchFinanceSection('revenue')" class="finance-section-tab">Revenue</button>` : ''}
                 <button id="fin-tab-summary" onclick="switchFinanceSection('summary')" class="finance-section-tab">Termly Summary</button>
                 <button id="fin-tab-defaulters" onclick="switchFinanceSection('defaulters')" class="finance-section-tab">Defaulters</button>
                 ${payrollCanAccess() ? `<button id="fin-tab-payroll" onclick="switchFinanceSection('payroll')" class="finance-section-tab">Payroll</button>` : ''}
+                ${/* Bursar-only tab — Admin/HR/Director already reach Salary Advances
+                     via the Staff Detail modal inside the Payroll tab (payroll.js),
+                     so this dedicated screen only needs to exist for the one role
+                     that has advances access WITHOUT general Payroll access. */
+                  (currentUser.role === ROLES.BURSAR && financeCanAccessSalaryAdvances())
+                    ? `<button id="fin-tab-advances" onclick="switchFinanceSection('advances')" class="finance-section-tab">Salary Advances</button>` : ''}
             </div>
             <style>
                 .finance-section-tab { padding: 10px 16px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
@@ -206,7 +256,7 @@ function initFinanceModule() {
 
 function switchFinanceSection(section) {
     financeActiveSection = section;
-    ['payments', 'fees', 'expenses', 'revenue', 'summary', 'defaulters', 'payroll'].forEach(s => {
+    ['payments', 'fees', 'expenses', 'revenue', 'summary', 'defaulters', 'payroll', 'advances'].forEach(s => {
         const tabEl = document.getElementById(`fin-tab-${s}`);
         if (tabEl) tabEl.classList.toggle('active', s === section);
     });
@@ -221,34 +271,55 @@ function loadFinanceActiveSection() {
     if (financeActiveSection === 'summary') return loadFinanceSummary();
     if (financeActiveSection === 'defaulters') return loadFinanceDefaulters();
     if (financeActiveSection === 'payroll') return loadFinancePayrollSection();
+    if (financeActiveSection === 'advances') return loadFinanceSalaryAdvancesSection();
     return loadFinancePayments();
 }
 
-// Financial Overview Dashboard — 4 headline metric cards shown above every
-// Finance section. Revenue/Expenses/Net come from FinanceAPI.getFinanceFlow
-// (calendar-year totals, same source as the Termly Summary flow chart);
-// Outstanding/Defaulters comes from FinanceAPI.getPayments for the
-// currently selected term (same data loadFinanceDefaulters() uses), since
-// student fee balances are term-scoped rather than year-scoped.
+// Financial Overview Dashboard — headline metric cards shown above every
+// Finance section. For Admin/HR/Director: Revenue/Expenses/Net come from
+// FinanceAPI.getFinanceFlow (calendar-year totals, same source as the
+// Termly Summary flow chart). For Bursar: getFinanceFlow is never called
+// at all — it's blocked server-side (EXPENSE_REVENUE_ROLES in
+// finance.routes.js) — "Fees Collected" instead comes from
+// FinanceAPI.getSummary for the selected term/year, the same fees-only
+// totals the Termly Summary tab uses. Outstanding/Defaulters comes from
+// FinanceAPI.getPayments for the currently selected term either way
+// (same data loadFinanceDefaulters() uses), since student fee balances
+// are term-scoped rather than year-scoped.
 async function loadFinanceOverviewMetrics() {
     const grid = document.getElementById('fin-overview-metrics');
     if (!grid) return;
     const { term, year } = getFinanceViewedTermYear();
+    const canViewExpensesRevenues = financeCanViewExpensesRevenues();
 
     try {
-        const [flow, students] = await Promise.all([
-            FinanceAPI.getFinanceFlow(year),
-            FinanceAPI.getPayments({ term, year })
-        ]);
-        const defaulters = students.filter(s => s.balance > 0);
-        const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
+        if (canViewExpensesRevenues) {
+            const [flow, students] = await Promise.all([
+                FinanceAPI.getFinanceFlow(year),
+                FinanceAPI.getPayments({ term, year })
+            ]);
+            const defaulters = students.filter(s => s.balance > 0);
+            const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
 
-        document.getElementById('fin-metric-revenue').textContent = formatUGX(flow.totals.revenue);
-        document.getElementById('fin-metric-expenses').textContent = formatUGX(flow.totals.expenses);
-        document.getElementById('fin-metric-net').textContent = formatUGX(flow.totals.net);
-        document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
-        document.getElementById('fin-metric-defaulters-count').textContent =
-            `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+            document.getElementById('fin-metric-revenue').textContent = formatUGX(flow.totals.revenue);
+            document.getElementById('fin-metric-expenses').textContent = formatUGX(flow.totals.expenses);
+            document.getElementById('fin-metric-net').textContent = formatUGX(flow.totals.net);
+            document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
+            document.getElementById('fin-metric-defaulters-count').textContent =
+                `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+        } else {
+            const [summary, students] = await Promise.all([
+                FinanceAPI.getSummary(term, year),
+                FinanceAPI.getPayments({ term, year })
+            ]);
+            const defaulters = students.filter(s => s.balance > 0);
+            const outstanding = defaulters.reduce((sum, s) => sum + s.balance, 0);
+
+            document.getElementById('fin-metric-revenue').textContent = formatUGX(summary.totals.collected);
+            document.getElementById('fin-metric-outstanding').textContent = formatUGX(outstanding);
+            document.getElementById('fin-metric-defaulters-count').textContent =
+                `${defaulters.length} student${defaulters.length === 1 ? '' : 's'}`;
+        }
     } catch (err) {
         // Non-fatal — the active section below still loads/shows its own
         // error state; the overview cards just stay blank on failure.
@@ -1374,4 +1445,155 @@ function printFinanceReceipt(payment, student) {
         </div>
     `;
     window.print();
+}
+
+/* ---------------------------------------------------------
+   SALARY ADVANCES (Bursar-facing) — see the "fin-tab-advances" tab
+   above, only ever rendered for Bursar (financeCanAccessSalaryAdvances()
+   is also true for Admin/HR/Director, but they already reach the same
+   capability via the Staff Detail modal inside the Payroll tab —
+   payroll.js's openStaffDetailModal()/renderStaffDetailModal() — so
+   there's no separate top-level tab for them here).
+
+   Deliberately built on ONLY two endpoints, both allowed for Bursar
+   server-side (SALARY_ADVANCE_ROLES in payroll.routes.js):
+     - GET  /finance/payroll/advance-lookup  (id/name/roleType only)
+     - GET/POST /finance/payroll/staff/:staffId/advances
+   This screen never calls PayrollAPI.listStaff()/getStaff() — those
+   hit PAYROLL_EDIT_ROLES-only endpoints that include base salary, so
+   Bursar's browser never even requests that data, let alone displays it.
+   --------------------------------------------------------- */
+let financeAdvancesSelectedStaff = null; // { id, name, roleType } | null
+
+async function loadFinanceSalaryAdvancesSection() {
+    const body = document.getElementById('fin-section-body');
+    if (!body) return;
+    body.innerHTML = `
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div class="lg:col-span-1 bg-white border border-slate-200 rounded-2xl shadow-xs p-4">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Find a Staff Member</h4>
+                <input type="text" id="fin-advance-search" oninput="searchFinanceAdvanceStaff(this.value)" placeholder="Search by name&hellip;" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 mb-3">
+                <div id="fin-advance-staff-list" class="space-y-1.5 max-h-96 overflow-y-auto"></div>
+            </div>
+            <div class="lg:col-span-2" id="fin-advance-detail">
+                <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">
+                    Search for a staff member on the left to view or issue a salary advance.
+                </div>
+            </div>
+        </div>
+    `;
+    searchFinanceAdvanceStaff('');
+}
+
+let financeAdvanceSearchDebounce = null;
+function searchFinanceAdvanceStaff(search) {
+    clearTimeout(financeAdvanceSearchDebounce);
+    financeAdvanceSearchDebounce = setTimeout(async () => {
+        const listEl = document.getElementById('fin-advance-staff-list');
+        if (!listEl) return;
+        listEl.innerHTML = `<p class="text-center text-slate-400 text-xs font-medium py-4"><i class="fa-solid fa-circle-notch fa-spin mr-1.5"></i>Searching&hellip;</p>`;
+        let staff;
+        try {
+            staff = await PayrollAPI.lookupAdvanceStaff(search.trim());
+        } catch (err) {
+            listEl.innerHTML = `<p class="text-center text-rose-500 text-xs font-semibold py-4">${escapeHTML(err.message || "Couldn't load staff.")}</p>`;
+            return;
+        }
+        if (!staff.length) {
+            listEl.innerHTML = `<p class="text-center text-slate-400 text-xs font-medium py-4">No active staff match that search.</p>`;
+            return;
+        }
+        listEl.innerHTML = staff.map(s => `
+            <button onclick="selectFinanceAdvanceStaff(${s.id}, '${escapeHTML(s.name)}', '${escapeHTML(s.roleType)}')"
+                class="w-full text-left p-2.5 rounded-xl border ${financeAdvancesSelectedStaff && financeAdvancesSelectedStaff.id === s.id ? 'border-teal-400 bg-teal-50' : 'border-slate-200 hover:bg-slate-50'} transition-colors">
+                <p class="text-xs font-bold text-slate-800">${escapeHTML(s.name)}</p>
+                <p class="text-[10px] font-semibold text-slate-400 uppercase">${escapeHTML(s.roleType)}</p>
+            </button>
+        `).join('');
+    }, 250);
+}
+
+async function selectFinanceAdvanceStaff(id, name, roleType) {
+    financeAdvancesSelectedStaff = { id, name, roleType };
+    // Re-render the left list so the selected row highlights.
+    const searchInput = document.getElementById('fin-advance-search');
+    searchFinanceAdvanceStaff(searchInput ? searchInput.value : '');
+    await loadFinanceAdvanceDetail();
+}
+
+async function loadFinanceAdvanceDetail() {
+    const detailEl = document.getElementById('fin-advance-detail');
+    if (!detailEl || !financeAdvancesSelectedStaff) return;
+    const staff = financeAdvancesSelectedStaff;
+    detailEl.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading&hellip;</div>`;
+
+    let advances;
+    try {
+        advances = await PayrollAPI.getAdvances(staff.id);
+    } catch (err) {
+        detailEl.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-rose-500 text-xs font-semibold">${escapeHTML(err.message || "Couldn't load salary advances.")}</div>`;
+        return;
+    }
+
+    const activeAdvance = advances.find(a => a.status === 'active');
+    detailEl.innerHTML = `
+        <div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-5">
+            <h4 class="text-sm font-black text-slate-900 mb-0.5">${escapeHTML(staff.name)}</h4>
+            <p class="text-[11px] font-semibold text-slate-400 uppercase mb-4">${escapeHTML(staff.roleType)}</p>
+
+            <h5 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Salary Advance History</h5>
+            ${advances.length ? `
+                <div class="overflow-x-auto mb-4">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
+                            <th class="p-2">Requested</th><th class="p-2">Repay/mo</th><th class="p-2">Balance</th><th class="p-2">Status</th><th class="p-2">Date</th>
+                        </tr></thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${advances.map(a => `
+                                <tr>
+                                    <td class="p-2 font-bold">${formatUGX(a.requestedAmount)}</td>
+                                    <td class="p-2">${formatUGX(a.repaymentAmountPerMonth)}</td>
+                                    <td class="p-2">${formatUGX(a.balanceRemaining)}</td>
+                                    <td class="p-2"><span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-lg ${a.status === 'active' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">${escapeHTML(a.status)}</span></td>
+                                    <td class="p-2 text-slate-400">${a.requestDate ? new Date(a.requestDate).toLocaleDateString() : '—'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            ` : `<p class="text-xs text-slate-400 mb-4">No salary advances on record for this staff member yet.</p>`}
+
+            ${activeAdvance ? `
+                <p class="text-[11px] text-amber-600 font-semibold mb-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Already has an active advance — issuing another will deduct both every payroll run.</p>
+            ` : ''}
+            <h5 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Issue a New Advance</h5>
+            <div class="flex flex-wrap gap-2 items-start">
+                <input type="number" min="1" id="fin-advance-amount" placeholder="Requested amount" class="w-36 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                <input type="number" min="1" id="fin-advance-repayment" placeholder="Repay / month" class="w-36 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
+                <button onclick="issueFinanceSalaryAdvance(${staff.id})" class="bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition">Issue Advance</button>
+            </div>
+            <p id="fin-advance-error" class="text-rose-600 text-[11px] font-bold mt-1.5 hidden"></p>
+        </div>
+    `;
+}
+
+async function issueFinanceSalaryAdvance(staffId) {
+    const requestedAmount = Number(document.getElementById('fin-advance-amount').value);
+    const repaymentAmountPerMonth = Number(document.getElementById('fin-advance-repayment').value);
+    const errEl = document.getElementById('fin-advance-error');
+    if (errEl) errEl.classList.add('hidden');
+
+    if (!requestedAmount || requestedAmount <= 0 || !repaymentAmountPerMonth || repaymentAmountPerMonth <= 0) {
+        if (errEl) { errEl.textContent = 'Enter a valid requested amount and monthly repayment.'; errEl.classList.remove('hidden'); }
+        return;
+    }
+    if (!confirm(`Issue an advance of ${formatUGX(requestedAmount)}, repaid at ${formatUGX(repaymentAmountPerMonth)}/month? This takes effect immediately, starting with the next payroll run.`)) return;
+
+    try {
+        await PayrollAPI.issueAdvance(staffId, { requestedAmount, repaymentAmountPerMonth });
+    } catch (err) {
+        if (errEl) { errEl.textContent = err.message || "Couldn't issue that advance."; errEl.classList.remove('hidden'); }
+        return;
+    }
+    loadFinanceAdvanceDetail();
 }

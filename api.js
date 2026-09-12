@@ -158,6 +158,10 @@ const ENDPOINTS = {
     PAYROLL_ALLOWANCES: (staffId) => `/finance/payroll/staff/${encodeURIComponent(staffId)}/allowances`,
     PAYROLL_ALLOWANCE_BY_ID: (id) => `/finance/payroll/allowances/${encodeURIComponent(id)}`,
     PAYROLL_ADVANCES: (staffId) => `/finance/payroll/staff/${encodeURIComponent(staffId)}/advances`,
+    // Lightweight staff picker for Salary Advances (id/name/roleType only —
+    // never salary/payment data). Available to Bursar too, unlike every
+    // other PAYROLL_* endpoint above/below — see routes/payroll.routes.js.
+    PAYROLL_ADVANCE_LOOKUP: "/finance/payroll/advance-lookup",
     PAYROLL_RECORDS: "/finance/payroll/records",
     PAYROLL_GENERATE: "/finance/payroll/generate",
     PAYROLL_MARK_PAID: (recordId) => `/finance/payroll/records/${encodeURIComponent(recordId)}/mark-paid`,
@@ -328,7 +332,9 @@ const ROLE_PERMISSIONS = {
         canSwitchTerm: true,        // can browse a past term/year instead of only the live one
         canManageNotices: true,     // post/delete school bulletin notices
         canPrintWholeClass: true,   // bulk "Print / Save PDF (Whole Class)" report-card export
-        canManageStaff: true        // Administrator-only: create/edit/reset Bursar/HR/Director accounts (staff-management.js)
+        canManageStaff: true,        // Administrator-only: create/edit/reset Bursar/HR/Director accounts (staff-management.js)
+        canAccessExpensesRevenues: true,
+        canAccessSalaryAdvances: true
     },
     [ROLES.TEACHER]: {
         // "classsummaries" and "aitoolbox" appended here — same tab ids as above.
@@ -352,9 +358,12 @@ const ROLE_PERMISSIONS = {
         // Finance" gate (renderFinanceNavItem), which isn't part of this
         // tabs array (same as how Admin/Teacher/HR/Director reach it).
         // Bursar gets the General Finance / Student Fees section of that
-        // gated module, but NOT Payroll — see payrollCanAccess() in
-        // payroll.js and EDIT_ROLES in payroll.routes.js (strict exclusion,
-        // enforced server-side; this frontend flag just keeps the UI honest).
+        // gated module, and Salary Advances specifically, but NOT the
+        // general Payroll tab and NOT Expenses/Revenues at all (view or
+        // edit) — see payrollCanAccess()/financeCanViewExpensesRevenues()
+        // in finance.js/payroll.js and the matching role lists in
+        // payroll.routes.js/finance.routes.js (enforced server-side;
+        // these frontend flags just keep the UI honest).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -369,13 +378,15 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: false
+        canAccessPayroll: false,
+        canAccessExpensesRevenues: false,
+        canAccessSalaryAdvances: true
     },
     [ROLES.HR]: {
         // Same shape as Bursar — whole job lives behind the Finance gate
-        // — but Human Resource gets Payroll access that Bursar does not
-        // (see payrollCanAccess() in payroll.js / EDIT_ROLES in
-        // payroll.routes.js), on top of the same General Finance access.
+        // — but Human Resource gets full Payroll + Expenses/Revenues
+        // access that Bursar does not, on top of the same General
+        // Finance access (and Salary Advances, same as Bursar).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -390,12 +401,15 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: true
+        canAccessPayroll: true,
+        canAccessExpensesRevenues: true,
+        canAccessSalaryAdvances: true
     },
     [ROLES.DIRECTOR]: {
-        // Same shape as Human Resource: General Finance + Payroll behind
-        // the Finance gate, no academic tabs, no staff-account management
-        // (that stays Administrator-only).
+        // Same shape as Human Resource: General Finance + Payroll +
+        // Expenses/Revenues + Salary Advances behind the Finance gate,
+        // no academic tabs, no staff-account management (that stays
+        // Administrator-only).
         tabs: ["dashboard"],
         defaultTab: "dashboard",
         canManageStudents: false,
@@ -410,7 +424,9 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: true
+        canAccessPayroll: true,
+        canAccessExpensesRevenues: true,
+        canAccessSalaryAdvances: true
     },
     [ROLES.STUDENT]: {
         tabs: ["dashboard", "reports", "resources"],
@@ -432,7 +448,9 @@ const ROLE_PERMISSIONS = {
         canManageNotices: false,
         canPrintWholeClass: false,
         canManageStaff: false,
-        canAccessPayroll: false
+        canAccessPayroll: false,
+        canAccessExpensesRevenues: false,
+        canAccessSalaryAdvances: false
     }
 };
 
@@ -725,6 +743,18 @@ const PayrollAPI = {
             method: "POST",
             body: { requestedAmount, repaymentAmountPerMonth, requestDate }
         });
+    },
+    // Standalone advances list for one staff member — used by the Bursar's
+    // dedicated Salary Advances screen, which (unlike the Admin/HR/Director
+    // Staff Detail modal) never calls getStaff()/PAYROLL_STAFF_BY_ID, since
+    // that endpoint is Admin/HR/Director only and returns base salary too.
+    async getAdvances(staffId) {
+        return apiRequest(ENDPOINTS.PAYROLL_ADVANCES(staffId));
+    },
+    // Bursar-safe staff picker for Salary Advances — id/name/roleType only.
+    async lookupAdvanceStaff(search) {
+        const qs = search ? `?search=${encodeURIComponent(search)}` : "";
+        return apiRequest(`${ENDPOINTS.PAYROLL_ADVANCE_LOOKUP}${qs}`);
     },
 
     // --- Payroll runs ---
