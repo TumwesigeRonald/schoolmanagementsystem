@@ -513,7 +513,6 @@ async function loadFinanceOverviewMetrics() {
     if (!grid) return;
     const { term, year } = getFinanceViewedTermYear();
     const canViewExpensesRevenues = financeCanViewExpensesRevenues();
-    const canViewExpensesRevenues = financeCanViewExpensesRevenues();
 
     try {
         if (canViewExpensesRevenues) {
