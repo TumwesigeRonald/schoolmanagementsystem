@@ -111,9 +111,11 @@ img {
     height: 100%;
     display: flex;
     flex-direction: column;
+    align-items: center;
     justify-content: center;
     padding: 64px 72px;
     color: #ffffff;
+    text-align: center;
 }
 .login-eyebrow {
     font-family: var(--font-body);
