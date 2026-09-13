@@ -148,6 +148,8 @@ img {
     font-size: 17px;
     color: #f2c14e;
     max-width: 320px;
+    text-align: center;
+    align-self: center;
 }
 .login-panel-wrap {
     flex: 1 1 42%;
