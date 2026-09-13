@@ -11,11 +11,14 @@ function toggleSidebar() {
     if (sidebar) sidebar.classList.toggle('-translate-x-full');
     if (backdrop) backdrop.classList.toggle('hidden');
 }
-// Auto-close the drawer after a menu/nav-link click (mobile only — the
-// docked desktop sidebar ignores this class via CSS, so this is a no-op
-// visually on desktop while still being harmless to call there).
+// Auto-collapse the sidebar after a menu/nav-link click — on mobile this
+// closes the overlay drawer; on desktop (see the .sidebar.-translate-x-full
+// rule in styles.css under @media (min-width: 768px)) it collapses the
+// docked sidebar's width to 0 so .main-content reflows to fill the freed
+// space, giving each module more room instead of the sidebar staying
+// permanently open. Either way, the header's hamburger button (outside
+// #sidebar, so always reachable) calls toggleSidebar() to bring it back.
 function closeMobileSidebar() {
-    if (window.innerWidth >= 768) return;
     const sidebar = document.getElementById('sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
     if (sidebar) sidebar.classList.add('-translate-x-full');
@@ -617,6 +620,15 @@ async function applySessionUser(user) {
     const dashboardSection = document.getElementById('dashboard-section');
     if (loginSection) loginSection.classList.add('hidden');
     if (dashboardSection) dashboardSection.classList.remove('hidden');
+
+    // The sidebar now genuinely collapses on desktop too (see
+    // closeMobileSidebar()/styles.css), so it's no longer force-opened by a
+    // CSS !important override — it starts however its class in index.html
+    // says. That markup defaults to closed (mobile-first), so on desktop
+    // widths explicitly open it here on the very first render; on mobile
+    // widths it's left closed, matching the existing drawer behavior.
+    const sidebarEl = document.getElementById('sidebar');
+    if (sidebarEl && window.innerWidth >= 768) sidebarEl.classList.remove('-translate-x-full');
 
     // Pull the current, authoritative state from the backend/Neon before
     // rendering anything below, so the dashboard reflects real data

@@ -357,6 +357,7 @@ img {
     z-index: 50;
     width: 256px;
     max-width: 84vw;
+    flex-shrink: 0;
     background: var(--navy-900);
     color: #bfdbfe;
     display: flex;
@@ -366,8 +367,9 @@ img {
        meant removing the toggle class on mobile had no visible effect and the
        hamburger menu appeared to do nothing. */
     transform: translateX(0);
-    transition: transform 0.3s ease;
+    transition: transform 0.3s ease, width 0.25s ease;
     box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+    overflow: hidden;
 }
 .sidebar.-translate-x-full {
     transform: translateX(-100%);
@@ -400,8 +402,16 @@ img {
     }
 }
 @media (min-width: 768px) {
-    /* Sidebar is always docked open on desktop, regardless of the toggle class. */
-    .sidebar { position: relative; transform: translateX(0) !important; }
+    /* Real collapse on desktop — the sidebar sits in normal flex flow here
+       (position: relative, a sibling of .main-content inside the flex row
+       .app-body), so a transform alone would only slide it visually while
+       still reserving its 256px of layout space. Collapsing WIDTH to 0
+       instead removes that space entirely and lets .main-content's flex:1
+       reflow to fill it, which is the actual "more room for the module"
+       effect being asked for. (translateX(-100%) from the base rule above
+       still applies too — harmless, since it's just -100% of a 0-width box.) */
+    .sidebar { position: relative; }
+    .sidebar.-translate-x-full { width: 0; min-width: 0; box-shadow: none; }
     .sidebar-backdrop { display: none !important; }
 }
 .sidebar-brand {
