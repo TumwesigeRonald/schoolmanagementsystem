@@ -86,13 +86,32 @@ img {
    equivalent (the background-image, the two-pane flex layout, fluid
    type sizing) plus the small text-color tweaks needed for legibility
    against the new dark card. */
+/* ---------------- LOGIN PAGE — DARK HERO / NEUMORPHIC CARD ----------------
+   Two-pane layout: a full-height campus photo on the left with a dark
+   gradient overlay (Tailwind utility classes on a child div in
+   index.html — bg-gradient-to-b from-black/70 via-black/50 to-black/80)
+   for legible white text, and a dark neumorphic "soft UI" login card on
+   the right. Color/background/border/shadow for the card, inputs, and
+   button are intentionally NOT set here — they're applied as Tailwind
+   utility classes directly in index.html (per the requested design spec)
+   so they aren't fighting this stylesheet for cascade order. This file
+   only keeps the structural CSS that has no clean Tailwind utility
+   equivalent (the background-image, the two-pane flex layout, fluid
+   type sizing) plus the small text-color tweaks needed for legibility
+   against the new dark card. */
 .login-shell {
     position: relative;
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
     background: #14161b;
+    background: #14161b;
 }
+.login-visual {
+    position: relative;
+    flex: 1 1 58%;
+    min-width: 0;
+    overflow: hidden;
 .login-visual {
     position: relative;
     flex: 1 1 58%;
@@ -106,7 +125,13 @@ img {
    `absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80`
    div placed inside .login-visual in index.html — nothing to style here. */
 .login-visual-content {
+/* The dark gradient overlay itself is the Tailwind
+   `absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80`
+   div placed inside .login-visual in index.html — nothing to style here. */
+.login-visual-content {
     position: relative;
+    z-index: 10;
+    height: 100%;
     z-index: 10;
     height: 100%;
     display: flex;
@@ -114,13 +139,21 @@ img {
     align-items: center;
     justify-content: center;
     padding: 64px 72px;
+    justify-content: center;
+    padding: 64px 72px;
     color: #ffffff;
+    text-align: center;
     text-align: center;
 }
 .login-eyebrow {
     font-family: var(--font-body);
     letter-spacing: 0.2em;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 800;
+    color: #ff8a68;
+    margin-bottom: 18px;
     font-size: 12px;
     font-weight: 800;
     color: #ff8a68;
@@ -132,12 +165,20 @@ img {
     line-height: 1.22;
     margin: 0 0 18px 0;
     max-width: 560px;
+    font-size: clamp(26px, 3.2vw, 42px);
+    line-height: 1.22;
+    margin: 0 0 18px 0;
+    max-width: 560px;
     color: #ffffff;
 }
 .login-visual p.tagline {
     font-size: 15px;
     color: #e8e3d6;
+    font-size: 15px;
+    color: #e8e3d6;
     max-width: 460px;
+    line-height: 1.7;
+    margin: 0;
     line-height: 1.7;
     margin: 0;
 }
@@ -145,15 +186,24 @@ img {
     margin-top: 32px;
     padding-top: 16px;
     border-top: 1px solid rgba(255,255,255,0.25);
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.25);
     font-family: var(--font-display);
     font-style: italic;
+    font-size: 17px;
+    color: #f2c14e;
     font-size: 17px;
     color: #f2c14e;
     max-width: 320px;
     text-align: center;
     align-self: center;
+    text-align: center;
+    align-self: center;
 }
 .login-panel-wrap {
+    flex: 1 1 42%;
+    min-width: 0;
     flex: 1 1 42%;
     min-width: 0;
     display: flex;
@@ -164,12 +214,22 @@ img {
        card's raised light/dark shadow pair to be derived from the surface
        it sits on, so this can't be a light/cream color anymore. */
     background: #14161b;
+    padding: 48px;
+    /* Same dark family as the card itself — genuine neumorphism needs the
+       card's raised light/dark shadow pair to be derived from the surface
+       it sits on, so this can't be a light/cream color anymore. */
+    background: #14161b;
 }
+/* Background/border-radius/box-shadow are the Tailwind classes on the
+   element in index.html (bg-[#1e222b] rounded-[28px] border border-white/5
+   shadow-[...]) — only padding/sizing lives here. */
 /* Background/border-radius/box-shadow are the Tailwind classes on the
    element in index.html (bg-[#1e222b] rounded-[28px] border border-white/5
    shadow-[...]) — only padding/sizing lives here. */
 .login-card {
     width: 100%;
+    max-width: 380px;
+    padding: 40px 36px;
     max-width: 380px;
     padding: 40px 36px;
 }
@@ -178,11 +238,17 @@ img {
     align-items: flex-start;
     gap: 14px;
     margin-bottom: 28px;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 28px;
 }
 .login-badge-row img {
     width: 46px; height: 46px;
+    width: 46px; height: 46px;
     border-radius: 50%;
     object-fit: cover;
+    border: 1px solid rgba(255,255,255,0.12);
+    flex-shrink: 0;
     border: 1px solid rgba(255,255,255,0.12);
     flex-shrink: 0;
 }
@@ -191,15 +257,23 @@ img {
     font-family: var(--font-display);
     font-size: 16px;
     line-height: 1.25;
+    font-size: 16px;
+    line-height: 1.25;
     margin: 0;
+    color: #f1f5f9;
+    font-weight: 700;
     color: #f1f5f9;
     font-weight: 700;
 }
 .login-badge-row span {
     display: block;
     font-size: 9.5px;
+    font-size: 9.5px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
+    font-weight: 800;
+    color: #8b93a3;
+    margin-top: 6px;
     font-weight: 800;
     color: #8b93a3;
     margin-top: 6px;
@@ -209,10 +283,18 @@ img {
     font-size: 10.5px;
     font-weight: 800;
     letter-spacing: 0.1em;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    color: #8b93a3;
     color: #8b93a3;
     margin-bottom: 8px;
 }
+/* Background/border/text/placeholder/shadow are Tailwind utility classes
+   on the input itself in index.html (the inset shadow that makes it look
+   "carved into" the card, per the requested design) — only the sizing/
+   radius/transition structure lives here. */
 /* Background/border/text/placeholder/shadow are Tailwind utility classes
    on the input itself in index.html (the inset shadow that makes it look
    "carved into" the card, per the requested design) — only the sizing/
@@ -222,10 +304,34 @@ img {
     padding: 13px 16px;
     border-radius: 12px;
     font-size: 14px;
+    padding: 13px 16px;
+    border-radius: 12px;
+    font-size: 14px;
     font-weight: 500;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     font-family: var(--font-body);
 }
+/* Chrome/Safari/Edge repaint a remembered/suggested username or password
+   field with their own pale-yellow autofill background, ignoring the
+   dark bg-[#0d1f16] Tailwind class on the input in index.html — that's
+   the "yellow input" bug. The only reliable fix is layering an inset
+   box-shadow large enough to fully cover the field in the theme's own
+   dark green, painted UNDER the browser's text (autofill fires this at
+   a higher priority than a plain background-color override). Also forces
+   the autofilled text/caret back to light grey so it stays readable, and
+   pushes the (very long) background-color transition Chrome applies to
+   autofilled fields out past any reasonable interaction so it never
+   visibly fades in. */
+.control-input:-webkit-autofill,
+.control-input:-webkit-autofill:hover,
+.control-input:-webkit-autofill:focus,
+.control-input:-webkit-autofill:active {
+    -webkit-text-fill-color: #f1f5f9;
+    caret-color: #f1f5f9;
+    -webkit-box-shadow: 0 0 0px 1000px #0d1f16 inset, inset 0 2px 4px rgba(0,0,0,0.65);
+    box-shadow: 0 0 0px 1000px #0d1f16 inset, inset 0 2px 4px rgba(0,0,0,0.65);
+    transition: background-color 600000s ease-in-out 0s, color 600000s ease-in-out 0s;
 /* Chrome/Safari/Edge repaint a remembered/suggested username or password
    field with their own pale-yellow autofill background, ignoring the
    dark bg-[#0d1f16] Tailwind class on the input in index.html — that's
@@ -251,6 +357,10 @@ img {
 /* Sizing/typography only — the raised gradient + soft shadow (and the
    hover/active "pressed into the surface" swap) are Tailwind classes on
    the button in index.html. */
+.login-field { margin-bottom: 20px; }
+/* Sizing/typography only — the raised gradient + soft shadow (and the
+   hover/active "pressed into the surface" swap) are Tailwind classes on
+   the button in index.html. */
 .login-submit {
     width: 100%;
     padding: 15px;
@@ -261,9 +371,12 @@ img {
     border: none;
     cursor: pointer;
     transition: transform 0.1s ease, box-shadow 0.15s ease;
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
 }
 .login-submit:active { transform: translateY(1px); }
 .login-error {
+    background: rgba(220,38,38,0.14);
+    color: #fca5a5;
     background: rgba(220,38,38,0.14);
     color: #fca5a5;
     font-size: 12px;
@@ -272,16 +385,22 @@ img {
     border-radius: 8px;
     margin-bottom: 16px;
     border: 1px solid rgba(248,113,113,0.3);
+    border: 1px solid rgba(248,113,113,0.3);
 }
 .login-footer-note {
     margin-top: 24px;
+    margin-top: 24px;
     padding-top: 18px;
+    border-top: 1px solid rgba(255,255,255,0.08);
     border-top: 1px solid rgba(255,255,255,0.08);
     text-align: center;
     font-size: 10px;
+    font-size: 10px;
     font-weight: 700;
     color: #6b7280;
+    color: #6b7280;
 }
+.login-footer-note span { color: #9ca3af; }
 .login-footer-note span { color: #9ca3af; }
 /* ---------------- DASHBOARD SHELL ---------------- */
 .app-header {
