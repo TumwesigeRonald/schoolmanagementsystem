@@ -73,205 +73,183 @@ img {
     height: auto;
 }
 .hidden { display: none !important; }
-/* ---------------- LOGIN PAGE — BLURRED GLASSMORPHISM ----------------
-   Full campus photo, heavily blurred (matches the depth-of-field in the
-   reference screenshot) via a ::before pseudo-element rather than a
-   filter on .login-shell itself — filtering the shell would blur the
-   card and text too. The pseudo-element is oversized (inset: -20px) and
-   scaled slightly so the blur's soft edges never show at the viewport
-   boundary. Content (.login-visual, .login-panel-wrap) is lifted onto
-   its own stacking layer with z-index so it paints above the blur.
-   Card uses a cool dark-grey glass fill (not maroon) with a copper/brown
-   gradient button as the sole accent color, matching the screenshot.
-   All existing copy is unchanged — only re-styled. */
+/* ---------------- LOGIN PAGE — SPLIT HERO / WHITE CARD ----------------
+   Two-pane layout matching the live reference screenshot: a full-height
+   campus photo on the left (crisp, NOT blurred — dark gradient laid over
+   it for text legibility) with the headline/tagline/motto, and a plain
+   cream panel on the right holding a solid white login card (no glass/
+   blur effect — this replaced an earlier frosted-glassmorphism version
+   that had drifted from what's actually deployed). All existing copy/
+   markup is unchanged — only re-styled. */
 .login-shell {
     position: relative;
-    overflow: hidden;
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-}
-.login-shell::before {
-    content: "";
-    position: fixed;
-    inset: -20px;
-    background-image: url('school_building.jpg');
-    background-size: cover;
-    background-position: center;
-    transform: scale(1.1);
-    filter: blur(20px);
-    z-index: 0;
+    background: #f5f0e6;
 }
 .login-visual {
     position: relative;
-    z-index: 1;
+    flex: 1 1 58%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    text-align: center;
-    max-width: 640px;
-    margin-bottom: 36px;
+    justify-content: center;
+    padding: 64px 72px;
     color: #ffffff;
+    background-image: linear-gradient(190deg, rgba(8,14,26,0.35) 0%, rgba(6,10,20,0.78) 100%), url('school_building.jpg');
+    background-size: cover;
+    background-position: center;
 }
 .login-eyebrow {
     font-family: var(--font-body);
-    letter-spacing: 0.22em;
+    letter-spacing: 0.2em;
     text-transform: uppercase;
-    font-size: 11.5px;
-    font-weight: 700;
-    color: #f0e6d2;
-    text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9);
-    margin-bottom: 16px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #ff8a68;
+    margin-bottom: 18px;
 }
 .login-visual h1 {
     font-family: var(--font-display);
-    font-size: clamp(24px, 3.6vw, 38px);
-    line-height: 1.18;
-    margin: 0 0 14px 0;
+    font-size: clamp(26px, 3.2vw, 42px);
+    line-height: 1.22;
+    margin: 0 0 18px 0;
+    max-width: 560px;
     color: #ffffff;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.85), 0 1px 3px rgba(0,0,0,0.9);
 }
 .login-visual p.tagline {
-    font-size: 14.5px;
-    color: #f0e6d2;
-    text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9);
+    font-size: 15px;
+    color: #e8e3d6;
     max-width: 460px;
-    line-height: 1.6;
-    margin: 0 auto;
+    line-height: 1.7;
+    margin: 0;
 }
 .login-motto {
-    margin-top: 28px;
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.25);
     font-family: var(--font-display);
     font-style: italic;
-    font-size: 16px;
-    color: #f0e6d2;
-    text-shadow: 0 1px 6px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9);
-    padding-top: 14px;
-    border-top: 1px solid rgba(240,230,210,0.4);
+    font-size: 17px;
+    color: #f2c14e;
     max-width: 320px;
 }
 .login-panel-wrap {
-    position: relative;
-    z-index: 1;
-    width: 100%;
+    flex: 1 1 42%;
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 48px;
+    background: #f5f0e6;
 }
-/* Cool dark-grey frosted glass card, matching the reference screenshot. */
 .login-card {
     width: 100%;
-    max-width: 400px;
-    background: rgba(31, 41, 55, 0.7);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 28px;
-    padding: 44px 36px;
-    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.4);
+    max-width: 380px;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 40px 36px;
+    box-shadow: 0 20px 45px rgba(15,23,42,0.18);
 }
 .login-badge-row {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 26px;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 28px;
 }
 .login-badge-row img {
-    width: 52px; height: 52px;
+    width: 46px; height: 46px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid rgba(240,230,210,0.4);
+    border: 1px solid #e2e8f0;
+    flex-shrink: 0;
 }
 /* Selector targets h3 to match the heading element used in index.html. */
 .login-badge-row h3 {
     font-family: var(--font-display);
-    font-size: 17px;
+    font-size: 16px;
+    line-height: 1.25;
     margin: 0;
-    color: #f0e6d2;
-    font-weight: 600;
+    color: var(--navy-900);
+    font-weight: 700;
 }
 .login-badge-row span {
     display: block;
-    font-size: 10.5px;
+    font-size: 9.5px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    font-weight: 700;
-    color: #f0e6d2;
-    margin-top: 3px;
+    font-weight: 800;
+    color: #64748b;
+    margin-top: 6px;
 }
 .field-label {
     display: block;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #f0e6d2;
+    color: #64748b;
     margin-bottom: 8px;
 }
-/* Minimalist underline style — no fill, no full border, just a thin
-   bottom border. */
 .control-input, .control-select {
     width: 100%;
-    padding: 8px 2px 10px;
-    border: none;
-    border-bottom: 1.5px solid rgba(240,230,210,0.35);
-    border-radius: 0;
-    font-size: 16px;
+    padding: 13px 16px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 12px;
+    font-size: 14px;
     font-weight: 500;
-    color: #f0e6d2;
-    background: transparent;
-    transition: border-color 0.15s ease;
+    color: #1e293b;
+    background: #ffffff;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     font-family: var(--font-body);
 }
-.control-input::placeholder { color: rgba(240,230,210,0.45); font-weight: 400; }
+.control-input::placeholder { color: #94a3b8; font-weight: 400; }
 .control-input:focus, .control-select:focus {
     outline: none;
-    border-bottom-color: #f0e6d2;
-    box-shadow: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
 }
-.login-field { margin-bottom: 22px; }
-/* Primary action button — warm copper-to-brown gradient, per screenshot. */
+.login-field { margin-bottom: 20px; }
+/* Primary action button — solid blue, per reference screenshot (replaces
+   the earlier copper/brown gradient from the glassmorphism version). */
 .login-submit {
     width: 100%;
     padding: 15px;
-    background: linear-gradient(135deg, #c9884f 0%, #8a6a4a 100%);
-    color: #241a12;
+    background: #1d4ed8;
+    color: #ffffff;
     font-weight: 800;
     font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     border: none;
-    border-radius: 999px;
+    border-radius: 12px;
     cursor: pointer;
     transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    box-shadow: 0 8px 20px rgba(29,78,216,0.35);
 }
-.login-submit:hover { filter: brightness(1.1); box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+.login-submit:hover { filter: brightness(1.08); }
 .login-submit:active { transform: translateY(1px); filter: brightness(1.03); }
 .login-error {
-    background: rgba(220,38,38,0.18);
-    color: #ffd7d7;
+    background: #fef2f2;
+    color: #b91c1c;
     font-size: 12px;
     font-weight: 700;
     padding: 10px 14px;
     border-radius: 8px;
     margin-bottom: 16px;
-    border: 1px solid rgba(248,113,113,0.4);
+    border: 1px solid #fecaca;
 }
 .login-footer-note {
-    margin-top: 22px;
+    margin-top: 24px;
     padding-top: 18px;
-    border-top: 1px solid rgba(255,255,255,0.16);
+    border-top: 1px solid #e2e8f0;
     text-align: center;
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 700;
-    color: #f0e6d2;
+    color: #94a3b8;
 }
-.login-footer-note span { color: #f0e6d2; }
+.login-footer-note span { color: #475569; }
 /* ---------------- DASHBOARD SHELL ---------------- */
 .app-header {
     display: flex;
@@ -835,21 +813,25 @@ input, select, textarea {
    pushes past the edge of a phone screen.
    --------------------------------------------------------- */
 @media (max-width: 900px) {
-    /* position: fixed on ::before is expensive/buggy on mobile browsers,
-       so anchor the blurred background to the shell itself instead of
-       the viewport on smaller screens. */
     .login-shell {
-        min-height: auto;
-        padding: 40px 20px;
-        padding-top: calc(40px + env(safe-area-inset-top));
-        padding-bottom: calc(40px + env(safe-area-inset-bottom));
+        flex-direction: column;
     }
-    .login-shell::before { position: absolute; }
-    .login-visual { margin-bottom: 28px; }
-    .login-motto { margin: 24px auto 0; }
+    .login-visual {
+        flex: none;
+        min-height: 320px;
+        padding: 48px 28px;
+        padding-top: calc(48px + env(safe-area-inset-top));
+    }
+    .login-panel-wrap {
+        flex: none;
+        padding: 32px 20px;
+        padding-bottom: calc(32px + env(safe-area-inset-bottom));
+    }
+    .login-motto { margin-top: 24px; }
 }
 @media (max-width: 480px) {
     .login-card { padding: 34px 26px; }
+    .login-visual { padding: 40px 22px; }
     .login-visual h1 { font-size: clamp(22px, 7vw, 28px); }
     .login-visual p.tagline { font-size: 13.5px; }
 }
