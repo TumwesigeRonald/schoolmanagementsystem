@@ -192,7 +192,7 @@ function renderPayrollStaffTable() {
 
     wrap.innerHTML = `
         <div class="overflow-x-auto border-t border-slate-100">
-            <table class="w-full text-left text-xs text-slate-700 min-w-[820px]">
+            <table class="fin-table w-full text-left text-xs text-slate-700 min-w-[820px]">
                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
                     <th class="p-3">Staff Name</th><th class="p-3">Role</th><th class="p-3">Phone</th>
                     <th class="p-3 text-right">Base Salary</th><th class="p-3 text-right">Allowances</th>
@@ -395,7 +395,7 @@ function renderStaffDetailModal(staff) {
                         <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Allowances</h4>
                         ${staff.allowances.length ? `
                         <div class="border border-slate-200 rounded-xl overflow-hidden mb-3">
-                            <table class="w-full text-left text-xs text-slate-700">
+                            <table class="fin-table w-full text-left text-xs text-slate-700">
                                 <tbody class="divide-y divide-slate-100">
                                     ${staff.allowances.map(a => `
                                         <tr>
@@ -424,7 +424,7 @@ function renderStaffDetailModal(staff) {
                         <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Salary Advances</h4>
                         ${staff.advances.length ? `
                         <div class="border border-slate-200 rounded-xl overflow-hidden mb-3">
-                            <table class="w-full text-left text-xs text-slate-700">
+                            <table class="fin-table w-full text-left text-xs text-slate-700">
                                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
                                     <th class="p-2.5">Requested</th><th class="p-2.5">Per Month</th><th class="p-2.5">Balance</th><th class="p-2.5">Status</th>
                                 </tr></thead>
@@ -455,7 +455,7 @@ function renderStaffDetailModal(staff) {
                         <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-2">Salary History</h4>
                         ${staff.salaryHistory && staff.salaryHistory.length ? `
                         <div class="border border-slate-200 rounded-xl overflow-hidden">
-                            <table class="w-full text-left text-xs text-slate-700">
+                            <table class="fin-table w-full text-left text-xs text-slate-700">
                                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider"><tr>
                                     <th class="p-2.5">Date</th><th class="p-2.5">Change</th><th class="p-2.5">By</th><th class="p-2.5">Reason</th>
                                 </tr></thead>
@@ -594,7 +594,7 @@ async function loadPayrollRecords() {
         ${!payrollRecordsCache.length
             ? `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">No payroll generated for this month/year yet. Click "Generate Payroll" above.</div>`
             : `<div class="bg-white border border-slate-200 rounded-2xl shadow-xs overflow-auto max-h-[55vh]">
-                <table class="w-full text-left text-xs text-slate-700">
+                <table class="fin-table w-full text-left text-xs text-slate-700">
                     <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider sticky top-0"><tr>
                         <th class="p-3">Staff</th><th class="p-3">Base</th><th class="p-3">Allowances</th><th class="p-3">Advance Deduction</th><th class="p-3">Net Pay</th><th class="p-3">Status</th><th class="p-3"></th>
                     </tr></thead>
@@ -757,7 +757,7 @@ async function refreshBulkSalaryPreview(refetch = true) {
 
     previewEl.innerHTML = `
         <div class="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-            <table class="w-full text-left text-xs text-slate-700">
+            <table class="fin-table w-full text-left text-xs text-slate-700">
                 <thead class="bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold tracking-wider sticky top-0"><tr>
                     <th class="p-2">Staff</th><th class="p-2">Current</th><th class="p-2">New</th>
                 </tr></thead>
