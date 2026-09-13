@@ -94,17 +94,20 @@
      ========================================================= -->
 <div id="login-section" class="login-shell">
     <div class="login-visual">
-        <span class="login-eyebrow">SHAPING FUTURES, TRACKING PROGRESS- All in one place</span>
-        <h1>A smarter way to navigate the Ugandan Curriculum &mdash; in one secure Web app.</h1>
-        <p class="tagline">Built for the Ugandan O-Level and A-Level curriculum. Teachers and Students each get exactly the access their role needs.</p>
-        <div class="login-motto">&ldquo;Be Known By Deeds&rdquo;</div>
+        <div class="absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80"></div>
+        <div class="login-visual-content">
+            <span class="login-eyebrow">SHAPING FUTURES, TRACKING PROGRESS- All in one place</span>
+            <h1>Academics, Finance, and Administration &mdash; All in One Secure Platform</h1>
+            <p class="tagline">Built for the Ugandan O-Level and A-Level curriculum. Teachers and Students each get exactly the access their role needs.</p>
+            <div class="login-motto">&ldquo;Be Known By Deeds&rdquo;</div>
+        </div>
     </div>
     <div class="login-panel-wrap">
-        <div class="login-card">
+        <div class="login-card bg-[#1e222b] rounded-[28px] border border-white/5 shadow-[12px_12px_28px_rgba(0,0,0,0.55),-8px_-8px_20px_rgba(255,255,255,0.03)]">
             <div class="login-badge-row">
                 <img src="school_badge.jpg" alt="School Badge">
                 <div>
-                    <h3>LUWEERO COMMUNITY SS MANAGEMENT SYSTEM</h3>
+                    <h3>LUWEERO COMMUNITY SS WEB APP</h3>
                     <span>LOGIN WITH YOUR CREDENTIALS</span>
                 </div>
             </div>
@@ -112,13 +115,13 @@
             <form id="login-form" method="post" action="javascript:void(0);" onsubmit="handleLogin(event)">
                 <div class="login-field">
                     <label class="field-label">Username / Student ID / LIN</label>
-                    <input type="text" id="login-username" class="control-input" placeholder="e.g. admin, teacher, student" required>
+                    <input type="text" id="login-username" class="control-input bg-[#171a21] border border-white/5 text-slate-100 placeholder:text-slate-500 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus:outline-none focus:border-teal-500/40 focus:shadow-[inset_0_2px_6px_rgba(0,0,0,0.7),0_0_0_3px_rgba(45,212,191,0.15)]" placeholder="e.g. admin, teacher, student" required>
                 </div>
                 <div class="login-field">
                     <label class="field-label">Password</label>
-                    <input type="password" id="login-password" class="control-input" placeholder="Enter your password" required>
+                    <input type="password" id="login-password" class="control-input bg-[#171a21] border border-white/5 text-slate-100 placeholder:text-slate-500 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus:outline-none focus:border-teal-500/40 focus:shadow-[inset_0_2px_6px_rgba(0,0,0,0.7),0_0_0_3px_rgba(45,212,191,0.15)]" placeholder="Enter your password" required>
                 </div>
-                <button type="submit" class="login-submit"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
+                <button type="submit" class="login-submit rounded-2xl text-white bg-gradient-to-b from-teal-500 to-teal-700 shadow-[0_10px_24px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.15)] hover:from-teal-400 hover:to-teal-600 active:shadow-[inset_0_3px_10px_rgba(0,0,0,0.5)]"><i class="fa-solid fa-right-to-bracket"></i> Login</button>
             </form>
             <div class="login-footer-note">
                 Developed &amp; Engineered by <span>TUMWESIGE RONALD</span>
@@ -168,10 +171,10 @@
                     <select id="sidebar-term-year" class="sidebar-term-select" title="Academic year"></select>
                     <select id="sidebar-term-term" class="sidebar-term-select" title="Term"></select>
                 </div>
-                <button id="sidebar-term-load" type="button" onclick="loadSelectedTerm()" class="sidebar-term-load">
+                <button id="sidebar-term-load" type="button" onclick="loadSelectedTerm(); closeMobileSidebar();" class="sidebar-term-load">
                     <i class="fa-solid fa-arrows-rotate"></i> Load Term
                 </button>
-                <button id="sidebar-term-reset" type="button" onclick="resetTermSwitcherToCurrent()" class="sidebar-term-reset hidden">
+                <button id="sidebar-term-reset" type="button" onclick="resetTermSwitcherToCurrent(); closeMobileSidebar();" class="sidebar-term-reset hidden">
                     <i class="fa-solid fa-rotate-left"></i> Back to current term
                 </button>
             </div>

@@ -73,33 +73,47 @@ img {
     height: auto;
 }
 .hidden { display: none !important; }
-/* ---------------- LOGIN PAGE — SPLIT HERO / WHITE CARD ----------------
-   Two-pane layout matching the live reference screenshot: a full-height
-   campus photo on the left (crisp, NOT blurred — dark gradient laid over
-   it for text legibility) with the headline/tagline/motto, and a plain
-   cream panel on the right holding a solid white login card (no glass/
-   blur effect — this replaced an earlier frosted-glassmorphism version
-   that had drifted from what's actually deployed). All existing copy/
-   markup is unchanged — only re-styled. */
+/* ---------------- LOGIN PAGE — DARK HERO / NEUMORPHIC CARD ----------------
+   Two-pane layout: a full-height campus photo on the left with a dark
+   gradient overlay (Tailwind utility classes on a child div in
+   index.html — bg-gradient-to-b from-black/70 via-black/50 to-black/80)
+   for legible white text, and a dark neumorphic "soft UI" login card on
+   the right. Color/background/border/shadow for the card, inputs, and
+   button are intentionally NOT set here — they're applied as Tailwind
+   utility classes directly in index.html (per the requested design spec)
+   so they aren't fighting this stylesheet for cascade order. This file
+   only keeps the structural CSS that has no clean Tailwind utility
+   equivalent (the background-image, the two-pane flex layout, fluid
+   type sizing) plus the small text-color tweaks needed for legibility
+   against the new dark card. */
 .login-shell {
     position: relative;
     min-height: 100vh;
     min-height: 100dvh;
     display: flex;
-    background: #f5f0e6;
+    background: #14161b;
 }
 .login-visual {
     position: relative;
     flex: 1 1 58%;
     min-width: 0;
+    overflow: hidden;
+    background-image: url('school_building.jpg');
+    background-size: cover;
+    background-position: center;
+}
+/* The dark gradient overlay itself is the Tailwind
+   `absolute inset-0 bg-gradient-to-b from-black/70 via-black/50 to-black/80`
+   div placed inside .login-visual in index.html — nothing to style here. */
+.login-visual-content {
+    position: relative;
+    z-index: 10;
+    height: 100%;
     display: flex;
     flex-direction: column;
     justify-content: center;
     padding: 64px 72px;
     color: #ffffff;
-    background-image: linear-gradient(190deg, rgba(8,14,26,0.35) 0%, rgba(6,10,20,0.78) 100%), url('school_building.jpg');
-    background-size: cover;
-    background-position: center;
 }
 .login-eyebrow {
     font-family: var(--font-body);
@@ -142,15 +156,18 @@ img {
     align-items: center;
     justify-content: center;
     padding: 48px;
-    background: #f5f0e6;
+    /* Same dark family as the card itself — genuine neumorphism needs the
+       card's raised light/dark shadow pair to be derived from the surface
+       it sits on, so this can't be a light/cream color anymore. */
+    background: #14161b;
 }
+/* Background/border-radius/box-shadow are the Tailwind classes on the
+   element in index.html (bg-[#1e222b] rounded-[28px] border border-white/5
+   shadow-[...]) — only padding/sizing lives here. */
 .login-card {
     width: 100%;
     max-width: 380px;
-    background: #ffffff;
-    border-radius: 20px;
     padding: 40px 36px;
-    box-shadow: 0 20px 45px rgba(15,23,42,0.18);
 }
 .login-badge-row {
     display: flex;
@@ -162,7 +179,7 @@ img {
     width: 46px; height: 46px;
     border-radius: 50%;
     object-fit: cover;
-    border: 1px solid #e2e8f0;
+    border: 1px solid rgba(255,255,255,0.12);
     flex-shrink: 0;
 }
 /* Selector targets h3 to match the heading element used in index.html. */
@@ -171,7 +188,7 @@ img {
     font-size: 16px;
     line-height: 1.25;
     margin: 0;
-    color: var(--navy-900);
+    color: #f1f5f9;
     font-weight: 700;
 }
 .login-badge-row span {
@@ -180,7 +197,7 @@ img {
     letter-spacing: 0.14em;
     text-transform: uppercase;
     font-weight: 800;
-    color: #64748b;
+    color: #8b93a3;
     margin-top: 6px;
 }
 .field-label {
@@ -189,67 +206,58 @@ img {
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: #64748b;
+    color: #8b93a3;
     margin-bottom: 8px;
 }
+/* Background/border/text/placeholder/shadow are Tailwind utility classes
+   on the input itself in index.html (the inset shadow that makes it look
+   "carved into" the card, per the requested design) — only the sizing/
+   radius/transition structure lives here. */
 .control-input, .control-select {
     width: 100%;
     padding: 13px 16px;
-    border: 1.5px solid #cbd5e1;
     border-radius: 12px;
     font-size: 14px;
     font-weight: 500;
-    color: #1e293b;
-    background: #ffffff;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     font-family: var(--font-body);
 }
-.control-input::placeholder { color: #94a3b8; font-weight: 400; }
-.control-input:focus, .control-select:focus {
-    outline: none;
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
-}
 .login-field { margin-bottom: 20px; }
-/* Primary action button — solid blue, per reference screenshot (replaces
-   the earlier copper/brown gradient from the glassmorphism version). */
+/* Sizing/typography only — the raised gradient + soft shadow (and the
+   hover/active "pressed into the surface" swap) are Tailwind classes on
+   the button in index.html. */
 .login-submit {
     width: 100%;
     padding: 15px;
-    background: #1d4ed8;
-    color: #ffffff;
     font-weight: 800;
     font-size: 12px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     border: none;
-    border-radius: 12px;
     cursor: pointer;
-    transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
-    box-shadow: 0 8px 20px rgba(29,78,216,0.35);
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
 }
-.login-submit:hover { filter: brightness(1.08); }
-.login-submit:active { transform: translateY(1px); filter: brightness(1.03); }
+.login-submit:active { transform: translateY(1px); }
 .login-error {
-    background: #fef2f2;
-    color: #b91c1c;
+    background: rgba(220,38,38,0.14);
+    color: #fca5a5;
     font-size: 12px;
     font-weight: 700;
     padding: 10px 14px;
     border-radius: 8px;
     margin-bottom: 16px;
-    border: 1px solid #fecaca;
+    border: 1px solid rgba(248,113,113,0.3);
 }
 .login-footer-note {
     margin-top: 24px;
     padding-top: 18px;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid rgba(255,255,255,0.08);
     text-align: center;
     font-size: 10px;
     font-weight: 700;
-    color: #94a3b8;
+    color: #6b7280;
 }
-.login-footer-note span { color: #475569; }
+.login-footer-note span { color: #9ca3af; }
 /* ---------------- DASHBOARD SHELL ---------------- */
 .app-header {
     display: flex;
@@ -819,6 +827,8 @@ input, select, textarea {
     .login-visual {
         flex: none;
         min-height: 320px;
+    }
+    .login-visual-content {
         padding: 48px 28px;
         padding-top: calc(48px + env(safe-area-inset-top));
     }
@@ -831,7 +841,7 @@ input, select, textarea {
 }
 @media (max-width: 480px) {
     .login-card { padding: 34px 26px; }
-    .login-visual { padding: 40px 22px; }
+    .login-visual-content { padding: 40px 22px; }
     .login-visual h1 { font-size: clamp(22px, 7vw, 28px); }
     .login-visual p.tagline { font-size: 13.5px; }
 }
