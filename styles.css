@@ -222,6 +222,27 @@ img {
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     font-family: var(--font-body);
 }
+/* Chrome/Safari/Edge repaint a remembered/suggested username or password
+   field with their own pale-yellow autofill background, ignoring the
+   dark bg-[#0d1f16] Tailwind class on the input in index.html — that's
+   the "yellow input" bug. The only reliable fix is layering an inset
+   box-shadow large enough to fully cover the field in the theme's own
+   dark green, painted UNDER the browser's text (autofill fires this at
+   a higher priority than a plain background-color override). Also forces
+   the autofilled text/caret back to light grey so it stays readable, and
+   pushes the (very long) background-color transition Chrome applies to
+   autofilled fields out past any reasonable interaction so it never
+   visibly fades in. */
+.control-input:-webkit-autofill,
+.control-input:-webkit-autofill:hover,
+.control-input:-webkit-autofill:focus,
+.control-input:-webkit-autofill:active {
+    -webkit-text-fill-color: #f1f5f9;
+    caret-color: #f1f5f9;
+    -webkit-box-shadow: 0 0 0px 1000px #0d1f16 inset, inset 0 2px 4px rgba(0,0,0,0.65);
+    box-shadow: 0 0 0px 1000px #0d1f16 inset, inset 0 2px 4px rgba(0,0,0,0.65);
+    transition: background-color 600000s ease-in-out 0s, color 600000s ease-in-out 0s;
+}
 .login-field { margin-bottom: 20px; }
 /* Sizing/typography only — the raised gradient + soft shadow (and the
    hover/active "pressed into the surface" swap) are Tailwind classes on
