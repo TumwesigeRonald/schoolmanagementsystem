@@ -44,6 +44,14 @@ function payrollCanAccess() {
     return [ROLES.ADMIN, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
 }
 
+// Deleting a staff profile now cascade-removes their whole payroll
+// history (allowances/advances/payroll records) — see STAFF_DELETE_ROLES
+// in payroll.routes.js — so it's kept Administrator-only. HR/Director
+// still get the Edit action to set someone "inactive" instead.
+function payrollCanDeleteStaff() {
+    return currentUser.role === ROLES.ADMIN;
+}
+
 /* ---------------------------------------------------------
    ENTRY POINT — called from finance.js's loadFinanceActiveSection()
    when the "Payroll" section tab is active. Renders its own sub-tab
@@ -223,7 +231,7 @@ function renderPayrollStaffTable() {
                                 <div class="flex items-center justify-center gap-1">
                                     <button onclick="openStaffDetailModal(${s.id})" title="View" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-teal-600 flex items-center justify-center transition"><i class="fa-solid fa-eye text-[11px]"></i></button>
                                     <button onclick="openStaffFormModal(${s.id})" title="Edit" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 flex items-center justify-center transition"><i class="fa-solid fa-pen text-[11px]"></i></button>
-                                    <button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>
+                                    ${payrollCanDeleteStaff() ? `<button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>`;
@@ -348,7 +356,7 @@ async function submitStaffForm(id) {
 }
 
 async function deletePayrollStaff(id, name) {
-    if (!confirm(`Delete ${name}'s staff profile? This only works if they have no payroll history — otherwise, edit their status to "inactive" instead.`)) return;
+    if (!confirm(`Delete ${name}'s staff profile? This also permanently deletes ALL of their payroll history — every allowance, salary advance, and payroll record tied to them. This cannot be undone. If you just want them off future payroll runs, use Edit to set their status to "inactive" instead.`)) return;
     try {
         await PayrollAPI.deleteStaff(id);
         loadPayrollStaffList();
