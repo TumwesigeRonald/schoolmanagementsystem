@@ -3,7 +3,7 @@
    Theme: Professional Clean Light Design with Analytics Graph
    ========================================================= */
 /* ---------------------------------------------------------
-   0. MOBILE SIDEBAR TOGGLE LOGIC
+   0. SIDEBAR TOGGLE LOGIC (mobile overlay drawer + desktop collapse)
    --------------------------------------------------------- */
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -11,16 +11,32 @@ function toggleSidebar() {
     if (sidebar) sidebar.classList.toggle('-translate-x-full');
     if (backdrop) backdrop.classList.toggle('hidden');
 }
-// Auto-close the drawer after a menu/nav-link click (mobile only — the
-// docked desktop sidebar ignores this class via CSS, so this is a no-op
-// visually on desktop while still being harmless to call there).
+// Auto-close the panel after a menu/nav-link click. Now applies on every
+// screen size — on desktop the CSS above collapses the panel's width to 0
+// (see the min-width:768px block in styles.css) so .main-content reflows
+// to fill the space, giving a full-width view instead of a fixed 256px
+// gap sitting empty; on mobile it still slides off as an overlay, same
+// as before.
 function closeMobileSidebar() {
-    if (window.innerWidth >= 768) return;
     const sidebar = document.getElementById('sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
     if (sidebar) sidebar.classList.add('-translate-x-full');
     if (backdrop) backdrop.classList.add('hidden');
 }
+// Safety net: collapses the panel on ANY click inside it (any screen
+// size), on top of the specific nav/action buttons above that already
+// call closeMobileSidebar() individually (switchTab links, Load Term,
+// Back to current term, School Finance). This catches every other
+// clickable element in here too — including ones added to the sidebar
+// later without remembering to wire closeMobileSidebar() into their
+// onclick. The Year/Term <select>s are excluded: clicking one just to
+// open/change its value shouldn't collapse the panel out from under the
+// user mid-selection — that still happens once they commit via Load
+// Term's own explicit call.
+document.getElementById('sidebar')?.addEventListener('click', (e) => {
+    if (e.target.closest('select')) return;
+    closeMobileSidebar();
+});
 /* ---------------------------------------------------------
    1. GLOBAL STATE & DATA
    --------------------------------------------------------- */

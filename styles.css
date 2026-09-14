@@ -400,8 +400,24 @@ img {
     }
 }
 @media (min-width: 768px) {
-    /* Sidebar is always docked open on desktop, regardless of the toggle class. */
-    .sidebar { position: relative; transform: translateX(0) !important; }
+    /* Desktop collapse: instead of sliding as an overlay (mobile's
+       transform: translateX(-100%), which would just leave a blank
+       256px gap here since the sidebar stays `position: relative` — a
+       real flex item — on desktop), the panel collapses its own width
+       to 0 so .main-content (flex: 1 in the same .app-body flex row)
+       reflows to fill the freed space, giving a genuine full-width view
+       rather than something merely hidden behind an overlay. The
+       `transform: none` cancels the global slide rule above so width is
+       the only thing animating here. No backdrop is needed for the same
+       reason, so it stays hidden on desktop regardless of toggle state. */
+    .sidebar { position: relative; width: 256px; transition: width 0.3s ease; }
+    .sidebar.-translate-x-full {
+        width: 0;
+        min-width: 0;
+        transform: none;
+        overflow: hidden;
+        box-shadow: none;
+    }
     .sidebar-backdrop { display: none !important; }
 }
 .sidebar-brand {
