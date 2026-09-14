@@ -11,14 +11,11 @@ function toggleSidebar() {
     if (sidebar) sidebar.classList.toggle('-translate-x-full');
     if (backdrop) backdrop.classList.toggle('hidden');
 }
-// Auto-collapse the sidebar after a menu/nav-link click — on mobile this
-// closes the overlay drawer; on desktop (see the .sidebar.-translate-x-full
-// rule in styles.css under @media (min-width: 768px)) it collapses the
-// docked sidebar's width to 0 so .main-content reflows to fill the freed
-// space, giving each module more room instead of the sidebar staying
-// permanently open. Either way, the header's hamburger button (outside
-// #sidebar, so always reachable) calls toggleSidebar() to bring it back.
+// Auto-close the drawer after a menu/nav-link click (mobile only — the
+// docked desktop sidebar ignores this class via CSS, so this is a no-op
+// visually on desktop while still being harmless to call there).
 function closeMobileSidebar() {
+    if (window.innerWidth >= 768) return;
     const sidebar = document.getElementById('sidebar');
     const backdrop = document.getElementById('sidebar-backdrop');
     if (sidebar) sidebar.classList.add('-translate-x-full');
@@ -621,15 +618,6 @@ async function applySessionUser(user) {
     if (loginSection) loginSection.classList.add('hidden');
     if (dashboardSection) dashboardSection.classList.remove('hidden');
 
-    // The sidebar now genuinely collapses on desktop too (see
-    // closeMobileSidebar()/styles.css), so it's no longer force-opened by a
-    // CSS !important override — it starts however its class in index.html
-    // says. That markup defaults to closed (mobile-first), so on desktop
-    // widths explicitly open it here on the very first render; on mobile
-    // widths it's left closed, matching the existing drawer behavior.
-    const sidebarEl = document.getElementById('sidebar');
-    if (sidebarEl && window.innerWidth >= 768) sidebarEl.classList.remove('-translate-x-full');
-
     // Pull the current, authoritative state from the backend/Neon before
     // rendering anything below, so the dashboard reflects real data
     // instead of the hardcoded demo lists.
@@ -781,10 +769,19 @@ function renderSidebarNav() {
 // same font weight, tracking, color and interactivity, with only the
 // active item picking up the glowing left-border accent + fill.
 const SIDEBAR_NAV_BASE_CLASS = "flex items-center gap-3 w-full text-left py-2.5 px-4 rounded-lg text-xs font-extrabold uppercase tracking-wide border-l-[3px] transition-all duration-200 ease-in-out mb-1";
-const SIDEBAR_NAV_INACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} text-slate-200 border-transparent hover:bg-white/10 hover:text-white hover:border-teal-400/50 hover:translate-x-0.5`;
+// Dark Neumorphic inset: a soft near-black surface (#18191c, barely
+// distinct from the --navy-900 panel it sits on) with a dual inset
+// shadow — dark on the top-left, a faint highlight on the bottom-right —
+// so each resting nav row reads as pressed/carved into the sidebar
+// rather than a flat button. Hover lightens the surface slightly and
+// deepens the shadow a touch so the row still visibly responds to input
+// without breaking the carved look.
+const SIDEBAR_NAV_INACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-[#18191c] text-slate-200 border-transparent shadow-[inset_2px_2px_5px_rgba(0,0,0,0.7),inset_-2px_-2px_5px_rgba(255,255,255,0.03)] hover:bg-[#1e1f24] hover:text-white hover:border-teal-400/50 hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-2px_-2px_5px_rgba(255,255,255,0.05)] hover:translate-x-0.5`;
 // Glowing accent: a white left border + soft matching glow on a teal-700
 // (blue) fill, so the active item stays inside the 5-color palette (no
 // amber/gold) while keeping the same WCAG-AA text contrast as before.
+// Deliberately kept flat/raised (no inset shadow) so the selected item
+// still pops forward off the carved-in inactive rows around it.
 const SIDEBAR_NAV_ACTIVE_CLASS = `${SIDEBAR_NAV_BASE_CLASS} bg-teal-700 text-white border-l-white shadow-[0_0_14px_rgba(255,255,255,0.35)]`;
 // "School Finance" is intentionally NOT part of the tabs/RBAC routing array
 // above — it's a placeholder entry that never actually navigates, so it's
