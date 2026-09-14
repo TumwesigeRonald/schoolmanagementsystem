@@ -18,6 +18,7 @@ const remarksRoutes = require('./routes/remarks.routes');
 const aiRoutes = require('./routes/ai.routes');
 const financeAuthRoutes = require('./routes/finance-auth.routes');
 const financeRoutes = require('./routes/finance.routes');
+const studentFinanceRoutes = require('./routes/student-finance.routes');
 const payrollRoutes = require('./routes/payroll.routes');
 const partTimePayrollRoutes = require('./routes/part-time-payroll.routes');
 const adminStaffRoutes = require('./routes/admin-staff.routes');
@@ -95,6 +96,12 @@ app.use('/api/remarks', remarksRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/finance-auth', financeAuthRoutes);
 app.use('/api/finance', financeRoutes);
+// Separate from financeRoutes on purpose: this is a single Student-only,
+// self-scoped balance view that must NOT sit behind requireFinanceScope
+// (Students can never obtain that finance-scoped token — see the header
+// comment in routes/finance.routes.js). See student-finance.routes.js
+// for the full explanation.
+app.use('/api/student-finance', studentFinanceRoutes);
 // Mounted under /api/finance/* too — routes inside require BOTH the login
 // JWT and the Finance-scope token, same gate as financeRoutes, so nesting
 // it here doesn't loosen anything.
