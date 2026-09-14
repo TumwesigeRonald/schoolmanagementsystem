@@ -44,14 +44,6 @@ function payrollCanAccess() {
     return [ROLES.ADMIN, ROLES.HR, ROLES.DIRECTOR].includes(currentUser.role);
 }
 
-// Deleting a staff profile now cascade-removes their whole payroll
-// history (allowances/advances/payroll records) — see STAFF_DELETE_ROLES
-// in payroll.routes.js — so it's kept Administrator-only. HR/Director
-// still get the Edit action to set someone "inactive" instead.
-function payrollCanDeleteStaff() {
-    return currentUser.role === ROLES.ADMIN;
-}
-
 /* ---------------------------------------------------------
    ENTRY POINT — called from finance.js's loadFinanceActiveSection()
    when the "Payroll" section tab is active. Renders its own sub-tab
@@ -168,7 +160,7 @@ function renderPayrollStaffToolbar(body, status, roleType) {
             </div>
             <div class="ml-auto flex items-center gap-2.5">
                 <button onclick="openBulkSalaryModal()" class="inline-flex items-center gap-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition"><i class="fa-solid fa-arrows-rotate text-[10px]"></i>Bulk Salary Update</button>
-                <button onclick="openStaffFormModal()" class="inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus text-[10px]"></i>Add Staff</button>
+                <button onclick="openStaffFormModal()" class="inline-flex items-center gap-2 btn-neu-light text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus text-[10px]"></i>Add Staff</button>
             </div>
         </div>
         <div id="payroll-staff-table-wrap"></div>
@@ -193,7 +185,7 @@ function renderPayrollStaffTable() {
                 </div>
                 <p class="text-sm font-bold text-slate-700">No staff profiles found.</p>
                 <p class="text-xs text-slate-400 mt-1 max-w-xs">Try adjusting your filters, or add a new staff member to get started.</p>
-                <button onclick="openStaffFormModal()" class="mt-5 inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus text-[10px]"></i>Add Staff</button>
+                <button onclick="openStaffFormModal()" class="mt-5 inline-flex items-center gap-2 btn-neu-light text-[11px] font-extrabold uppercase tracking-wide px-4 py-2.5 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus text-[10px]"></i>Add Staff</button>
             </div>`;
         return;
     }
@@ -231,7 +223,7 @@ function renderPayrollStaffTable() {
                                 <div class="flex items-center justify-center gap-1">
                                     <button onclick="openStaffDetailModal(${s.id})" title="View" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-teal-600 flex items-center justify-center transition"><i class="fa-solid fa-eye text-[11px]"></i></button>
                                     <button onclick="openStaffFormModal(${s.id})" title="Edit" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 flex items-center justify-center transition"><i class="fa-solid fa-pen text-[11px]"></i></button>
-                                    ${payrollCanDeleteStaff() ? `<button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+                                    <button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>
                                 </div>
                             </td>
                         </tr>`;
@@ -314,7 +306,7 @@ function openStaffFormModal(id) {
                     <p id="payroll-staff-form-error" class="text-rose-600 text-xs font-bold mt-2 hidden"></p>
                     <div class="flex justify-end gap-2 mt-5">
                         <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
-                        <button id="payroll-staff-submit-btn" onclick="submitStaffForm(${staff ? staff.id : 'null'})" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">${staff ? 'Save' : 'Add'}</button>
+                        <button id="payroll-staff-submit-btn" onclick="submitStaffForm(${staff ? staff.id : 'null'})" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">${staff ? 'Save' : 'Add'}</button>
                     </div>
                 </div>
             </div>
@@ -356,7 +348,7 @@ async function submitStaffForm(id) {
 }
 
 async function deletePayrollStaff(id, name) {
-    if (!confirm(`Delete ${name}'s staff profile? This also permanently deletes ALL of their payroll history — every allowance, salary advance, and payroll record tied to them. This cannot be undone. If you just want them off future payroll runs, use Edit to set their status to "inactive" instead.`)) return;
+    if (!confirm(`Delete ${name}'s staff profile? This only works if they have no payroll history — otherwise, edit their status to "inactive" instead.`)) return;
     try {
         await PayrollAPI.deleteStaff(id);
         loadPayrollStaffList();
@@ -423,7 +415,7 @@ function renderStaffDetailModal(staff) {
                                 <option value="recurring">Recurring</option>
                                 <option value="one-time">One-time</option>
                             </select>
-                            <button onclick="addPayrollAllowance(${staff.id})" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-2 px-3 rounded-lg transition">Add</button>
+                            <button onclick="addPayrollAllowance(${staff.id})" class="btn-neu-light text-[11px] font-extrabold uppercase py-2 px-3 rounded-lg transition">Add</button>
                         </div>
                         <p id="payroll-allowance-error" class="text-rose-600 text-[11px] font-bold mt-1.5 hidden"></p>
                     </div>
@@ -454,7 +446,7 @@ function renderStaffDetailModal(staff) {
                         <div class="flex flex-wrap items-end gap-2">
                             <input type="number" min="1" id="payroll-advance-amount" placeholder="Requested amount" class="w-32 p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold">
                             <input type="number" min="1" id="payroll-advance-repayment" placeholder="Repay / month" class="w-32 p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold">
-                            <button onclick="issuePayrollAdvance(${staff.id})" class="bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold uppercase py-2 px-3 rounded-lg transition">Issue Advance</button>
+                            <button onclick="issuePayrollAdvance(${staff.id})" class="btn-neu-light-accent text-[11px] font-extrabold uppercase py-2 px-3 rounded-lg transition">Issue Advance</button>
                         </div>
                         <p id="payroll-advance-error" class="text-rose-600 text-[11px] font-bold mt-1.5 hidden"></p>
                     </div>
@@ -573,7 +565,7 @@ function loadPayrollRunsSection() {
                 <label class="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Year</label>
                 <input type="number" id="payroll-run-year" value="${year}" onchange="loadPayrollRecords()" class="w-24 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
             </div>
-            <button onclick="generatePayrollRun()" class="ml-auto bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-gears mr-1.5"></i>Generate Payroll</button>
+            <button onclick="generatePayrollRun()" class="ml-auto btn-neu-light text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-gears mr-1.5"></i>Generate Payroll</button>
         </div>
         <div id="payroll-records-body"></div>
     `;
@@ -619,7 +611,7 @@ async function loadPayrollRecords() {
                                     : `<span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-50 text-amber-600">Pending</span>`}</td>
                                 <td class="p-3 text-right">${r.status === 'paid'
                                     ? `<span class="text-slate-400 text-[10px]">by ${escapeHTML(r.paidBy || '')}</span>`
-                                    : `<button onclick="markPayrollPaid(${r.id}, '${escapeHTML(r.staffName).replace(/'/g, "\\'")}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Mark Paid</button>`}</td>
+                                    : `<button onclick="markPayrollPaid(${r.id}, '${escapeHTML(r.staffName).replace(/'/g, "\\'")}')" class="btn-neu-light text-[10px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Mark Paid</button>`}</td>
                             </tr>
                         `).join('')}
                     </tbody>
@@ -720,7 +712,7 @@ function openBulkSalaryModal() {
                 </div>
                 <div class="p-4 border-t border-slate-100 flex justify-end gap-2">
                     <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
-                    <button id="bulk-salary-submit-btn" onclick="submitBulkSalaryUpdate()" class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Apply Update</button>
+                    <button id="bulk-salary-submit-btn" onclick="submitBulkSalaryUpdate()" class="btn-neu-light-accent text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Apply Update</button>
                 </div>
             </div>
         </div>

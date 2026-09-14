@@ -664,6 +664,60 @@ button.btn-neu-raised:active {
 .btn-accent:hover { background: #3f3f46; }
 .btn-danger-sm { background: var(--rose-100); color: var(--rose-700); font-size: 10px; padding: 6px 12px; border: 1px solid rgba(220,38,38,0.25); }
 .btn-danger-sm:hover { background: #fecaca; }
+/* ---------------------------------------------------------------------
+   LIGHT NEUMORPHIC "RAISED" BUTTON — companion to .btn-neu-raised (dark,
+   used on the sidebar) for the app's white/light panels: Finance,
+   Payroll, Students, Scores, Report Cards, Resources, Staff, etc. Same
+   mechanic — extruded at rest, inset on press for tactile feedback —
+   tuned for a light base since a near-black button would clash on a
+   white .panel-card. These replace what used to be solid Tailwind fills
+   (bg-teal-600/blue-600/amber-500/emerald-600 + text-white, or the pale
+   bg-rose-50 delete-button recipe) hardcoded inline across finance.js,
+   payroll.js, script.js, staff-management.js, and class-summaries.js.
+   Each variant keeps its original color as the TEXT/icon instead of a
+   solid fill, so Save/Record/Generate (blue), Print/Export (amber),
+   confirm (emerald), and Delete (rose, via its own existing text-rose-*
+   Tailwind classes) all stay visually distinguishable on the same
+   neutral raised surface. */
+.btn-neu-light,
+.btn-neu-light-accent,
+.btn-neu-light-success,
+.btn-neu-light-danger {
+    box-shadow: 4px 4px 10px rgba(0,0,0,0.12), -4px -4px 10px rgba(255,255,255,0.9);
+    transition: box-shadow 0.12s ease, background-color 0.12s ease, color 0.12s ease, transform 0.05s ease;
+}
+button.btn-neu-light,
+button.btn-neu-light-accent,
+button.btn-neu-light-success,
+button.btn-neu-light-danger {
+    cursor: pointer;
+}
+button.btn-neu-light:active,
+button.btn-neu-light-accent:active,
+button.btn-neu-light-success:active,
+button.btn-neu-light-danger:active {
+    box-shadow: inset 3px 3px 6px rgba(0,0,0,0.16), inset -3px -3px 6px rgba(255,255,255,0.9);
+    transform: translateY(1px);
+}
+.btn-neu-light { background: #eef1f5; color: #2563eb; }
+.btn-neu-light:hover { background: #e5e9ee; color: #1d4ed8; }
+.btn-neu-light-accent { background: #f5f1e8; color: #b45309; }
+.btn-neu-light-accent:hover { background: #ede6d6; color: #92400e; }
+.btn-neu-light-success { background: #eaf3ee; color: #047857; }
+.btn-neu-light-success:hover { background: #dfeee5; color: #036049; }
+/* No color set here on purpose — these buttons already carry their own
+   text-rose-600 hover:text-rose-700 Tailwind classes inline, so the red
+   text keeps working untouched; this class only supplies the neumorphic
+   surface/shadow. Smaller shadow values since these are compact inline
+   row actions (Delete, Clear Logs), not full-width panel buttons. */
+.btn-neu-light-danger {
+    background: #f6ecec;
+    box-shadow: 3px 3px 7px rgba(0,0,0,0.1), -3px -3px 7px rgba(255,255,255,0.85);
+}
+.btn-neu-light-danger:hover { background: #efe0e0; }
+button.btn-neu-light-danger:active {
+    box-shadow: inset 2px 2px 5px rgba(0,0,0,0.14), inset -2px -2px 5px rgba(255,255,255,0.85);
+}
 .form-panel { background: var(--teal-50); border: 1px solid var(--teal-100); border-radius: 14px; padding: 18px; margin-bottom: 22px; }
 .form-panel-title { margin: 0 0 12px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #1e40af; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }

@@ -895,7 +895,7 @@ async function showFinancePasswordModal() {
                         <div class="w-14 h-14 mx-auto rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-triangle-exclamation"></i></div>
                         <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Couldn't Reach Server</h3>
                         <p class="text-xs font-semibold text-slate-500 mt-2 leading-relaxed">${escapeHTML(status.message)}</p>
-                        <button onclick="closeModal()" class="mt-5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Close</button>
+                        <button onclick="closeModal()" class="mt-5 btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Close</button>
                     </div>
                 </div>
             </div>
@@ -934,7 +934,7 @@ function renderFinancePasswordForm(mode) {
                     <p id="finance-form-error" class="text-rose-600 text-xs font-bold mt-2 hidden"></p>
                     <div class="flex justify-end gap-2 mt-5">
                         <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
-                        <button id="finance-submit-btn" onclick="submitFinancePasswordForm('${mode}')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">
+                        <button id="finance-submit-btn" onclick="submitFinancePasswordForm('${mode}')" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">
                             ${isCreate ? 'Set Password' : 'Unlock'}
                         </button>
                     </div>
@@ -1018,7 +1018,7 @@ function openUnderConstructionNotice(sectionName) {
                     <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-2xl mb-4"><i class="fa-solid fa-person-digging"></i></div>
                     <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">${escapeHTML(sectionName)}</h3>
                     <p class="text-xs font-semibold text-slate-500 mt-2 leading-relaxed">This section is currently under construction by the Tech Engineer and will be available soon. Thank you for your patience.</p>
-                    <button onclick="closeModal()" class="mt-5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Got It</button>
+                    <button onclick="closeModal()" class="mt-5 btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Got It</button>
                 </div>
             </div>
         </div>
@@ -1323,7 +1323,7 @@ function renderDashboardModule() {
                     <button onclick="openBulkImportModal()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
                         <i class="fa-solid fa-file-csv mr-2"></i>Bulk Import (CSV)
                     </button>
-                    <button onclick="goToAddStudentForm()" class="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                    <button onclick="goToAddStudentForm()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
                         <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
                     </button>
                 </div>` : `
@@ -1390,7 +1390,7 @@ function renderDashboardModule() {
                         <p class="text-xs font-semibold text-slate-500 mt-0.5">Staff announcements and school bulletin.</p>
                     </div>
                     ${canManageNotices ? `
-                    <button onclick="toggleNoticeForm()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                    <button onclick="toggleNoticeForm()" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
                         <i class="fa-solid fa-plus mr-2"></i>Post Notice
                     </button>` : ''}
                 </div>
@@ -1407,7 +1407,7 @@ function renderDashboardModule() {
                         </div>
                         <div class="flex justify-end gap-2">
                             <button type="button" onclick="toggleNoticeForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
-                            <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Post</button>
+                            <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Post</button>
                         </div>
                     </form>
                 </div>` : ''}
@@ -1435,7 +1435,7 @@ function renderNoticeBoardList() {
                 <p class="text-xs text-slate-600 font-medium mt-1.5 leading-relaxed">${escapeHTML(n.message)}</p>
                 <p class="text-[10px] font-extrabold text-teal-700 uppercase tracking-wider mt-2">&mdash; ${escapeHTML(n.author)}</p>
             </div>
-            ${canManageNotices ? `<button onclick="deleteNotice(${n.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors flex-shrink-0"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
+            ${canManageNotices ? `<button onclick="deleteNotice(${n.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider btn-neu-light-danger px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
         </div>
     `).join('');
 }
@@ -1566,7 +1566,7 @@ function renderStudentsModule() {
                     <button onclick="openBulkImportModal()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
                         <i class="fa-solid fa-file-csv mr-2"></i>Bulk Import (CSV)
                     </button>
-                    <button onclick="toggleStudentForm()" class="w-full sm:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                    <button onclick="toggleStudentForm()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
                         <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
                     </button>
                 </div>` : `
@@ -1604,7 +1604,7 @@ function renderStudentsModule() {
                     </div>
                     <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
                         <button type="button" onclick="toggleStudentForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
-                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Student</button>
+                        <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Student</button>
                     </div>
                 </form>
             </div>` : ''}
@@ -1693,7 +1693,7 @@ async function loadStudentData() {
                 <td class="p-4 text-center space-x-2 whitespace-nowrap">
                     <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
                     ${canManage ? `<button onclick="openEditStudentModal('${student.id}')" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>` : ''}
-                    ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
+                    ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider btn-neu-light-danger px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
                 </td>
             </tr>
         `).join('');
@@ -1978,7 +1978,7 @@ function buildModalSaveSection(student) {
     return `
         <div class="flex items-center justify-end gap-3 pt-1">
             <span id="modal-save-status" class="text-[11px] font-bold text-slate-400"></span>
-            <button type="button" onclick="saveModalRemarksNow('${student.id}', this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-sm transition-colors">
+            <button type="button" onclick="saveModalRemarksNow('${student.id}', this)" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-sm transition-colors">
                 <i class="fa-solid fa-floppy-disk mr-1.5"></i>Save
             </button>
         </div>`;
@@ -2315,7 +2315,7 @@ function openEditStudentModal(studentId) {
                     </div>
                     <div class="flex justify-end space-x-2 pt-2">
                         <button type="button" onclick="closeModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
-                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
+                        <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
                     </div>
                 </form>
             </div>
@@ -2383,7 +2383,7 @@ function renderScoresModule() {
                             <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Subject</label>
                             <select id="score-subject-select" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700"></select>
                         </div>
-                        <button onclick="loadScoreSheetData()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl transition shadow-xs"><i class="fa-solid fa-download mr-1.5"></i>Load Subject</button>
+                        <button onclick="loadScoreSheetData()" class="btn-neu-light text-xs font-extrabold uppercase py-2.5 px-3 rounded-xl transition shadow-xs"><i class="fa-solid fa-download mr-1.5"></i>Load Subject</button>
                     </div>
                     <div>
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Search Students</label>
@@ -2393,7 +2393,7 @@ function renderScoresModule() {
                         </div>
                     </div>
                 </div>
-                <button onclick="saveMarksEntry(this)" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
+                <button onclick="saveMarksEntry(this)" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry</button>
             </div>
             <div id="score-table-empty-state" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">
                 Select a class and subject, then click "Load Subject" to view the marks entry table.
@@ -2403,7 +2403,7 @@ function renderScoresModule() {
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Teacher's Initial (applies to whole class/subject)</label>
                     <input type="text" id="bulk-initials-input" maxlength="4" placeholder="e.g. JN" class="w-32 p-2.5 text-center bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold uppercase text-slate-800">
                 </div>
-                <button onclick="applyBulkInitials()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-signature mr-1.5"></i>Apply to All</button>
+                <button onclick="applyBulkInitials()" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-signature mr-1.5"></i>Apply to All</button>
                 <p class="text-[11px] text-slate-400 w-full md:w-auto md:ml-2">Fills in "TR's Initial" for every student already showing marks for this class &amp; subject. You can still override any single row below.</p>
             </div>
             <div id="score-table-wrapper" class="overflow-auto max-h-[65vh] bg-white border border-slate-200 rounded-2xl shadow-xs hidden">
@@ -3031,7 +3031,7 @@ function renderReportsModule() {
                     </div>
                     <div class="flex gap-2 ml-auto">
                         <button onclick="toggleGradingLegendPreview()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-table-list mr-1.5"></i>Grading Scale</button>
-                        <button onclick="generateReportCards()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-circle-plus mr-1.5"></i>Generate Report Cards</button>
+                        <button onclick="generateReportCards()" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-circle-plus mr-1.5"></i>Generate Report Cards</button>
                         ${canPrintWholeClass ? `<button onclick="printReportCards()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF (Whole Class)</button>` : ''}
                     </div>
                 </div>
@@ -4306,7 +4306,7 @@ function renderAttendanceModule() {
                 </div>
                 <div class="flex gap-2">
                     <button onclick="markAllPresent()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-extrabold uppercase py-3 px-5 rounded-xl transition"><i class="fa-solid fa-check-double mr-1.5"></i>Mark All Present</button>
-                    <button onclick="saveAttendanceRegistry()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-3 px-5 rounded-xl shadow-xs transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Attendance</button>
+                    <button onclick="saveAttendanceRegistry()" class="btn-neu-light text-xs font-extrabold uppercase py-3 px-5 rounded-xl shadow-xs transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Attendance</button>
                 </div>
             </div>
             <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
@@ -4441,7 +4441,7 @@ function renderResourcesModule() {
                     </div>
                 </div>
                 ${canUpload ? `
-                <button onclick="toggleResourceForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                <button onclick="toggleResourceForm()" class="w-full md:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
                     <i class="fa-solid fa-upload mr-2"></i>Upload Resource
                 </button>` : ''}
             </div>
@@ -4475,7 +4475,7 @@ function renderResourcesModule() {
                     <div id="resource-form-error" class="hidden sm:col-span-2 md:col-span-4 text-xs font-bold text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></div>
                     <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
                         <button type="button" onclick="toggleResourceForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
-                        <button type="submit" id="resource-submit-btn" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-upload mr-1.5"></i>Upload</button>
+                        <button type="submit" id="resource-submit-btn" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-upload mr-1.5"></i>Upload</button>
                     </div>
                 </form>
             </div>` : ''}
@@ -4647,10 +4647,10 @@ function buildResourceCard(r) {
                 Uploaded by ${escapeHTML(r.uploadedBy)} &middot; ${formatReportDate(uploadedDate)}
             </div>
             <div class="flex gap-2 pt-1">
-                <a href="${r.fileUrl}" download="${escapeHTML(r.fileName)}" target="_blank" rel="noopener" class="flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
+                <a href="${r.fileUrl}" download="${escapeHTML(r.fileName)}" target="_blank" rel="noopener" class="flex-1 text-center btn-neu-light text-[11px] font-extrabold uppercase tracking-wider py-2 rounded-lg transition">
                     <i class="fa-solid fa-download mr-1"></i>Download
                 </a>
-                ${canDelete ? `<button onclick="deleteResource(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-2 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
+                ${canDelete ? `<button onclick="deleteResource(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider btn-neu-light-danger px-3 py-2 rounded-lg transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
             </div>
         </div>
     `;
@@ -4664,7 +4664,7 @@ function renderTeachersModule() {
             <div class="space-y-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                     <p class="text-xs font-semibold text-slate-500">Add, remove, or reset login credentials for teacher accounts.</p>
-                    <button onclick="toggleTeacherForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                    <button onclick="toggleTeacherForm()" class="w-full md:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
                         <i class="fa-solid fa-chalkboard-user mr-2"></i>Add New Teacher
                     </button>
                 </div>
@@ -4693,7 +4693,7 @@ function renderTeachersModule() {
                         </div>
                         <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
                             <button type="button" onclick="toggleTeacherForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
-                            <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Teacher</button>
+                            <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Teacher</button>
                         </div>
                     </form>
                 </div>
@@ -4750,7 +4750,7 @@ function renderTeachersModule() {
                 </div>
                 <div id="teacher-profile-msg" class="hidden text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2"></div>
                 <div class="flex justify-end pt-2">
-                    <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
+                    <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
                 </div>
             </form>
         </div>
@@ -4774,7 +4774,7 @@ function loadTeacherData() {
                 <td class="p-4 text-center space-x-2">
                     <button onclick="openEditTeacherModal(${index})" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
                     <button onclick="resetTeacherPassword(${index})" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>
-                    <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
+                    <button onclick="deleteTeacher(${index})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider btn-neu-light-danger px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
                 </td>
             </tr>
         `).join('');
@@ -4878,7 +4878,7 @@ function openEditTeacherModal(index) {
                     </div>
                     <div class="flex justify-end space-x-2 pt-2">
                         <button type="button" onclick="closeModal()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
-                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
+                        <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Changes</button>
                     </div>
                 </form>
             </div>
@@ -5055,7 +5055,7 @@ function renderActivityLogModule() {
                 <p class="text-xs font-semibold text-slate-500">A record of every successful login to this system, most recent first.</p>
                 <div class="w-full md:w-auto flex flex-col sm:flex-row gap-2">
                     <button onclick="loadActivityLogData()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-rotate-right mr-1.5"></i>Refresh</button>
-                    <button onclick="clearActivityLog()" class="w-full sm:w-auto bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl border border-rose-200 transition"><i class="fa-solid fa-trash mr-1.5"></i>Clear Logs</button>
+                    <button onclick="clearActivityLog()" class="w-full sm:w-auto btn-neu-light-danger text-rose-600 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-trash mr-1.5"></i>Clear Logs</button>
                 </div>
             </div>
             <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">

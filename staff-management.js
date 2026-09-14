@@ -55,7 +55,7 @@ function renderStaffManagementModule() {
         <div class="space-y-6">
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                 <p class="text-xs font-semibold text-slate-500">Create and manage login accounts for Bursar, Human Resource, and Director staff. These accounts still need their own Finance password the first time they open School Finance.</p>
-                <button onclick="toggleStaffForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                <button onclick="toggleStaffForm()" class="w-full md:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
                     <i class="fa-solid fa-user-plus mr-2"></i>Add New Staff Account
                 </button>
             </div>
@@ -82,7 +82,7 @@ function renderStaffManagementModule() {
                     </div>
                     <div class="sm:col-span-2 md:col-span-4 flex justify-end space-x-2 pt-2">
                         <button type="button" onclick="toggleStaffForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold uppercase py-2 px-4 rounded-xl"><i class="fa-solid fa-xmark mr-1.5"></i>Cancel</button>
-                        <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Account</button>
+                        <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition"><i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Account</button>
                     </div>
                 </form>
             </div>
@@ -145,7 +145,7 @@ function renderStaffTableRows(staff) {
             <td class="p-4 text-center space-x-2">
                 <button onclick="openEditStaffModal('${escapeHTML(s.username)}')" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>
                 <button onclick="resetStaffPassword('${escapeHTML(s.username)}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-key mr-1"></i>Reset Password</button>
-                <button onclick="deleteStaffAccount('${escapeHTML(s.username)}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
+                <button onclick="deleteStaffAccount('${escapeHTML(s.username)}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider btn-neu-light-danger px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>
             </td>
         </tr>
     `).join('');
@@ -252,7 +252,7 @@ function openEditStaffModal(username) {
                         </div>
                         <div class="flex justify-end gap-2 pt-3">
                             <button type="button" onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
-                            <button type="submit" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Save Changes</button>
+                            <button type="submit" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Save Changes</button>
                         </div>
                     </form>
                 </div>

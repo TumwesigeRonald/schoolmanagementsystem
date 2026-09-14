@@ -118,11 +118,11 @@ function renderClassSummariesModule() {
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Year</label>
                         <input type="number" id="css-year-input" value="${t.year}" class="w-24 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
                     </div>
-                    <button onclick="loadClassSummaryData()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-magnifying-glass mr-1.5"></i>View Mark Sheet</button>
+                    <button onclick="loadClassSummaryData()" class="btn-neu-light text-xs font-extrabold uppercase py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-magnifying-glass mr-1.5"></i>View Mark Sheet</button>
                 </div>
                 <div class="flex gap-2">
                     <button onclick="printClassSummary()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print</button>
-                    <button onclick="exportClassSummaryPDF()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-pdf mr-1.5"></i>Export to PDF</button>
+                    <button onclick="exportClassSummaryPDF()" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-pdf mr-1.5"></i>Export to PDF</button>
                 </div>
             </div>
             <p class="text-[11px] font-semibold text-slate-400 -mt-2">General Mark Sheet &mdash; every subject for the selected class and level, side-by-side. O-Level shows AO1, AO2, E.O.T and Final Score per subject; A-Level shows P1, P2, Avg and Points per subject (subsidiary subjects flagged). Marks are pulled live from the current gradebook (there is no separate historical record per term yet) &mdash; Term/Year here label the printed sheet, the same way Report Cards do. Printing / exporting uses Landscape orientation to fit every subject.</p>

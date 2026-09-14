@@ -608,7 +608,7 @@ async function loadFinanceFeeStructure() {
                                     ? `<input type="number" min="0" id="fin-fee-${c}" value="${byClass[c] != null ? byClass[c] : ''}" placeholder="0" class="w-32 p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-right">`
                                     : formatUGX(byClass[c] || 0)}
                             </td>
-                            ${canEdit ? `<td class="fin-actions"><span class="inline-flex items-center gap-2"><button onclick="saveFinanceFeeAmount('${c}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Save</button> <span id="fin-fee-saved-${c}" class="text-emerald-600 text-[11px] font-bold hidden"><i class="fa-solid fa-check"></i></span></span></td>` : ''}
+                            ${canEdit ? `<td class="fin-actions"><span class="inline-flex items-center gap-2"><button onclick="saveFinanceFeeAmount('${c}')" class="btn-neu-light text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Save</button> <span id="fin-fee-saved-${c}" class="text-emerald-600 text-[11px] font-bold hidden"><i class="fa-solid fa-check"></i></span></span></td>` : ''}
                         </tr>
                     `).join('')}
                 </tbody>
@@ -736,7 +736,7 @@ function applyFinancePaymentsFilter() {
                             <td class="fin-actions">
                                 <span class="inline-flex items-center gap-3 justify-end">
                                     <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase">History</button>
-                                    ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                                    ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="btn-neu-light text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
                                 </span>
                             </td>
                         </tr>
@@ -769,7 +769,7 @@ function openFeeOverrideModal(studentId, studentName, studentClass, currentBille
                         ${hasCustomFee ? `<button onclick="resetFeeOverride('${studentId}', '${escapeHTML(studentName).replace(/'/g, "\\'")}')" class="text-[11px] font-extrabold uppercase tracking-wider text-rose-500 hover:text-rose-700">Reset to Class Default</button>` : '<span></span>'}
                         <div class="flex gap-2">
                             <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
-                            <button id="fin-override-submit-btn" onclick="submitFeeOverride('${studentId}')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Save</button>
+                            <button id="fin-override-submit-btn" onclick="submitFeeOverride('${studentId}')" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Save</button>
                         </div>
                     </div>
                 </div>
@@ -837,7 +837,7 @@ function openRecordFinancePaymentModal(studentId, studentName, studentClass) {
                     <p id="fin-pay-error" class="text-rose-600 text-xs font-bold mt-2 hidden"></p>
                     <div class="flex justify-end gap-2 mt-5">
                         <button onclick="closeModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Cancel</button>
-                        <button id="fin-pay-submit-btn" onclick="submitFinancePayment('${studentId}', '${escapeHTML(studentName).replace(/'/g, "\\'")}', '${escapeHTML(studentClass || '').replace(/'/g, "\\'")}')" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Record</button>
+                        <button id="fin-pay-submit-btn" onclick="submitFinancePayment('${studentId}', '${escapeHTML(studentName).replace(/'/g, "\\'")}', '${escapeHTML(studentClass || '').replace(/'/g, "\\'")}')" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs">Record</button>
                     </div>
                 </div>
             </div>
@@ -888,7 +888,7 @@ function showFinancePaymentSuccess(paymentId, studentName) {
                     <p class="text-xs font-semibold text-slate-500 mt-1 mb-5">${escapeHTML(studentName)}</p>
                     <div class="flex justify-center gap-2">
                         <button onclick="finishFinancePaymentModal()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2.5 px-4 rounded-xl transition">Done</button>
-                        <button onclick="printFinanceReceiptById(${paymentId}); finishFinancePaymentModal();" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print Receipt</button>
+                        <button onclick="printFinanceReceiptById(${paymentId}); finishFinancePaymentModal();" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-6 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print Receipt</button>
                     </div>
                 </div>
             </div>
@@ -996,7 +996,7 @@ async function loadFinanceSummary() {
 
     body.innerHTML = `
         <div class="flex justify-end gap-2 mb-3">
-            <button id="fin-summary-export-btn" onclick="exportFinanceSummaryPDF()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-pdf mr-1.5"></i>Export PDF</button>
+            <button id="fin-summary-export-btn" onclick="exportFinanceSummaryPDF()" class="btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-file-pdf mr-1.5"></i>Export PDF</button>
             <button onclick="printFinanceSummary()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print</button>
         </div>
 
@@ -1303,7 +1303,7 @@ async function loadFinanceLedger(type) {
                     <label class="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Note (optional)</label>
                     <input type="text" id="fin-ledger-note" placeholder="Short description&hellip;" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
                 </div>
-                <button onclick="submitFinanceLedgerEntry('${type}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition">Add</button>
+                <button onclick="submitFinanceLedgerEntry('${type}')" class="btn-neu-light text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition">Add</button>
             </div>
             <p id="fin-ledger-error" class="text-rose-500 text-[11px] font-semibold mt-2 hidden"></p>
         </div>
@@ -1420,7 +1420,7 @@ async function loadFinanceDefaulters() {
                             <td class="fin-actions">
                                 <span class="inline-flex items-center gap-3 justify-end">
                                     <button onclick="openFinancePaymentHistory('${s.id}', '${nameEsc}')" class="text-slate-500 hover:text-teal-600 text-[11px] font-extrabold uppercase">History</button>
-                                    ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
+                                    ${financeCanEdit() ? `<button onclick="openRecordFinancePaymentModal('${s.id}', '${nameEsc}', '${classEsc}')" class="btn-neu-light text-[11px] font-extrabold uppercase py-1.5 px-3 rounded-lg transition">Record Payment</button>` : ''}
                                 </span>
                             </td>
                         </tr>
@@ -1816,7 +1816,7 @@ async function loadFinanceAdvanceDetail() {
             <div class="flex flex-wrap gap-2 items-start">
                 <input type="number" min="1" id="fin-advance-amount" placeholder="Requested amount" class="w-36 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
                 <input type="number" min="1" id="fin-advance-repayment" placeholder="Repay / month" class="w-36 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold">
-                <button onclick="issueFinanceSalaryAdvance(${staff.id})" class="bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition">Issue Advance</button>
+                <button onclick="issueFinanceSalaryAdvance(${staff.id})" class="btn-neu-light-accent text-[11px] font-extrabold uppercase py-2.5 px-4 rounded-xl transition">Issue Advance</button>
             </div>
             <p id="fin-advance-error" class="text-rose-600 text-[11px] font-bold mt-1.5 hidden"></p>
         </div>
@@ -1876,7 +1876,7 @@ function loadFinancePartTimePayrollSection() {
                 <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Week Starting (Monday)</label>
                 <input type="date" id="fin-ptp-week" value="${financePartTimePayrollWeek}" onchange="changeFinancePartTimePayrollWeek(this.value)" class="p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
             </div>
-            ${canEdit ? `<button onclick="toggleFinancePartTimePayrollForm()" class="w-full md:w-auto bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus mr-2"></i>Record Payment</button>` : ''}
+            ${canEdit ? `<button onclick="toggleFinancePartTimePayrollForm()" class="w-full md:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-plus mr-2"></i>Record Payment</button>` : ''}
         </div>
 
         ${canEdit ? `
@@ -1894,7 +1894,7 @@ function loadFinancePartTimePayrollSection() {
             <p id="fin-ptp-form-error" class="text-rose-600 text-[11px] font-bold mt-1.5 hidden"></p>
             <div class="flex justify-end gap-2 mt-3">
                 <button type="button" onclick="toggleFinancePartTimePayrollForm()" class="text-xs font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-700 py-2 px-4 rounded-xl">Cancel</button>
-                <button onclick="submitFinancePartTimePayrollEntry()" class="bg-teal-600 hover:bg-teal-700 text-white text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Save Entry</button>
+                <button onclick="submitFinancePartTimePayrollEntry()" class="btn-neu-light text-xs font-extrabold uppercase py-2 px-4 rounded-xl transition">Save Entry</button>
             </div>
         </div>` : ''}
 
@@ -1945,7 +1945,7 @@ async function loadFinancePartTimePayrollRecords() {
             ${canEdit ? `
             <td class="p-4 text-center space-x-2">
                 ${r.status === 'pending' ? `<button onclick="markFinancePartTimePayrollPaid(${r.id})" class="text-emerald-700 hover:text-emerald-800 text-[11px] font-extrabold uppercase tracking-wider bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors"><i class="fa-solid fa-check mr-1"></i>Mark Paid</button>
-                <button onclick="deleteFinancePartTimePayrollRecord(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : '&mdash;'}
+                <button onclick="deleteFinancePartTimePayrollRecord(${r.id})" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider btn-neu-light-danger px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : '&mdash;'}
             </td>` : ''}
         </tr>
     `).join('');
