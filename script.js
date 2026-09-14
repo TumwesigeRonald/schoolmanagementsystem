@@ -1320,10 +1320,10 @@ function renderDashboardModule() {
                 </div>
                 ${canManageStudents ? `
                 <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                    <button onclick="openBulkImportModal()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
+                    <button onclick="openBulkImportModal()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
                         <i class="fa-solid fa-file-csv mr-2"></i>Bulk Import (CSV)
                     </button>
-                    <button onclick="goToAddStudentForm()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                    <button onclick="goToAddStudentForm()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
                         <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
                     </button>
                 </div>` : `
@@ -1563,10 +1563,10 @@ function renderStudentsModule() {
                 </div>
                 ${canManage ? `
                 <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-                    <button onclick="openBulkImportModal()" class="w-full sm:w-auto bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
+                    <button onclick="openBulkImportModal()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
                         <i class="fa-solid fa-file-csv mr-2"></i>Bulk Import (CSV)
                     </button>
-                    <button onclick="toggleStudentForm()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs">
+                    <button onclick="toggleStudentForm()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
                         <i class="fa-solid fa-user-plus mr-2"></i>Add New Student
                     </button>
                 </div>` : `
