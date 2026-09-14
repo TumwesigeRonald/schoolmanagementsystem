@@ -149,6 +149,9 @@ const ENDPOINTS = {
     FINANCE_EXPENSES: "/finance/expenses",
     FINANCE_REVENUES: "/finance/revenues",
     FINANCE_FLOW: "/finance/finance-flow",
+    // --- Student-only self-service balance (NOT behind the Finance gate
+    // above — see routes/student-finance.routes.js) ---
+    STUDENT_MY_BALANCE: "/student-finance/my-balance",
 
     // --- Staff Payroll, Allowances & Salary Advances (also behind the
     // Finance gate above; Admin + Bursar only, no Teacher access at all —
@@ -695,6 +698,34 @@ const FinanceAPI = {
     // --- Finance Flow (Jan-Dec revenue vs expenses for a calendar year) ---
     async getFinanceFlow(year) {
         return apiRequest(`${ENDPOINTS.FINANCE_FLOW}?year=${encodeURIComponent(year)}`);
+    }
+};
+
+/* ---------------------------------------------------------
+   5a-i. STUDENT SELF-SERVICE FEE BALANCE
+   Talks to routes/student-finance.routes.js, mounted at
+   /api/student-finance — NOT under "/finance/", so apiRequest's
+   finance-scope check above never fires for it and no Finance
+   password is required. Student-only server-side; always scoped to
+   the caller's own studentId (see the route file for the security
+   note), same convention as ScoresAPI.trend().
+   --------------------------------------------------------- */
+const StudentFinanceAPI = {
+    // termYear: optional { term, year } to look back at a past term;
+    // omit to get the school's current term (resolved server-side).
+    // Same remoteFirst convention as ScoresAPI.trend() — a network
+    // failure resolves to null (rendered as an empty state) rather than
+    // breaking the rest of the dashboard's Promise.all; a real backend
+    // error (403, a mislinked account, etc.) still throws.
+    async getMyBalance(termYear) {
+        const params = new URLSearchParams();
+        if (termYear && termYear.term) params.set("term", termYear.term);
+        if (termYear && termYear.year) params.set("year", termYear.year);
+        const qs = params.toString();
+        return remoteFirst(
+            () => apiRequest(`${ENDPOINTS.STUDENT_MY_BALANCE}${qs ? `?${qs}` : ""}`),
+            () => null
+        );
     }
 };
 

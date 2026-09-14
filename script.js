@@ -3129,6 +3129,12 @@ function renderOwnDashboardModule() {
                 <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
             </div>
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-sack-dollar mr-1.5 text-emerald-600"></i>My Fees Balance</h4>
+                <div id="my-fees-balance-card" class="text-center text-slate-400 text-xs font-semibold py-8">
+                    <i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Loading your fee balance&hellip;
+                </div>
+            </div>
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                 <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-chart-line mr-1.5 text-teal-600"></i>My Performance Trend</h4>
                 <div class="relative h-72">
                     <canvas id="my-performance-trend-chart" class="hidden"></canvas>
@@ -3161,13 +3167,54 @@ function renderOwnDashboardModule() {
 async function initOwnDashboardModule() {
     const student = studentsList.find(s => s.id.toLowerCase() === (currentUser.studentId || currentUser.username).toLowerCase());
     if (!student) return;
-    const [, trend] = await Promise.all([
+    const [, trend, feesBalance] = await Promise.all([
         refreshAttendanceForStudent(student.id),
-        ScoresAPI.trend()
+        ScoresAPI.trend(),
+        StudentFinanceAPI.getMyBalance()
     ]);
     renderStudentProfileBody(student, 'own-dashboard-summary-body');
     renderMyPerformanceTrendChart(trend);
     renderMyAchievementsPanel(student, trend);
+    renderMyFeesBalanceCard(feesBalance);
+}
+/* ---------------------------------------------------------
+   3c-0. MY FEES BALANCE
+   Backed by GET /api/student-finance/my-balance (Student-only,
+   always scoped server-side to req.user.studentId — see
+   student-finance.routes.js). feesBalance is null on a network
+   failure (StudentFinanceAPI.getMyBalance()'s remoteFirst fallback),
+   in which case this just shows a quiet "couldn't load" message
+   rather than a scary error block.
+   --------------------------------------------------------- */
+function renderMyFeesBalanceCard(feesBalance) {
+    const el = document.getElementById('my-fees-balance-card');
+    if (!el) return; // navigated away from Dashboard while this was loading
+
+    if (!feesBalance) {
+        el.innerHTML = `<p class="text-slate-400 text-xs font-semibold">Couldn't load your fee balance right now — please try again shortly.</p>`;
+        return;
+    }
+
+    const { term, year, billed, paid, balance } = feesBalance;
+    const isCleared = balance <= 0;
+
+    el.innerHTML = `
+        <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 text-center">${escapeHTML(term)} ${escapeHTML(String(year))}</p>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <div class="bg-slate-50 rounded-xl p-3 text-center">
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Billed</p>
+                <p class="text-sm font-extrabold text-slate-700">${formatUGX(billed)}</p>
+            </div>
+            <div class="bg-slate-50 rounded-xl p-3 text-center">
+                <p class="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1">Paid</p>
+                <p class="text-sm font-extrabold text-slate-700">${formatUGX(paid)}</p>
+            </div>
+        </div>
+        <div class="rounded-xl p-3 text-center border-t-2 ${isCleared ? 'border-emerald-500 bg-emerald-50' : 'border-rose-500 bg-rose-50'}">
+            <p class="text-[10px] font-extrabold uppercase tracking-wider mb-1 ${isCleared ? 'text-emerald-600' : 'text-rose-600'}">Balance Due</p>
+            <p class="text-lg font-extrabold ${isCleared ? 'text-emerald-700' : 'text-rose-700'}">${isCleared ? 'Fully Paid' : formatUGX(balance)}</p>
+        </div>
+    `;
 }
 /* ---------------------------------------------------------
    3c-i. PERSONAL PERFORMANCE TREND CHART

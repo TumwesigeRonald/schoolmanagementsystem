@@ -1,0 +1,160 @@
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+
+const authRoutes = require('./routes/auth.routes');
+const studentsRoutes = require('./routes/students.routes');
+const teachersRoutes = require('./routes/teachers.routes');
+const scoresRoutes = require('./routes/scores.routes');
+const attendanceRoutes = require('./routes/attendance.routes');
+const termRoutes = require('./routes/term.routes');
+const resourcesRoutes = require('./routes/resources.routes');
+const uploadRoutes = require('./routes/upload.routes'); // <-- Added upload routes
+const activityLogRoutes = require('./routes/activity-log.routes');
+const noticesRoutes = require('./routes/notices.routes');
+const remarksRoutes = require('./routes/remarks.routes');
+const aiRoutes = require('./routes/ai.routes');
+const financeAuthRoutes = require('./routes/finance-auth.routes');
+const financeRoutes = require('./routes/finance.routes');
+const studentFinanceRoutes = require('./routes/student-finance.routes');
+const payrollRoutes = require('./routes/payroll.routes');
+const partTimePayrollRoutes = require('./routes/part-time-payroll.routes');
+const adminStaffRoutes = require('./routes/admin-staff.routes');
+
+const app = express();
+
+// Trust the platform's reverse proxy (Vercel/Render both sit behind one) so
+// req.ip reflects the real client address from X-Forwarded-For instead of
+// the proxy's own internal address — needed for accurate IP capture in the
+// Activity Log (see routes/auth.routes.js + lib/activityLog.js).
+app.set('trust proxy', 1);
+
+// --- Core middleware ---
+const corsOrigin = process.env.CORS_ORIGIN || '*';
+app.use(cors({
+  origin: corsOrigin === '*' ? true : corsOrigin.split(',').map((o) => o.trim()),
+  credentials: true
+}));
+app.use(express.json({ limit: '5mb' }));
+
+// --- Security headers ---
+// Sets sane defaults (X-Content-Type-Options, HSTS, X-Frame-Options, etc.)
+// for a JSON API. contentSecurityPolicy/crossOriginEmbedderPolicy are
+// disabled here because this process only ever serves JSON to a separate
+// frontend origin, not HTML — leaving them on adds their headers to API
+// responses with no benefit (no HTML/inline-script surface to protect on
+// this server) and occasionally confuses non-browser API clients.
+app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+
+// --- Rate limiting ---
+// Defends against brute-force credential guessing and traffic spikes
+// (accidental or malicious) overwhelming the DB connection pool. Uses
+// express-rate-limit's default in-memory store, which is per-instance —
+// on Vercel that means each serverless instance tracks its own counters
+// rather than one global count, so this is a best-effort mitigation layer
+// rather than a hard guarantee; pairing it with account lockout or a
+// shared store (e.g. Redis) would tighten this further if it's ever
+// needed, but this already meaningfully raises the cost of both a
+// password-guessing script and a naive flood of requests.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // 20 login attempts per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts. Please wait a few minutes and try again.' }
+});
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 300, // generous ceiling for normal multi-user use (dashboards, bulk saves), just enough to blunt a runaway client/script
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please slow down and try again shortly.' }
+});
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+// Same brute-force protection as the main login — this is a second
+// password guarding sensitive data, so it deserves the same limiter.
+app.use('/api/finance-auth/verify-password', authLimiter);
+
+// --- Health check (useful for Vercel/Render uptime checks) ---
+app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+
+// --- Routes (paths match ENDPOINTS in the frontend's api.js) ---
+app.use('/api/auth', authRoutes);
+app.use('/api/students', studentsRoutes);
+app.use('/api/teachers', teachersRoutes);
+app.use('/api/scores', scoresRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/settings/term', termRoutes);
+app.use('/api/resources', resourcesRoutes);
+app.use('/api/upload', uploadRoutes); // <-- Mounted upload endpoint here
+app.use('/api/activity-log', activityLogRoutes);
+app.use('/api/notices', noticesRoutes);
+app.use('/api/remarks', remarksRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/finance-auth', financeAuthRoutes);
+app.use('/api/finance', financeRoutes);
+// Separate from financeRoutes on purpose: this is a single Student-only,
+// self-scoped balance view that must NOT sit behind requireFinanceScope
+// (Students can never obtain that finance-scoped token — see the header
+// comment in routes/finance.routes.js). See student-finance.routes.js
+// for the full explanation.
+app.use('/api/student-finance', studentFinanceRoutes);
+// Mounted under /api/finance/* too — routes inside require BOTH the login
+// JWT and the Finance-scope token, same gate as financeRoutes, so nesting
+// it here doesn't loosen anything.
+app.use('/api/finance/payroll', payrollRoutes);
+// A separate, isolated track from payrollRoutes above — see the header
+// comment in routes/part-time-payroll.routes.js for why it's not a
+// shared table/route. Same finance-scope gate, different role split
+// (Bursar has full access here; Bursar has none in payrollRoutes).
+app.use('/api/finance/part-time-payroll', partTimePayrollRoutes);
+// Administrator-only Bursar/HR/Director account management — a separate
+// gate from the Finance password above (see routes/admin-staff.routes.js).
+app.use('/api/admin', adminStaffRoutes);
+
+// --- 404 for unmatched /api routes ---
+app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));
+
+// --- Centralized error handler ---
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error(`[error] ${req.method} ${req.originalUrl} ->`, err);
+  if (err.code === '23505') { // Postgres unique_violation
+    return res.status(409).json({ message: 'A record with that identifier already exists.' });
+  }
+  if (err.type === 'entity.too.large') {
+    return res.status(413).json({ message: 'Payload too large.' });
+  }
+  // Safety net: a MulterError (e.g. an oversized file upload) should normally
+  // be caught locally by the upload route itself, but if one ever reaches
+  // here instead, surface a clear message rather than the generic fallback.
+  if (err.name === 'MulterError') {
+    return res.status(413).json({ message: `Upload failed: ${err.message}` });
+  }
+  const isConnectionOrTimeout =
+    err.code === 'ETIMEDOUT' ||
+    err.code === 'ECONNREFUSED' ||
+    err.code === 'ECONNRESET' ||
+    err.code === '57P01' || 
+    err.code === '53300' || 
+    /timeout/i.test(err.message || '');
+  if (isConnectionOrTimeout) {
+    return res.status(503).json({ message: 'The database is taking too long to respond. Please try again in a moment — your changes were not saved.' });
+  }
+  // TEMPORARY DIAGNOSTIC: include the raw Postgres/Node error code and a
+  // short message alongside the generic one, so the real cause shows up
+  // directly in the browser's Network tab instead of requiring a trip to
+  // the Vercel function logs. Safe to leave in for now (error codes/short
+  // messages only — no stack trace, no query text, no credentials) but
+  // worth removing once the underlying bug is found and fixed.
+  res.status(500).json({
+    message: 'Something went wrong on the server.',
+    debugCode: err.code || err.name || null,
+    debugMessage: (err.message || '').slice(0, 300)
+  });
+});
+
+module.exports = app;
