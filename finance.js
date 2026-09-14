@@ -1720,7 +1720,19 @@ function printFinanceReceipt(payment, student) {
             <p class="fin-receipt-footer">This is a system-generated receipt. Not valid without an official school stamp.</p>
         </div>
     `;
+
+    // The "Payment Recorded" / History modal that launched this print is
+    // still open in the DOM (window.print() below is synchronous, and the
+    // modal only closes *after* this call returns) -- this class tells the
+    // print stylesheet (styles.css) to hide everything except the receipt
+    // itself, so the modal doesn't leak into the print preview. Cleared on
+    // 'afterprint', with a timeout fallback for browsers/print flows that
+    // don't fire that event reliably.
+    document.body.classList.add('printing-receipt');
+    const clearPrintingReceiptClass = () => document.body.classList.remove('printing-receipt');
+    window.addEventListener('afterprint', clearPrintingReceiptClass, { once: true });
     window.print();
+    setTimeout(clearPrintingReceiptClass, 1000);
 }
 
 /* ---------------------------------------------------------

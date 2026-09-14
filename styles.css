@@ -1161,13 +1161,40 @@ input, select, textarea {
 }
 
 @media print {
+    /* ---- Receipt-only print: hide EVERYTHING else on the page first.
+       This exists because #modal-root (the "Payment Recorded" popup) is
+       still in the DOM when the print dialog opens -- printFinanceReceipt()
+       calls window.print() synchronously, and the modal only closes
+       *after* that call returns, so without this it leaks into the print
+       preview alongside the receipt. printFinanceReceipt() toggles this
+       class onto <body> right before printing and removes it afterward. */
+    body.printing-receipt * {
+        display: none !important;
+    }
+    /* Then re-reveal ONLY #print-area and the receipt inside it. These are
+       ID/class-qualified selectors so they win over the blanket rule above
+       regardless of source order. */
+    body.printing-receipt #print-area,
+    body.printing-receipt #print-area .fin-receipt,
+    body.printing-receipt #print-area .fin-receipt * {
+        display: block !important;
+        visibility: visible !important;
+    }
+    /* The blanket display:none above would otherwise collapse the
+       receipt's key/value rows back to block -- restore their flex
+       layout specifically. */
+    body.printing-receipt #print-area .fin-receipt .fin-receipt-row {
+        display: flex !important;
+    }
+
     .fin-receipt {
-        width: 80mm;
-        max-width: 80mm;
-        margin: 0 auto;
+        width: 80mm !important;
+        max-width: 80mm !important;
+        margin: 0 !important;
         padding: 4mm 3mm;
-        border: none;
+        border: none !important;
         border-radius: 0;
+        box-shadow: none !important;
         font-size: 10.5px;
     }
     /* Named page: only elements with `page: receipt-slip` (i.e. .fin-receipt)
