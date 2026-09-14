@@ -66,6 +66,12 @@ const ENDPOINTS = {
     // --- Students ---
     STUDENTS: "/students",
     STUDENT_BY_ID: (id) => `/students/${encodeURIComponent(id)}`,
+    STUDENT_PHOTO: (id) => `/students/${encodeURIComponent(id)}/photo`,
+    // Generic file upload (Admin/Teacher) — stores the raw file and hands
+    // back a public URL, no other side effects. Distinct from
+    // RESOURCE_UPLOAD below, which also creates a "resources" DB record;
+    // a student photo just needs a URL to save onto the student record.
+    UPLOAD_FILE: "/upload",
 
     // --- Teachers / Users ---
     TEACHERS: "/teachers",
@@ -972,6 +978,36 @@ const StudentsAPI = {
             () => apiRequest(ENDPOINTS.STUDENT_BY_ID(studentId), { method: "DELETE" }),
             () => { studentsList = studentsList.filter(s => s.id !== studentId); return true; }
         );
+    },
+    // photoUrl is the URL UploadAPI.uploadFile() returns — this call just
+    // saves that URL onto the student record. Pass null to clear a photo.
+    async setPhoto(studentId, photoUrl) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.STUDENT_PHOTO(studentId), { method: "PUT", body: { photoUrl } }),
+            () => {
+                const s = studentsList.find(s => s.id === studentId);
+                if (s) s.photoUrl = photoUrl;
+                return { id: studentId, photoUrl };
+            }
+        );
+    }
+};
+
+/* ---------------------------------------------------------
+   7a. GENERIC FILE UPLOAD
+   Talks to POST /api/upload (Admin/Teacher, see upload.routes.js) — a
+   plain "store this file, hand back a public URL" endpoint with no
+   other side effects, unlike ResourcesAPI.upload() which also creates a
+   "resources" DB record. Used for student photos; kept generic (not
+   named studentPhoto*) since nothing here is photo-specific — the
+   resize-before-upload step lives in script.js, not here.
+   --------------------------------------------------------- */
+const UploadAPI = {
+    async uploadFile(file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const result = await apiRequest(ENDPOINTS.UPLOAD_FILE, { method: "POST", body: formData, isFormData: true });
+        return result.url;
     }
 };
 

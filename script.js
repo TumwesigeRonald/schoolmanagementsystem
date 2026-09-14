@@ -210,6 +210,56 @@ function escapeHTML(str) {
         .replace(/'/g, '&#039;');
 }
 /* ---------------------------------------------------------
+   1b-iv-b. IMAGE RESIZE-BEFORE-UPLOAD (student photos)
+   A raw phone photo can easily be 3-12MB — multiplied across a whole
+   school's worth of students, that's a real cost in Blob storage AND
+   in load time the moment more than one photo needs to render at once
+   (e.g. "Print Whole Class" report cards, which already puts every
+   student's full report on one page). This shrinks + re-encodes the
+   image client-side, BEFORE it's ever uploaded, so what actually
+   leaves the browser is already small.
+   maxDim=400 is comfortably larger than the 52x52px box this ever
+   renders into (report card / profile modal), so there's no visible
+   quality loss at display size — this is not a thumbnail generator,
+   just a sane upper bound so a photo taken on a modern phone camera
+   doesn't upload at its full multi-thousand-pixel original size.
+   Returns a Blob (JPEG) via the browser's own canvas encoder — no
+   image-processing library needed for this.
+   --------------------------------------------------------- */
+function resizeImageFile(file, maxDim = 400, quality = 0.8) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+                if (width >= height) {
+                    height = Math.round(height * (maxDim / width));
+                    width = maxDim;
+                } else {
+                    width = Math.round(width * (maxDim / height));
+                    height = maxDim;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+                (blob) => blob ? resolve(blob) : reject(new Error('Could not process this image.')),
+                'image/jpeg',
+                quality
+            );
+        };
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('That file could not be read as an image.'));
+        };
+        img.src = objectUrl;
+    });
+}
+/* ---------------------------------------------------------
    1b-iv. REPORT CARD REMARKS HELPERS
    Class Teacher's / Headteacher's comment fields on the report
    card footer. Purely additive productivity feature — does not
@@ -1761,9 +1811,16 @@ async function openStudentProfileModal(studentId) {
         <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
             <div class="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto">
                 <div class="flex items-center justify-between p-5 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
-                    <div>
-                        <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
-                        <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            ${student.photoUrl
+                                ? `<img src="${escapeHTML(student.photoUrl)}" class="w-full h-full object-cover" alt="${escapeHTML(student.name)}">`
+                                : `<i class="fa-solid fa-user text-slate-300 text-lg"></i>`}
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
+                            <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
+                        </div>
                     </div>
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
@@ -2307,6 +2364,20 @@ function openEditStudentModal(studentId) {
                     <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
                 </div>
                 <form onsubmit="submitEditStudent(event, '${student.id}')" class="p-5 space-y-4">
+                    <div class="flex items-center gap-4 pb-1">
+                        <div id="edit-stud-photo-preview" class="w-16 h-16 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            ${student.photoUrl
+                                ? `<img src="${escapeHTML(student.photoUrl)}" class="w-full h-full object-cover" alt="${escapeHTML(student.name)}">`
+                                : `<i class="fa-solid fa-user text-slate-300 text-xl"></i>`}
+                        </div>
+                        <div>
+                            <label class="inline-block cursor-pointer text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors">
+                                <i class="fa-solid fa-camera mr-1.5"></i>${student.photoUrl ? 'Change Photo' : 'Add Photo'}
+                                <input type="file" accept="image/*" class="hidden" onchange="handleStudentPhotoFileSelected(event, '${student.id}')">
+                            </label>
+                            <p id="edit-stud-photo-status" class="mt-1 text-[10px] font-semibold text-slate-400">JPG or PNG &middot; resized automatically before saving.</p>
+                        </div>
+                    </div>
                     <div>
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Student ID</label>
                         <input type="text" id="edit-stud-id" value="${escapeHTML(student.id)}" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
@@ -2370,6 +2441,44 @@ async function submitEditStudent(event, originalId) {
     closeModal();
     await loadStudentData();
     updateDashboardStats();
+}
+// Fires the moment a file is picked in the Edit Student modal's photo
+// input — deliberately saves immediately (its own resize -> upload ->
+// StudentsAPI.setPhoto sequence) rather than waiting for the form's
+// "Save Changes" button, since a photo isn't one of that form's fields
+// and shouldn't be held hostage by unrelated validation on Name/Class/
+// Gender. Safe to fire even if the admin also edits other fields
+// afterward: the photo is already saved server-side by then.
+async function handleStudentPhotoFileSelected(event, studentId) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const preview = document.getElementById('edit-stud-photo-preview');
+    const status = document.getElementById('edit-stud-photo-status');
+    if (!file.type.startsWith('image/')) {
+        if (status) { status.textContent = 'Please choose an image file.'; status.className = 'mt-1 text-[10px] font-semibold text-rose-600'; }
+        event.target.value = '';
+        return;
+    }
+    if (status) { status.textContent = 'Resizing & uploading\u2026'; status.className = 'mt-1 text-[10px] font-semibold text-slate-400'; }
+    try {
+        const resizedBlob = await resizeImageFile(file);
+        const uploadableFile = new File([resizedBlob], `${studentId}-photo.jpg`, { type: 'image/jpeg' });
+        const photoUrl = await UploadAPI.uploadFile(uploadableFile);
+        await StudentsAPI.setPhoto(studentId, photoUrl);
+
+        // Keep the in-memory roster in sync so the report card
+        // generator and the profile modal see the new photo immediately
+        // without needing a full refetch.
+        const cached = studentsList.find(s => s.id === studentId);
+        if (cached) cached.photoUrl = photoUrl;
+
+        if (preview) preview.innerHTML = `<img src="${escapeHTML(photoUrl)}" class="w-full h-full object-cover" alt="Student photo">`;
+        if (status) { status.textContent = 'Photo saved.'; status.className = 'mt-1 text-[10px] font-semibold text-emerald-600'; }
+    } catch (err) {
+        if (status) { status.textContent = err.message || 'Could not upload this photo. Please try again.'; status.className = 'mt-1 text-[10px] font-semibold text-rose-600'; }
+    } finally {
+        event.target.value = ''; // allow re-selecting the same file if they retry
+    }
 }
 /* ---------------------------------------------------------
    5. SCORE SHEETS MODULE (Light Theme)
@@ -3722,7 +3831,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <p>TEL: 0772620552 / 0782572120 / 0740773771</p>
                     <p class="rc-motto">&ldquo;BE KNOWN BY DEEDS&rdquo;</p>
                 </div>
-                <div class="rc-qr-box">PHOTO</div>
+                <div class="rc-qr-box">${student.photoUrl ? `<img src="${escapeHTML(student.photoUrl)}" alt="Student Photo">` : 'PHOTO'}</div>
             </div>
             <div class="rc-report-title">END OF TERM ACADEMIC REPORT CARD &mdash; A-LEVEL</div>
             <div class="rc-learner-row">
@@ -3898,7 +4007,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <p>TEL: 0772620552 / 0782572120 / 0740773771</p>
                     <p class="rc-motto">&ldquo;BE KNOWN BY DEEDS&rdquo;</p>
                 </div>
-                <div class="rc-qr-box">PHOTO</div>
+                <div class="rc-qr-box">${student.photoUrl ? `<img src="${escapeHTML(student.photoUrl)}" alt="Student Photo">` : 'PHOTO'}</div>
             </div>
             <div class="rc-report-title">LEARNER'S TERMLY ACHIEVEMENT REPORT</div>
             <div class="rc-learner-row">

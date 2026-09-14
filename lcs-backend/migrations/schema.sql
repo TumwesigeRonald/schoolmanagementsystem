@@ -678,3 +678,15 @@ CREATE INDEX IF NOT EXISTS idx_report_remarks_term_year
 -- =============================================================
 UPDATE users SET finance_password_hash = NULL
   WHERE role = 'Teacher' AND finance_password_hash IS NOT NULL;
+
+-- =============================================================
+-- MIGRATION: add student photos. photo_url stores the public Blob URL
+-- for a small, pre-resized (client-side, before upload) JPEG — see
+-- routes/students.routes.js and the upload flow in script.js. NULL for
+-- any student who hasn't had a photo uploaded yet; every read path
+-- (report cards, Students tab) already falls back to the existing
+-- placeholder box when this is NULL, so this migration is purely
+-- additive and changes nothing for existing students until someone
+-- uploads a photo for them.
+-- =============================================================
+ALTER TABLE students ADD COLUMN IF NOT EXISTS photo_url TEXT;

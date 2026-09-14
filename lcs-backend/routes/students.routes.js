@@ -21,7 +21,7 @@ const HASH_ROUNDS = 10;
 // { data, total, page, pageSize, totalPages } instead.
 router.get('/', authenticate, asyncHandler(async (req, res) => {
   if (req.user.role === 'Student') {
-    const { rows } = await db.query('SELECT id, name, class, gender FROM students WHERE id = $1', [req.user.studentId]);
+    const { rows } = await db.query('SELECT id, name, class, gender, photo_url AS "photoUrl" FROM students WHERE id = $1', [req.user.studentId]);
     return res.json(rows);
   }
 
@@ -41,7 +41,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 
   if (rawPage === undefined) {
     const { rows } = await db.query(
-      `SELECT id, name, class, gender FROM students ${where} ORDER BY id`,
+      `SELECT id, name, class, gender, photo_url AS "photoUrl" FROM students ${where} ORDER BY id`,
       values
     );
     return res.json(rows);
@@ -59,7 +59,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const limitParam = values.length - 1;
   const offsetParam = values.length;
   const { rows } = await db.query(
-    `SELECT id, name, class, gender, COUNT(*) OVER()::int AS "totalCount"
+    `SELECT id, name, class, gender, photo_url AS "photoUrl", COUNT(*) OVER()::int AS "totalCount"
      FROM students ${where}
      ORDER BY id
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
@@ -142,7 +142,7 @@ router.put('/:id', authenticate, requireRole('Administrator'), asyncHandler(asyn
   try {
     await client.query('BEGIN');
 
-    const existing = await client.query('SELECT id FROM students WHERE id = $1', [currentId]);
+    const existing = await client.query('SELECT id, photo_url FROM students WHERE id = $1', [currentId]);
     if (!existing.rows.length) {
       await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Student not found.' });
@@ -163,9 +163,13 @@ router.put('/:id', authenticate, requireRole('Administrator'), asyncHandler(asyn
         return res.status(409).json({ message: `Username "${newId}" is already taken.` });
       }
 
+      // Carries the existing photo_url over onto the new row — an ID
+      // change is a rename, not a fresh student, so a previously
+      // uploaded photo shouldn't silently vanish just because the ID
+      // changed.
       await client.query(
-        'INSERT INTO students (id, name, class, gender) VALUES ($1,$2,$3,$4)',
-        [newId, name, className, gender || null]
+        'INSERT INTO students (id, name, class, gender, photo_url) VALUES ($1,$2,$3,$4,$5)',
+        [newId, name, className, gender || null, existing.rows[0].photo_url]
       );
       await client.query(
         `UPDATE scores SET student_id = $1, record_key = REPLACE(record_key, $2, $1) WHERE student_id = $2`,
@@ -200,6 +204,29 @@ router.put('/:id', authenticate, requireRole('Administrator'), asyncHandler(asyn
   } finally {
     client.release();
   }
+}));
+
+// PUT /api/students/:id/photo — Admin only. Sets (or clears, with
+// photoUrl: null) a student's photo. Deliberately its own tiny endpoint
+// rather than folded into PUT /:id above: that route's job is already
+// the trickiest one in this file (repointing scores/attendance/users
+// when the Student ID itself changes), and a photo update has nothing
+// to do with any of that — it's a single-column write with no
+// transaction, no ID-change branching, no password reset. Keeping it
+// separate means a bug in one can never touch the other.
+//
+// photoUrl is expected to already be a small, pre-resized image (see
+// the client-side resize-before-upload step in script.js) uploaded via
+// the existing POST /api/upload endpoint, which returns the public
+// Blob URL saved here. This route does not upload anything itself.
+router.put('/:id/photo', authenticate, requireRole('Administrator'), asyncHandler(async (req, res) => {
+  const { photoUrl } = req.body || {};
+  const { rowCount, rows } = await db.query(
+    'UPDATE students SET photo_url = $1 WHERE id = $2 RETURNING id, photo_url AS "photoUrl"',
+    [photoUrl || null, req.params.id]
+  );
+  if (!rowCount) return res.status(404).json({ message: 'Student not found.' });
+  res.json(rows[0]);
 }));
 
 // DELETE /api/students/:id — Admin only. Cascades to users/scores/attendance.
