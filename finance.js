@@ -863,7 +863,16 @@ async function submitFinancePayment(studentId, studentName, studentClass) {
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     try {
         const created = await FinanceAPI.recordPayment({ studentId, term, year, amount, method, reference, note });
-        financeReceiptCache[created.id] = { payment: created, student: { name: studentName, class: studentClass, term, year } };
+        // Re-fetch this student's balance post-payment so the receipt can show
+        // an accurate "Balance Due" figure. Best-effort: if it fails, the
+        // receipt just falls back to "—" for that row rather than blocking
+        // the (already-successful) payment confirmation.
+        let balance = null;
+        try {
+            const updated = await FinanceAPI.getPayments({ term, year, studentId });
+            balance = updated.balance;
+        } catch (e) { /* non-fatal — see comment above */ }
+        financeReceiptCache[created.id] = { payment: created, student: { name: studentName, class: studentClass, term, year, balance } };
         showFinancePaymentSuccess(created.id, studentName);
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Record'; }
@@ -923,7 +932,7 @@ async function openFinancePaymentHistory(studentId, studentName) {
     try {
         const data = await FinanceAPI.getPayments({ term, year, studentId });
         const history = data.history || [];
-        const studentMeta = { name: studentName, class: data.class, term, year };
+        const studentMeta = { name: studentName, class: data.class, term, year, balance: data.balance };
         history.forEach(h => { financeReceiptCache[h.id] = { payment: h, student: studentMeta }; });
         if (!history.length) {
             historyBody.innerHTML = `<p>No payments recorded yet for ${escapeHTML(term)}, ${escapeHTML(String(year))}.</p>`;
@@ -1658,36 +1667,57 @@ function printFinanceReceiptById(paymentId) {
     printFinanceReceipt(entry.payment, entry.student);
 }
 
+// Builds one key/value row for the receipt body. `emphasize` adds the
+// extra classes used on the Amount Paid / Balance Due rows (see
+// .fin-receipt-amount-row / .fin-receipt-balance-row in styles.css).
+function financeReceiptRow(label, value, emphasize) {
+    const rowClass = emphasize ? `fin-receipt-row ${emphasize}` : 'fin-receipt-row';
+    return `<div class="${rowClass}"><span class="fin-receipt-label">${escapeHTML(label)}</span><span class="fin-receipt-value">${value}</span></div>`;
+}
+
 function printFinanceReceipt(payment, student) {
     const printArea = document.getElementById('print-area');
     if (!printArea) return;
+
+    // student.balance is the CURRENT outstanding balance (fetched fresh at
+    // record-time, or read off the payment-history response) — not
+    // necessarily what it was the instant this specific payment posted.
+    // Best-effort: if it's unavailable (e.g. the balance re-fetch failed),
+    // show an em dash instead of a misleading "0".
+    const hasBalance = student.balance !== undefined && student.balance !== null;
+    const balanceDisplay = hasBalance ? formatUGX(Math.max(0, Number(student.balance) || 0)) : '—';
+
     printArea.innerHTML = `
-        <div style="max-width:480px;margin:0 auto;font-family:Arial,sans-serif;color:#111;padding:24px;border:1px solid #ccc;">
-            <div style="text-align:center;border-bottom:2px solid #0f766e;padding-bottom:12px;margin-bottom:16px;">
-                <img src="school_badge.jpg" style="height:60px;margin-bottom:6px;" alt="School Badge">
-                <h2 style="margin:0;font-size:16px;letter-spacing:0.03em;">LUWEERO COMMUNITY SECONDARY SCHOOL</h2>
-                <p style="margin:2px 0;font-size:11px;">P.O BOX 29540, KAMPALA-UGANDA</p>
-                <p style="margin:2px 0;font-size:11px;">TEL: 0772620552 / 0782572120 / 0740773771</p>
+        <div class="fin-receipt">
+            <div class="fin-receipt-header">
+                <img src="school_badge.jpg" class="fin-receipt-badge" alt="School Badge">
+                <h2 class="fin-receipt-school-name">Luweero Community Secondary School</h2>
+                <p class="fin-receipt-contact">P.O BOX 29540, KAMPALA-UGANDA</p>
+                <p class="fin-receipt-contact">TEL: 0772620552 / 0782572120 / 0740773771</p>
             </div>
-            <h3 style="text-align:center;margin:0 0 16px;font-size:14px;letter-spacing:0.08em;">OFFICIAL PAYMENT RECEIPT</h3>
-            <table style="width:100%;font-size:12px;border-collapse:collapse;">
-                <tr><td style="padding:4px 0;color:#555;">Receipt No.</td><td style="padding:4px 0;text-align:right;font-weight:bold;">RCT-${payment.id}</td></tr>
-                <tr><td style="padding:4px 0;color:#555;">Date</td><td style="padding:4px 0;text-align:right;">${new Date(payment.createdAt).toLocaleString()}</td></tr>
-                <tr><td style="padding:4px 0;color:#555;">Student</td><td style="padding:4px 0;text-align:right;font-weight:bold;">${escapeHTML(student.name || '')}</td></tr>
-                <tr><td style="padding:4px 0;color:#555;">Class</td><td style="padding:4px 0;text-align:right;">${escapeHTML(student.class || '')}</td></tr>
-                <tr><td style="padding:4px 0;color:#555;">Term / Year</td><td style="padding:4px 0;text-align:right;">${escapeHTML(student.term || '')}, ${escapeHTML(String(student.year || ''))}</td></tr>
-            </table>
-            <div style="border-top:1px dashed #999;border-bottom:1px dashed #999;margin:14px 0;padding:12px 0;">
-                <table style="width:100%;font-size:12px;">
-                    <tr><td style="color:#555;">Amount Paid</td><td style="text-align:right;font-size:16px;font-weight:bold;">${formatUGX(payment.amount)}</td></tr>
-                    <tr><td style="color:#555;padding-top:4px;">Method</td><td style="text-align:right;padding-top:4px;">${escapeHTML(payment.method || 'N/A')}</td></tr>
-                    ${payment.reference ? `<tr><td style="color:#555;">Reference</td><td style="text-align:right;">${escapeHTML(payment.reference)}</td></tr>` : ''}
-                </table>
+
+            <h3 class="fin-receipt-title">Official Payment Receipt</h3>
+
+            <div class="fin-receipt-details">
+                ${financeReceiptRow('Receipt No.', `RCT-${payment.id}`)}
+                ${financeReceiptRow('Date', escapeHTML(new Date(payment.createdAt).toLocaleString()))}
+                ${financeReceiptRow('Student', escapeHTML(student.name || ''))}
+                ${financeReceiptRow('Class', escapeHTML(student.class || ''))}
+                ${financeReceiptRow('Term / Year', `${escapeHTML(student.term || '')}, ${escapeHTML(String(student.year || ''))}`)}
             </div>
-            <table style="width:100%;font-size:11px;color:#555;">
-                <tr><td>Received by</td><td style="text-align:right;">${escapeHTML(payment.recordedBy || '—')}</td></tr>
-            </table>
-            <p style="text-align:center;font-size:10px;color:#999;margin-top:20px;">This is a system-generated receipt. Not valid without an official school stamp.</p>
+
+            <div class="fin-receipt-financials">
+                ${financeReceiptRow('Amount Paid', formatUGX(payment.amount), 'fin-receipt-amount-row')}
+                ${financeReceiptRow('Balance Due', balanceDisplay, 'fin-receipt-balance-row')}
+                ${financeReceiptRow('Method', escapeHTML(payment.method || 'Cash'))}
+                ${payment.reference ? financeReceiptRow('Reference', escapeHTML(payment.reference)) : ''}
+            </div>
+
+            <div class="fin-receipt-signoff">
+                ${financeReceiptRow('Received by', 'School Bursar')}
+            </div>
+
+            <p class="fin-receipt-footer">This is a system-generated receipt. Not valid without an official school stamp.</p>
         </div>
     `;
     window.print();

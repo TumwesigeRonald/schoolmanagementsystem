@@ -1056,6 +1056,129 @@ input, select, textarea {
     .metric-card { padding: 14px 16px; }
     .metric-value { font-size: 24px; }
 }
+/* ---------------- FINANCE: PAYMENT RECEIPT (physical slip) ----------------
+   Rendered into #print-area by printFinanceReceipt() in finance.js.
+   Sized to preview at 320px on screen (roughly an 80mm thermal slip
+   blown up for a monitor); the @media print block below locks it to
+   its true 80mm print width via a *named* @page ("receipt-slip") so
+   it prints as a slip instead of stretching across the A4 sheet that
+   #print-area's report-card content uses (see the plain `@page` rule
+   inside the main PRINT block further down). */
+.fin-receipt {
+    max-width: 320px;
+    margin: 0 auto;
+    padding: 18px 16px;
+    border: 1px solid #d4d4d8;
+    border-radius: 6px;
+    background: #fff;
+    color: #18181b;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    line-height: 1.55;
+    page: receipt-slip; /* CSS Paged Media named page, honored on print */
+}
+
+.fin-receipt-header {
+    text-align: center;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+    border-bottom: 1px dashed #a1a1aa;
+}
+
+.fin-receipt-badge {
+    display: block;
+    margin: 0 auto 6px;
+    height: 52px;
+    width: auto;
+}
+
+.fin-receipt-school-name {
+    margin: 0 0 3px;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.fin-receipt-contact {
+    margin: 1px 0;
+    font-size: 10px;
+    color: #52525b;
+}
+
+.fin-receipt-title {
+    text-align: center;
+    margin: 0 0 12px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.fin-receipt-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    padding: 3px 0;
+}
+.fin-receipt-row .fin-receipt-label { color: #52525b; }
+.fin-receipt-row .fin-receipt-value { font-weight: 700; text-align: right; white-space: nowrap; }
+
+.fin-receipt-financials {
+    margin: 12px 0;
+    padding-top: 10px;
+    border-top: 1px dashed #a1a1aa;
+}
+
+/* "Amount Paid" — highlighted with a solid top border per spec. */
+.fin-receipt-amount-row {
+    border-top: 2px solid #18181b;
+    margin-top: 6px;
+    padding-top: 8px;
+}
+.fin-receipt-amount-row .fin-receipt-label { font-weight: 700; color: #18181b; }
+.fin-receipt-amount-row .fin-receipt-value { font-size: 16px; }
+
+/* "Balance Due" — sits right under Amount Paid, closed off with its own
+   dashed divider so the two financial rows read as one block. */
+.fin-receipt-balance-row {
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #a1a1aa;
+}
+
+.fin-receipt-signoff {
+    margin-top: 12px;
+    padding-top: 8px;
+    font-size: 10.5px;
+}
+
+.fin-receipt-footer {
+    text-align: center;
+    font-size: 9px;
+    color: #a1a1aa;
+    margin-top: 16px;
+}
+
+@media print {
+    .fin-receipt {
+        width: 80mm;
+        max-width: 80mm;
+        margin: 0 auto;
+        padding: 4mm 3mm;
+        border: none;
+        border-radius: 0;
+        font-size: 10.5px;
+    }
+    /* Named page: only elements with `page: receipt-slip` (i.e. .fin-receipt)
+       get this 80mm slip size — report cards printed through the same
+       #print-area keep using the unnamed @page (A4) rule below. */
+    @page receipt-slip {
+        size: 80mm auto;
+        margin: 3mm;
+    }
+}
+
 /* ---------------- PRINT ---------------- */
 #print-area { display: none; }
 @media print {
