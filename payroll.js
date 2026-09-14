@@ -223,7 +223,7 @@ function renderPayrollStaffTable() {
                                 <div class="flex items-center justify-center gap-1">
                                     <button onclick="openStaffDetailModal(${s.id})" title="View" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-teal-600 flex items-center justify-center transition"><i class="fa-solid fa-eye text-[11px]"></i></button>
                                     <button onclick="openStaffFormModal(${s.id})" title="Edit" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 flex items-center justify-center transition"><i class="fa-solid fa-pen text-[11px]"></i></button>
-                                    <button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>
+                                    ${currentUser.role === ROLES.ADMIN ? `<button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>`;
@@ -347,8 +347,15 @@ async function submitStaffForm(id) {
     }
 }
 
+// Administrator-only (see STAFF_DELETE_ROLES in payroll.routes.js — the
+// delete button itself is hidden from HR/Director in the table above, so
+// this only ever runs for an Administrator anyway). Unconditional now:
+// the database's ON DELETE CASCADE on allowances/salary_advances/
+// payroll_records.staff_id (schema.sql) removes that staff member's
+// whole payroll history along with their profile, so there's no "blocked
+// by history" case to warn about — the confirm is the only safety net.
 async function deletePayrollStaff(id, name) {
-    if (!confirm(`Delete ${name}'s staff profile? This only works if they have no payroll history — otherwise, edit their status to "inactive" instead.`)) return;
+    if (!confirm(`Delete ${name}'s staff profile? This permanently removes their profile along with every allowance, salary advance, and payroll record tied to them. This can't be undone — to keep their history intact and just stop them appearing in future payroll runs, edit their status to "inactive" instead.`)) return;
     try {
         await PayrollAPI.deleteStaff(id);
         loadPayrollStaffList();

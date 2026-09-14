@@ -329,24 +329,24 @@ router.post('/staff/bulk-salary-update', requireRole(...PAYROLL_EDIT_ROLES), asy
   res.json({ updated, skipped });
 }));
 
-// DELETE /api/finance/payroll/staff/:id — hard delete is only allowed if
-// the staff member has no payroll history, so past payroll runs can never
-// silently lose their staff record. Otherwise, set status to "inactive"
-// instead (PUT /staff/:id) so they stop appearing in future payroll runs
-// while their history stays intact.
-router.delete('/staff/:id', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async (req, res) => {
+// DELETE /api/finance/payroll/staff/:id — Administrator-only (see
+// STAFF_DELETE_ROLES below), and no longer blocked by existing payroll
+// history. allowances.staff_id, salary_advances.staff_id, and
+// payroll_records.staff_id are all `REFERENCES staff_profiles(id) ON
+// DELETE CASCADE` (see schema.sql), so the database itself removes every
+// allowance, salary advance, and payroll record tied to this staff
+// member the moment their profile is deleted — there's nothing left to
+// manually clean up first. HR/Director (who can still edit/view staff
+// via PAYROLL_EDIT_ROLES) no longer have delete access at all; they
+// still have PUT /staff/:id to set someone "inactive" instead, which is
+// the safer, non-destructive option for day-to-day use.
+const STAFF_DELETE_ROLES = ['Administrator'];
+router.delete('/staff/:id', requireRole(...STAFF_DELETE_ROLES), asyncHandler(async (req, res) => {
   const { rows: existing } = await db.query('SELECT id, name FROM staff_profiles WHERE id = $1', [req.params.id]);
   if (!existing.length) return res.status(404).json({ message: 'Staff member not found.' });
 
-  const { rows: hasPayroll } = await db.query('SELECT id FROM payroll_records WHERE staff_id = $1 LIMIT 1', [req.params.id]);
-  if (hasPayroll.length) {
-    return res.status(409).json({
-      message: 'This staff member has payroll history and cannot be deleted. Set their status to "inactive" instead.'
-    });
-  }
-
   await db.query('DELETE FROM staff_profiles WHERE id = $1', [req.params.id]);
-  await logActivity(req.user.username, `Deleted staff profile for ${existing[0].name} (payroll)`, req.ip);
+  await logActivity(req.user.username, `Deleted staff profile for ${existing[0].name} (payroll) — cascade-removed their allowances/advances/payroll records too`, req.ip);
   res.json({ ok: true });
 }));
 
