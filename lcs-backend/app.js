@@ -137,7 +137,17 @@ app.use((err, req, res, next) => {
   if (isConnectionOrTimeout) {
     return res.status(503).json({ message: 'The database is taking too long to respond. Please try again in a moment — your changes were not saved.' });
   }
-  res.status(500).json({ message: 'Something went wrong on the server.' });
+  // TEMPORARY DIAGNOSTIC: include the raw Postgres/Node error code and a
+  // short message alongside the generic one, so the real cause shows up
+  // directly in the browser's Network tab instead of requiring a trip to
+  // the Vercel function logs. Safe to leave in for now (error codes/short
+  // messages only — no stack trace, no query text, no credentials) but
+  // worth removing once the underlying bug is found and fixed.
+  res.status(500).json({
+    message: 'Something went wrong on the server.',
+    debugCode: err.code || err.name || null,
+    debugMessage: (err.message || '').slice(0, 300)
+  });
 });
 
 module.exports = app;
