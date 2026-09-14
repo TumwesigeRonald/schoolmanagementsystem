@@ -602,7 +602,7 @@ router.post('/generate', requireRole(...PAYROLL_EDIT_ROLES), asyncHandler(async 
       for (const upd of advanceUpdates) {
         await client.query(
           `UPDATE salary_advances
-           SET balance_remaining = $1, status = CASE WHEN $1 <= 0 THEN 'cleared' ELSE status END
+           SET balance_remaining = $1::numeric, status = CASE WHEN $1::numeric <= 0 THEN 'cleared' ELSE status END
            WHERE id = $2`,
           [upd.newBalance, upd.id]
         );
