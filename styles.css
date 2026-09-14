@@ -510,11 +510,42 @@ img {
     padding: 0;
 }
 .sidebar-term-reset:hover { color: #fff; }
+/* ---------------------------------------------------------------------
+   DARK NEUMORPHIC "RAISED" BUTTON — shared skin for standalone action
+   buttons/chips on a dark surface (sidebar today; reuse on any future
+   dark-surface control by adding this class alongside a layout-only
+   class for width/padding/etc., same pattern as .sidebar-term-load and
+   .sidebar-footer span below). Resting state looks extruded off the
+   panel; :active flips to an inset shadow so pressing it gives real
+   tactile feedback instead of just a color change.
+   NOT used on .sidebar-nav buttons — those are deliberately kept inset
+   (pressed-in) at rest so the raised buttons read as the app's distinct
+   "do something now" affordance, with the active-tab glow still the
+   only element allowed to sit flush/flat between the two states.
+   --------------------------------------------------------------------- */
+.btn-neu-raised {
+    background: #18191c;
+    border: none;
+    color: #93c5fd;
+    border-radius: 10px;
+    box-shadow: 4px 4px 10px rgba(0,0,0,0.7), -2px -2px 6px rgba(255,255,255,0.03);
+    transition: box-shadow 0.12s ease, background-color 0.12s ease, color 0.12s ease, transform 0.05s ease;
+}
+button.btn-neu-raised { cursor: pointer; }
+.btn-neu-raised:hover {
+    background: #1e1f24;
+    color: #fff;
+}
+button.btn-neu-raised:active {
+    box-shadow: inset 3px 3px 8px rgba(0,0,0,0.75), inset -2px -2px 6px rgba(255,255,255,0.04);
+    transform: translateY(1px);
+}
 /* "Load Term" — a real filled action button (unlike the plain-text "Back
    to current term" link below it), since it's the explicit trigger that
    commits whatever's currently picked in the two <select>s above. Nothing
    re-fetches/re-renders on dropdown change alone; see loadSelectedTerm()
-   in script.js. */
+   in script.js. Color/shadow/radius come from .btn-neu-raised — only
+   layout/spacing/typography live here. */
 .sidebar-term-load {
     display: flex;
     align-items: center;
@@ -522,19 +553,13 @@ img {
     gap: 7px;
     width: 100%;
     margin-top: 10px;
-    background: var(--teal-700);
-    border: none;
-    color: #fff;
     font-size: 11px;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     padding: 9px 10px;
-    border-radius: 8px;
     cursor: pointer;
-    transition: background-color 0.15s ease;
 }
-.sidebar-term-load:hover { background: #1d4ed8; }
 /* Scrollable nav (flex:1 fills whatever space is left below the frozen
    header/above the footer; min-height:0 is required for a flex child to
    actually shrink and scroll instead of growing to fit its content). */
@@ -578,12 +603,14 @@ img {
 .nav-link:hover { background: rgba(59,130,246,0.25); color: #fff; }
 .nav-link-active { background: var(--teal-700); color: #fff; }
 .sidebar-footer { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); text-align: center; flex-shrink: 0; }
-/* Blue chip (not gold-600/charcoal) — sits on the dark charcoal sidebar. */
+/* Text/typography only now — background, border, radius, and color all
+   come from the shared .btn-neu-raised skin (see above) so this chip
+   matches Load Term's raised surface instead of its old translucent-blue
+   pill treatment. */
 .sidebar-footer span {
     display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
-    text-transform: uppercase; color: #93c5fd;
-    background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3);
-    padding: 5px 12px; border-radius: 8px;
+    text-transform: uppercase;
+    padding: 5px 12px;
 }
 .term-pill {
     margin: 0 16px 16px;
@@ -1245,11 +1272,11 @@ tr.score-save-error input {
     --teal-50:  #faf1f1;   /* faintest tint — subtle card backgrounds */
 }
 
-/* Hardcoded hex fallbacks that don't read from the variables above —
-   without these two, the Load Term hover and nav-link hover would stay blue. */
-.sidebar-term-load:hover {
-    background: #4a1414;
-}
+/* Hardcoded hex fallback that doesn't read from the variables above —
+   without it, .nav-link:hover (a legacy/unused-by-sidebar selector kept
+   for any other consumer) would stay blue. Load Term's hover no longer
+   needs an entry here: it's fully driven by the dark-neutral
+   .btn-neu-raised skin now, independent of this maroon theme swap. */
 .nav-link:hover {
     background: rgba(107, 29, 29, 0.28);
     color: #fff;
