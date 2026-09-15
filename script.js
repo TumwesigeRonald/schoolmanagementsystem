@@ -3479,15 +3479,43 @@ async function generateReportCards() {
     // shows up instead of appearing blank.
     await Promise.all(classStudents.map(s => refreshReportRemarksForStudent(s.id)));
 
+    // Fees Balance on the report card is Administrator-only, and only when
+    // they've already unlocked Finance in this browser session (this is a
+    // read of finance data, so it must go through the same Finance-scope
+    // gate as everywhere else — see FinanceAuthAPI.isUnlocked()). Teachers
+    // can generate these same report cards but structurally can never
+    // unlock Finance (see finance-auth.routes.js), so they simply never
+    // reach this branch and their report cards are byte-for-byte what they
+    // were before this feature existed.
+    //
+    // feeBalanceByStudentId stays an empty Map (not populated) for anyone
+    // else, which is exactly what buildOLevelReportPage/buildALevelReportPage
+    // need to omit the "FEES BALANCE" item entirely (their feeBalance
+    // param defaults to null when nothing is passed in).
+    const feeBalanceByStudentId = new Map();
+    if (currentUser.role === ROLES.ADMIN && FinanceAuthAPI.isUnlocked()) {
+        try {
+            const balances = await FinanceAPI.getPayments({ term, year, class: selectedClass });
+            (balances || []).forEach(b => feeBalanceByStudentId.set(b.id, b.balance));
+        } catch (err) {
+            // Never let a Finance hiccup (expired token, brief network blip,
+            // etc.) block report card generation — worst case, the balance
+            // item is just missing from this batch, same as if Finance had
+            // never been unlocked at all.
+            console.warn('Could not load fee balances for report cards:', err.message || err);
+        }
+    }
+
     // Build the date->status lookup once for the whole class instead of
     // letting every student's report card re-scan the entire attendanceStorage
     // object for its own rows (see buildAttendanceIndexByStudent for why).
     const attendanceIndex = buildAttendanceIndexByStudent();
-    previewArea.innerHTML = classStudents.map(student =>
-        isALevel
-            ? buildALevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex)
-            : buildOLevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex)
-    ).join('');
+    previewArea.innerHTML = classStudents.map(student => {
+        const feeBalance = feeBalanceByStudentId.has(student.id) ? feeBalanceByStudentId.get(student.id) : null;
+        return isALevel
+            ? buildALevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex, feeBalance)
+            : buildOLevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex, feeBalance);
+    }).join('');
 }
 /* ---------------------------------------------------------
    6c. REPORT CARD SHARED HELPERS
@@ -3666,7 +3694,7 @@ function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex 
         </div>
     `;
 }
-function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
+function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null, feeBalance = null) {
     const subjectRecords = getALevelSubjectRecords(student);
     // A subject still awaiting a valid mark contributes no points — it must
     // never be silently counted as an 'E' (1 point) in the term's total.
@@ -3703,6 +3731,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 <div><span>TERM:</span><span class="rc-tag">${term}</span></div>
                 <div><span>YEAR:</span><span class="rc-tag">${year}</span></div>
                 <div><span>STUDENT ID:</span>${student.id}</div>
+                ${feeBalance !== null ? `<div><span>FEES BALANCE:</span><span class="rc-tag">${feeBalance <= 0 ? 'FULLY PAID' : formatUGX(feeBalance)}</span></div>` : ''}
             </div>
             <table class="rc-table">
                 <thead>
@@ -3798,7 +3827,7 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
     // consumer of this score in sync.
     return Math.round(((totalScore / denominator) * 3) * 10) / 10;
 }
-function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null) {
+function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null, feeBalance = null) {
     const subjectRecords = getOLevelSubjectRecords(student);
 
     // overallAvg/overallIdentifier (and buildSummarySection below) intentionally
@@ -3878,6 +3907,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 <div><span>TERM:</span><span class="rc-tag">${term}</span></div>
                 <div><span>YEAR:</span><span class="rc-tag">${year}</span></div>
                 <div><span>STUDENT ID:</span>${student.id}</div>
+                ${feeBalance !== null ? `<div><span>FEES BALANCE:</span><span class="rc-tag">${feeBalance <= 0 ? 'FULLY PAID' : formatUGX(feeBalance)}</span></div>` : ''}
             </div>
             <table class="rc-table">
                 <thead>
