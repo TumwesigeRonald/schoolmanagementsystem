@@ -8,25 +8,35 @@
  *
  * Setup:
  *   1. In the Vercel dashboard: Storage -> Create Database -> Blob,
- *      then connect it to this project. Vercel automatically injects
- *      BLOB_READ_WRITE_TOKEN into your deployment's environment — no
- *      manual token copying needed in production.
- *   2. For local dev, run `vercel env pull` (or copy the token from the
- *      dashboard) into your local .env as BLOB_READ_WRITE_TOKEN.
+ *      then connect it to this project. Connected stores now authenticate
+ *      via OIDC by default: Vercel injects BLOB_STORE_ID (plus a
+ *      short-lived OIDC token) into your deployment's environment — no
+ *      manual token copying needed in production, and no long-lived
+ *      BLOB_READ_WRITE_TOKEN is issued or required anymore.
+ *   2. For local dev, run `vercel env pull` once; the CLI writes the
+ *      short-lived OIDC credentials to .env.local and refreshes them
+ *      automatically when they expire.
  *
- * If that token isn't set yet, uploads fall back to storing the file as
+ * Detecting readiness via BLOB_STORE_ID (rather than the legacy
+ * BLOB_READ_WRITE_TOKEN) is required for OIDC-connected stores — Vercel
+ * simply never sets BLOB_READ_WRITE_TOKEN for those, so checking for it
+ * would make this permanently think Blob isn't configured. If a store
+ * still uses the old static-token connection mode, BLOB_READ_WRITE_TOKEN
+ * will be set too and @vercel/blob's put() picks it up on its own.
+ *
+ * If neither is set yet, uploads fall back to storing the file as
  * base64 in the `resources.file_data` column (same behaviour as before)
  * so the upload feature keeps working while Blob is being set up — it
  * just won't scale well for large files or many uploads, and is why you
- * should set BLOB_READ_WRITE_TOKEN as soon as you can.
+ * should connect a Blob store as soon as you can.
  */
-const hasBlobConfig = !!process.env.BLOB_READ_WRITE_TOKEN;
+const hasBlobConfig = !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
 
 let blobPut = null;
 if (hasBlobConfig) {
   ({ put: blobPut } = require('@vercel/blob'));
 } else {
-  console.warn('[storage] BLOB_READ_WRITE_TOKEN not set — resource uploads will fall back to storing base64 in Postgres. Connect a Vercel Blob store to this project (or set the token locally) to store files permanently.');
+  console.warn('[storage] No Blob store connected (BLOB_STORE_ID/BLOB_READ_WRITE_TOKEN not set) — resource uploads will fall back to storing base64 in Postgres. Connect a Vercel Blob store to this project to store files permanently.');
 }
 
 /**
@@ -46,10 +56,13 @@ async function uploadResourceFile(buffer, originalName) {
   const pathname = `lcs-portal-resources/${Date.now()}-${safeName}`;
 
   try {
+    // No explicit `token` option here — @vercel/blob auto-detects
+    // credentials from the environment (OIDC token + BLOB_STORE_ID, or a
+    // legacy BLOB_READ_WRITE_TOKEN if that's what's set), same as
+    // routes/upload.routes.js already does.
     const blob = await blobPut(pathname, buffer, {
       access: 'public',
-      addRandomSuffix: true,
-      token: process.env.BLOB_READ_WRITE_TOKEN
+      addRandomSuffix: true
     });
     return { fileUrl: blob.url, fileData: null };
   } catch (err) {
