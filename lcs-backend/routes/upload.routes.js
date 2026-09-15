@@ -3,6 +3,7 @@ const multer = require('multer');
 const router = express.Router();
 const { put } = require('@vercel/blob');
 const { authenticate, requireRole } = require('../middleware/auth');
+const { assertFallbackSizeOk, toDataUrl, describeBlobError } = require('../lib/storage');
 
 // This endpoint previously handed the raw (still multipart-encoded) request
 // stream straight to Blob's put() — that stores the multipart envelope
@@ -52,8 +53,31 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), (req, re
         url: blob.url
       });
     } catch (error) {
-      console.error(`[upload] Blob upload error for "${req.file.originalname}" (${req.file.size} bytes):`, error);
-      res.status(502).json({ error: 'Failed to upload file to Vercel Blob storage.' });
+      console.error(
+        `[upload] Blob upload error for "${req.file.originalname}" (${req.file.size} bytes) — ${describeBlobError(error)}`,
+        error
+      );
+      // Fall back to a base64 data: URL (same degrade-gracefully approach
+      // used in lib/storage.js for /api/resources/upload) so the upload
+      // still succeeds for the caller instead of hard-failing — but only
+      // up to BASE64_FALLBACK_MAX_BYTES. This route's callers persist the
+      // returned `url` (e.g. into students.photo_url), so a data URI past
+      // that size would silently bloat the database instead of the actual
+      // Blob-config problem getting fixed.
+      let dataUrl;
+      try {
+        assertFallbackSizeOk(req.file.buffer, `[upload] "${req.file.originalname}"`);
+        dataUrl = toDataUrl(req.file.buffer, req.file.mimetype);
+      } catch (fallbackErr) {
+        console.error(`[upload] fallback storage also unavailable for "${req.file.originalname}":`, fallbackErr);
+        return res.status(502).json({
+          error: 'Failed to upload file to Vercel Blob storage, and the file is too large to fall back to temporary storage. Please fix the Vercel Blob configuration (see server logs) and try again.'
+        });
+      }
+      res.status(200).json({
+        message: 'File uploaded (fallback storage — Vercel Blob is misconfigured, see server logs).',
+        url: dataUrl
+      });
     }
   });
 });
