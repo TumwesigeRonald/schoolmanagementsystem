@@ -686,6 +686,18 @@ async function loadFinancePayments() {
     applyFinancePaymentsFilter();
 }
 
+// Small round avatar for a student row in the Payments/Defaulters
+// tables — same photoUrl-or-placeholder pattern used everywhere else
+// in the app (see openStudentProfileModal in script.js). Falls back to
+// a generic user icon when the student has no photo on file yet.
+function financeStudentAvatar(photoUrl, name) {
+    return `<div class="w-7 h-7 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+        ${photoUrl
+            ? `<img src="${escapeHTML(photoUrl)}" class="w-full h-full object-cover" alt="${escapeHTML(name)}">`
+            : `<i class="fa-solid fa-user text-slate-300 text-[10px]"></i>`}
+    </div>`;
+}
+
 // Filters the already-fetched balances list client-side by name or
 // student ID — instant as the bursar types, no extra network call, and
 // works across "All Classes" too so they can find one student quickly
@@ -724,7 +736,7 @@ function applyFinancePaymentsFilter() {
                         const reasonEsc = escapeHTML(s.customFeeReason || '').replace(/'/g, "\\'");
                         return `
                         <tr>
-                            <td class="font-extrabold">${escapeHTML(s.name)}</td>
+                            <td class="font-extrabold"><span class="inline-flex items-center gap-2">${financeStudentAvatar(s.photoUrl, s.name)}${escapeHTML(s.name)}</span></td>
                             <td>${escapeHTML(s.class)}</td>
                             <td class="fin-num">
                                 ${formatUGX(s.billed)}
@@ -1421,7 +1433,7 @@ async function loadFinanceDefaulters() {
                         const classEsc = escapeHTML(s.class).replace(/'/g, "\\'");
                         return `
                         <tr>
-                            <td class="font-extrabold">${escapeHTML(s.name)}</td>
+                            <td class="font-extrabold"><span class="inline-flex items-center gap-2">${financeStudentAvatar(s.photoUrl, s.name)}${escapeHTML(s.name)}</span></td>
                             <td>${escapeHTML(s.class)}</td>
                             <td class="fin-num">${formatUGX(s.billed)}</td>
                             <td class="fin-num text-emerald-600 font-bold">${formatUGX(s.paid)}</td>

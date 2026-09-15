@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_8Mw6AmIRABGMZYWelVaVHr11FitU",
+      "name": "lcs-backend",
+      "directory": "lcs-backend",
+      "orgId": "team_X29KUkoYzpVDrHQDlLBLLMsN"
+    }
+  ]
+}

@@ -3233,9 +3233,16 @@ function renderOwnDashboardModule() {
     }
     return `
         <div class="space-y-6">
-            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
-                <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
-                <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    ${student.photoUrl
+                        ? `<img src="${escapeHTML(student.photoUrl)}" class="w-full h-full object-cover" alt="${escapeHTML(student.name)}">`
+                        : `<i class="fa-solid fa-user text-slate-300 text-lg"></i>`}
+                </div>
+                <div>
+                    <h3 class="text-sm font-extrabold text-slate-900">${escapeHTML(student.name)}</h3>
+                    <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">${escapeHTML(student.id)} &middot; ${escapeHTML(student.class)} &middot; ${escapeHTML(student.gender)}</p>
+                </div>
             </div>
             <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
                 <h4 class="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-sack-dollar mr-1.5 text-emerald-600"></i>My Fees Balance</h4>

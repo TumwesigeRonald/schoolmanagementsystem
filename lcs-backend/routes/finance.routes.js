@@ -139,7 +139,7 @@ router.get('/payments', asyncHandler(async (req, res) => {
   // billed = the student's own override if one is set for this term/year,
   // otherwise their class's default fee_structures amount, otherwise 0.
   const { rows: students } = await db.query(
-    `SELECT s.id, s.name, s.class,
+    `SELECT s.id, s.name, s.class, s.photo_url AS "photoUrl",
             COALESCE(sfo.amount, fs.amount, 0)::float AS billed,
             (sfo.amount IS NOT NULL) AS "hasCustomFee",
             sfo.reason AS "customFeeReason",
