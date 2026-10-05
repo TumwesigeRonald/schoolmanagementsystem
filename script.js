@@ -3894,7 +3894,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 </div>
                 <div class="rc-legal-row">
                     <span class="rc-motto">&ldquo;BE KNOWN BY DEEDS&rdquo;</span>
-                    <span class="rc-print-meta">Printed on ${formatGeneratedTimestamp()} &middot; via Luweero Community SS Management System</span>
+                    <span class="rc-print-meta">Printed on ${formatGeneratedTimestamp()} &middot; via Rontech School Suite</span>
                     <span class="rc-stamp-note">NOT VALID WITHOUT STAMP</span>
                 </div>
             </div>
