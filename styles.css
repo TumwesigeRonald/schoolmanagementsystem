@@ -175,12 +175,12 @@ img {
 }
 .login-badge-row {
     display: flex;
-    align-items: flex-start;
-    gap: 14px;
+    align-items: center;
+    gap: 16px;
     margin-bottom: 28px;
 }
 .login-badge-row img {
-    width: 46px; height: 46px;
+    width: 60px; height: 60px;
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid rgba(255,255,255,0.12);
@@ -188,16 +188,22 @@ img {
 }
 /* Selector targets h3 to match the heading element used in index.html. */
 .login-badge-row h3 {
-    font-family: var(--font-display);
-    font-size: 16px;
-    line-height: 1.25;
+    font-family: 'Playfair Display', var(--font-display), Georgia, serif;
+    font-size: clamp(26px, 5.5vw, 34px);
+    line-height: 1.1;
     margin: 0;
-    color: #f1f5f9;
-    font-weight: 700;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    background: linear-gradient(90deg, #ffffff 0%, #a7f3d0 55%, #6ee7b7 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: #f1f5f9; /* fallback */
+    text-shadow: 0 2px 14px rgba(110,231,183,0.25);
 }
 .login-badge-row span {
     display: block;
-    font-size: 9.5px;
+    font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     font-weight: 800;
