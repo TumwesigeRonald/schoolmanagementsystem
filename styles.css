@@ -177,6 +177,8 @@ img {
     display: flex;
     align-items: center;
     gap: 16px;
+    justify-content: center;
+    text-align: center;
     margin-bottom: 28px;
 }
 .login-badge-row img {
