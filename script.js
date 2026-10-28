@@ -3162,9 +3162,102 @@ function renderReportsModule() {
                 </div>
                 <div id="grading-legend-preview" class="hidden mt-4 pt-4 border-t border-slate-200"></div>
             </div>
+            <div class="bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
+                <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Single Student Report Card</label>
+                <p class="text-[11px] font-semibold text-slate-400 mb-3">Search any learner by name or student ID (all classes), then generate just their report card for the term shown above.</p>
+                <div class="relative max-w-xl">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="single-report-search" autocomplete="off" placeholder="Type a student's name or ID&hellip;" oninput="searchSingleReportStudent(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();pickFirstSingleReportResult();}" class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">
+                    <div id="single-report-results" class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-y-auto"></div>
+                </div>
+            </div>
             <div id="report-cards-preview" class="space-y-4"></div>
         </div>
     `;
+}
+// ---- Single student report card (search + generate one learner) ----
+function searchSingleReportStudent(query) {
+    const box = document.getElementById('single-report-results');
+    if (!box) return;
+    const q = (query || '').trim().toLowerCase();
+    if (!q) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+    const matches = studentsList.filter(s =>
+        String(s.name || '').toLowerCase().includes(q) || String(s.id || '').toLowerCase().includes(q)
+    ).slice(0, 10);
+    box.classList.remove('hidden');
+    if (matches.length === 0) {
+        box.innerHTML = '<div class="p-3 text-xs font-semibold text-slate-400">No matching student found.</div>';
+        return;
+    }
+    box.innerHTML = matches.map(s => `
+        <button type="button" data-student-id="${escapeHTML(s.id)}" onclick="generateSingleReportCard(this.dataset.studentId)" class="single-report-result w-full text-left px-3.5 py-2.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 flex items-center justify-between gap-3">
+            <span class="text-xs font-extrabold text-slate-700">${escapeHTML(s.name)}</span>
+            <span class="text-[11px] font-bold text-slate-400">${escapeHTML(s.id)} &middot; ${escapeHTML(s.class)}</span>
+        </button>`).join('');
+}
+function pickFirstSingleReportResult() {
+    const first = document.querySelector('#single-report-results .single-report-result');
+    if (first) generateSingleReportCard(first.dataset.studentId);
+}
+async function generateSingleReportCard(studentId) {
+    if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
+    const previewArea = document.getElementById('report-cards-preview');
+    const student = studentsList.find(s => s.id === studentId);
+    if (!previewArea || !student) return;
+    const box = document.getElementById('single-report-results');
+    if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+    const searchInput = document.getElementById('single-report-search');
+    if (searchInput) searchInput.value = `${student.name} (${student.id})`;
+
+    const termSelect = document.getElementById('report-term-select');
+    const yearInput = document.getElementById('report-year-input');
+    const beginsInput = document.getElementById('report-next-begins');
+    const endsInput = document.getElementById('report-next-ends');
+    const term = termSelect ? termSelect.value : termSettings.term;
+    const year = yearInput ? yearInput.value : termSettings.year;
+    const nextBegins = beginsInput ? beginsInput.value : termSettings.nextBegins;
+    const nextEnds = endsInput ? endsInput.value : termSettings.nextEnds;
+    termSettings = { term, year, nextBegins, nextEnds };
+
+    previewArea.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">Loading report card for ${escapeHTML(student.name)}&hellip;</div>`;
+    await refreshAttendanceForStudent(student.id);
+    await refreshReportRemarksForStudent(student.id);
+
+    // Fees balance: same Administrator-only / Finance-unlocked rule as the class generator.
+    let feeBalance = null;
+    if (currentUser.role === ROLES.ADMIN && FinanceAuthAPI.isUnlocked()) {
+        try {
+            const balances = await FinanceAPI.getPayments({ term, year, class: student.class });
+            const row = (balances || []).find(b => b.id === student.id);
+            if (row) feeBalance = row.balance;
+        } catch (err) {
+            console.warn('Could not load fee balance for report card:', err.message || err);
+        }
+    }
+
+    const isALevel = (student.class === 'S.5' || student.class === 'S.6');
+    const attendanceIndex = buildAttendanceIndexByStudent();
+    const page = isALevel
+        ? buildALevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex, feeBalance)
+        : buildOLevelReportPage(student, term, year, nextBegins, nextEnds, true, attendanceIndex, feeBalance);
+    previewArea.innerHTML = `
+        <div class="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs flex flex-wrap justify-between items-center gap-3">
+            <p class="text-xs font-semibold text-slate-500">Report card for <span class="font-extrabold text-slate-700">${escapeHTML(student.name)}</span> (${escapeHTML(student.id)}, ${escapeHTML(student.class)}) &middot; ${escapeHTML(term)}, ${escapeHTML(String(year))}</p>
+            <button onclick="printSingleReportCard('${escapeHTML(student.id)}')" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-print mr-1.5"></i>Print / Save PDF</button>
+        </div>
+        <div id="single-report-page">${page}</div>`;
+}
+function printSingleReportCard(studentId) {
+    if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
+    const page = document.getElementById('single-report-page');
+    const printArea = document.getElementById('print-area');
+    if (!page || !printArea) return;
+    printArea.innerHTML = page.innerHTML;
+    const student = studentsList.find(s => s.id === studentId);
+    const originalTitle = document.title;
+    if (student) document.title = `${student.name}_ReportCard_${termSettings.term.replace(/\s+/g, '')}_${termSettings.year}`.replace(/[^\w-]/g, '');
+    window.print();
+    document.title = originalTitle;
 }
 // Read-only preview of the grading scale used on every report card — lets
 // an admin/teacher check the scale up front without generating a full
