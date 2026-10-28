@@ -511,7 +511,7 @@ function buildClassSummaryPrintHTML(selectedClass, level, subjects, rows, term, 
                 </thead>
                 <tbody>${rowsHtml}</tbody>
             </table>
-            <p class="gms-print-footer">Printed on ${formatGeneratedTimestamp()} &middot; via Rontech School Suite</p>
+            <p class="gms-print-footer">Printed on ${formatGeneratedTimestamp()} &middot; via Luweero Community SS Management System</p>
         </div>
     `;
 }
