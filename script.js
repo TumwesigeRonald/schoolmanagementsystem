@@ -46,6 +46,7 @@ let studentsList = [];
 // else — dropdowns, the Scores/Attendance student pickers, lookups by
 // id) so paging through the table never affects any of those.
 let studentTablePage = 1;
+let graduatedStudentsList = []; // alumni: kept only so their IDs stay reserved and they can be looked up
 const STUDENT_TABLE_PAGE_SIZE = 25;
 let studentTableTotal = 0;
 let studentTableTotalPages = 1;
@@ -339,6 +340,17 @@ async function refreshStudentsList() {
         const remote = await StudentsAPI.list();
         if (Array.isArray(remote)) studentsList = remote;
     } catch (e) { /* keep existing local list */ }
+    // Graduated learners are not in studentsList (class lists stay clean), but
+    // their IDs must stay reserved, so keep a separate copy.
+    if (currentUser && currentUser.role !== 'Student') {
+        try {
+            const grads = await StudentsAPI.list({ status: 'Graduated' });
+            if (Array.isArray(grads)) graduatedStudentsList = grads;
+        } catch (e) { /* keep existing */ }
+    }
+}
+function findAnyStudent(id) {
+    return studentsList.find(s => s.id === id) || graduatedStudentsList.find(s => s.id === id);
 }
 async function refreshTeachersList() {
     try {
@@ -1620,6 +1632,13 @@ function renderStudentsModule() {
                         <option value="S.6">S.6</option>
                     </select>
                     <div class="mt-3">
+                        <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Show</label>
+                        <select id="student-status-filter" onchange="studentTablePage = 1; loadStudentData();" class="w-full md:w-64 p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-teal-500">
+                            <option value="Active">Current learners</option>
+                            <option value="Graduated">Graduated (Alumni)</option>
+                        </select>
+                    </div>
+                    <div class="mt-3">
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Search Students</label>
                         <div class="relative w-full md:w-64">
                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[11px] pointer-events-none"></i>
@@ -1629,6 +1648,9 @@ function renderStudentsModule() {
                 </div>
                 ${canManage ? `
                 <div class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <button onclick="openPromoteClassesModal()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
+                        <i class="fa-solid fa-turn-up mr-2"></i>Promote Classes
+                    </button>
                     <button onclick="openBulkImportModal()" class="w-full sm:w-auto btn-neu-light text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">
                         <i class="fa-solid fa-file-csv mr-2"></i>Bulk Import (CSV)
                     </button>
@@ -1644,7 +1666,11 @@ function renderStudentsModule() {
                 <form onsubmit="handleAddStudent(event)" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Student ID</label>
-                        <input type="text" id="stud-id" placeholder="e.g. LCS/005" required class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                        <div class="flex gap-2">
+                            <input type="text" id="stud-id" placeholder="e.g. LCS/005" required autocomplete="off" oninput="checkStudentIdAvailability()" onblur="normalizeStudentIdField()" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                            <button type="button" onclick="fillNextStudentId()" title="Fill in the next unused ID" class="shrink-0 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-[11px] font-extrabold uppercase tracking-wider px-3 rounded-xl transition"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Next ID</button>
+                        </div>
+                        <p id="stud-id-status" class="text-[11px] font-bold mt-1 min-h-[16px]"></p>
                     </div>
                     <div>
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">Full Name</label>
@@ -1709,6 +1735,8 @@ async function loadStudentData() {
     const canManage = getPermissions(currentUser.role).canManageStudents;
     const selectedClass = filterSelect ? filterSelect.value : 'ALL';
     const searchTerm = searchInput ? searchInput.value.trim() : '';
+    const statusFilter = document.getElementById('student-status-filter');
+    const showGraduated = !!statusFilter && statusFilter.value === 'Graduated';
 
     tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading students&hellip;</td></tr>`;
 
@@ -1716,6 +1744,7 @@ async function loadStudentData() {
     try {
         result = await StudentsAPI.list({
             class: selectedClass,
+            status: showGraduated ? 'Graduated' : undefined,
             search: searchTerm || undefined,
             page: studentTablePage,
             pageSize: STUDENT_TABLE_PAGE_SIZE
@@ -1734,10 +1763,12 @@ async function loadStudentData() {
     studentTableTotal = Array.isArray(result) ? pageStudents.length : (result.total || 0);
     studentTableTotalPages = Array.isArray(result) ? 1 : (result.totalPages || 1);
 
-    updateDashboardStats();
+    if (!showGraduated) updateDashboardStats();
 
     if (pageStudents.length === 0) {
-        const contextMsg = searchTerm
+        const contextMsg = showGraduated && !searchTerm
+            ? 'No graduated learners yet.'
+            : searchTerm
             ? `No student records match "${escapeHTML(searchTerm)}"${selectedClass !== 'ALL' ? ` in ${selectedClass}` : ''}.`
             : `No student records found for ${selectedClass}.`;
         tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium">${contextMsg}</td></tr>`;
@@ -1754,11 +1785,14 @@ async function loadStudentData() {
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 font-mono text-xs font-bold text-teal-700">${student.id}</td>
                 <td class="p-4 font-bold text-slate-900">${escapeHTML(student.name)}</td>
-                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${escapeHTML(student.class)}</span></td>
+                <td class="p-4"><span class="bg-teal-50 text-teal-800 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-teal-200">${escapeHTML(student.class)}</span>${student.status === 'Graduated' ? ` <span class="bg-amber-50 text-amber-700 font-extrabold px-2.5 py-1 rounded-lg text-[11px] border border-amber-200">Graduated${student.graduatedYear ? ' ' + escapeHTML(String(student.graduatedYear)) : ''}</span>` : ''}</td>
                 <td class="p-4 text-slate-600 font-semibold">${escapeHTML(student.gender)}</td>
                 <td class="p-4 text-center space-x-2 whitespace-nowrap">
                     <button onclick="openStudentProfileModal('${student.id}')" class="text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors"><i class="fa-solid fa-id-card mr-1"></i>View</button>
                     ${canManage ? `<button onclick="openEditStudentModal('${student.id}')" class="text-blue-600 hover:text-blue-700 text-[11px] font-extrabold uppercase tracking-wider bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors"><i class="fa-solid fa-pen mr-1"></i>Edit</button>` : ''}
+                    ${canManage ? (student.status === 'Graduated'
+                        ? `<button onclick="setStudentStatus('${student.id}', 'Active')" class="text-slate-600 hover:text-slate-800 text-[11px] font-extrabold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg border border-slate-300 transition-colors"><i class="fa-solid fa-rotate-left mr-1"></i>Restore</button>`
+                        : `<button onclick="setStudentStatus('${student.id}', 'Graduated')" class="text-amber-700 hover:text-amber-800 text-[11px] font-extrabold uppercase tracking-wider bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-200 transition-colors"><i class="fa-solid fa-graduation-cap mr-1"></i>Graduate</button>`) : ''}
                     ${canManage ? `<button onclick="deleteStudent('${student.id}')" class="text-rose-600 hover:text-rose-700 text-[11px] font-extrabold uppercase tracking-wider btn-neu-light-danger px-3 py-1.5 rounded-lg transition-colors"><i class="fa-solid fa-trash mr-1"></i>Delete</button>` : ''}
                 </td>
             </tr>
@@ -1805,7 +1839,7 @@ function closeModal() {
 async function openStudentProfileModal(studentId) {
     const root = document.getElementById('modal-root');
     if (!root) return;
-    const student = studentsList.find(s => s.id === studentId);
+    const student = findAnyStudent(studentId);
     if (!student) return;
     root.innerHTML = `
         <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
@@ -2117,6 +2151,9 @@ async function removeStudentSubject(studentId, subject) {
 function toggleStudentForm() {
     const formContainer = document.getElementById('student-form-container');
     if (formContainer) formContainer.classList.toggle('hidden');
+    // Suggest the next unused ID whenever the form is opened empty.
+    const idEl = document.getElementById('stud-id');
+    if (formContainer && !formContainer.classList.contains('hidden') && idEl && !idEl.value.trim()) fillNextStudentId();
 }
 /* ---------------------------------------------------------
    4c. BULK STUDENT IMPORT (CSV)
@@ -2211,11 +2248,12 @@ function parseAndPreviewCSV(text) {
         return;
     }
 
-    const seenIds = new Set(studentsList.map(s => s.id.toUpperCase()));
+    const seenIds = new Set(studentsList.map(s => studentIdKey(s.id)));
     const rows = [];
     for (let i = 1; i < lines.length; i++) {
         const cols = splitCSVLine(lines[i]);
-        const id = (cols[idIdx] || '').toUpperCase();
+        const rawId = (cols[idIdx] || '').trim();
+        const id = normalizeStudentId(rawId) || rawId.toUpperCase();
         const name = cols[nameIdx] || '';
         const cls = (cols[classIdx] || '').toUpperCase();
         const genderRaw = (cols[genderIdx] || '').toLowerCase();
@@ -2223,12 +2261,13 @@ function parseAndPreviewCSV(text) {
 
         let error = '';
         if (!id) error = 'Missing Student ID';
+        else if (!normalizeStudentId(id)) error = `ID "${rawId}" is not in the format LCS/###`;
         else if (!name) error = 'Missing Name';
         else if (!BULK_IMPORT_VALID_CLASSES.includes(cls)) error = `Invalid class "${cols[classIdx] || ''}"`;
         else if (!gender) error = `Invalid gender "${cols[genderIdx] || ''}"`;
-        else if (seenIds.has(id)) error = 'Duplicate / already registered ID';
+        else if (seenIds.has(studentIdKey(id))) error = 'Duplicate / already registered ID';
 
-        if (!error) seenIds.add(id); // guards against duplicates within the file itself too
+        if (!error) seenIds.add(studentIdKey(id)); // guards against duplicates within the file itself too
         rows.push({ id, name, class: cls, gender, error });
     }
 
@@ -2295,6 +2334,62 @@ async function confirmBulkImport() {
         `;
     }
 }
+// ---- Student ID helpers: format LCS/### ----
+// Turns "lcs 5", "LCS-05", "lcs/5" or just "5" into "LCS/005". Returns null
+// when the text can't be read as an LCS number.
+function normalizeStudentId(raw) {
+    const t = String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
+    const m = t.match(/^(?:LCS[\/\-_]*)?(\d+)$/);
+    if (!m) return null;
+    return 'LCS/' + m[1].replace(/^0+(?=\d)/, '').padStart(3, '0');
+}
+// Comparison key so "lcs/5", "LCS/005" and "LCS/ 005" all count as the same ID.
+function studentIdKey(raw) {
+    return normalizeStudentId(raw) || String(raw || '').trim().toUpperCase().replace(/\s+/g, '');
+}
+function findStudentByIdKey(raw) {
+    const key = studentIdKey(raw);
+    return studentsList.concat(graduatedStudentsList).find(s => studentIdKey(s.id) === key) || null;
+}
+function getNextStudentId() {
+    let max = 0;
+    studentsList.concat(graduatedStudentsList).forEach(s => {
+        const n = normalizeStudentId(s.id);
+        if (n) max = Math.max(max, parseInt(n.slice(4), 10));
+    });
+    return 'LCS/' + String(max + 1).padStart(3, '0');
+}
+function fillNextStudentId() {
+    const el = document.getElementById('stud-id');
+    if (!el) return;
+    el.value = getNextStudentId();
+    checkStudentIdAvailability();
+}
+function normalizeStudentIdField() {
+    const el = document.getElementById('stud-id');
+    if (!el || !el.value.trim()) return;
+    const n = normalizeStudentId(el.value);
+    if (n) el.value = n;
+    checkStudentIdAvailability();
+}
+function checkStudentIdAvailability() {
+    const el = document.getElementById('stud-id');
+    const status = document.getElementById('stud-id-status');
+    if (!el || !status) return;
+    const raw = el.value.trim();
+    if (!raw) { status.textContent = ''; return; }
+    const existing = findStudentByIdKey(raw);
+    if (existing) {
+        status.className = 'text-[11px] font-bold mt-1 min-h-[16px] text-rose-600';
+        status.textContent = `\u2716 Already used by ${existing.name} (${existing.class}).`;
+    } else if (!normalizeStudentId(raw)) {
+        status.className = 'text-[11px] font-bold mt-1 min-h-[16px] text-amber-600';
+        status.textContent = 'Use the format LCS/### (e.g. LCS/005).';
+    } else {
+        status.className = 'text-[11px] font-bold mt-1 min-h-[16px] text-emerald-600';
+        status.textContent = `\u2714 ${normalizeStudentId(raw)} is available.`;
+    }
+}
 async function handleAddStudent(event) {
     event.preventDefault();
     if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
@@ -2308,8 +2403,15 @@ async function handleAddStudent(event) {
         alert('Please provide both a Student ID and a Full Name.');
         return;
     }
-    if (studentsList.some(s => s.id.toUpperCase() === newStudent.id)) {
-        alert(`Student ID "${newStudent.id}" is already registered. Please use a unique ID.`);
+    const normalizedId = normalizeStudentId(newStudent.id);
+    if (!normalizedId) {
+        alert('Student ID must be in the format LCS/### (e.g. LCS/005).');
+        return;
+    }
+    newStudent.id = normalizedId;
+    const clash = findStudentByIdKey(newStudent.id);
+    if (clash) {
+        alert(`Student ID "${newStudent.id}" is already registered to ${clash.name} (${clash.class}). Please use a unique ID.`);
         return;
     }
     try {
@@ -2326,7 +2428,101 @@ async function handleAddStudent(event) {
     const studNameEl = document.getElementById('stud-name');
     if (studIdEl) studIdEl.value = "";
     if (studNameEl) studNameEl.value = "";
+    const studIdStatus = document.getElementById('stud-id-status');
+    if (studIdStatus) studIdStatus.textContent = '';
     updateDashboardStats();
+}
+// ---- Graduate / restore a single learner ----
+async function setStudentStatus(studentId, status) {
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
+    const student = findAnyStudent(studentId);
+    if (!student) return;
+    const msg = status === 'Graduated'
+        ? `Mark ${student.name} (${student.id}) as Graduated?\n\nTheir ID, marks and records are kept. They will no longer appear in class lists, attendance or report card runs, and the ID stays reserved.`
+        : `Restore ${student.name} (${student.id}) as a current learner in ${student.class}?`;
+    if (!confirm(msg)) return;
+    try {
+        await StudentsAPI.setStatus(studentId, status);
+    } catch (err) {
+        alert(err.message || 'Could not update this learner. Please try again.');
+        return;
+    }
+    await refreshStudentsList();
+    await loadStudentData();
+    updateDashboardStats();
+}
+// ---- Promote classes (whole school, one go) ----
+const PROMOTE_CLASS_ORDER = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
+function openPromoteClassesModal() {
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
+    const root = document.getElementById('modal-root');
+    if (!root) return;
+    const rows = PROMOTE_CLASS_ORDER.map((cls, i) => {
+        const count = studentsList.filter(s => s.class === cls).length;
+        const next = PROMOTE_CLASS_ORDER[i + 1];
+        // Sensible defaults: S.1-S.3 and S.5 move up, S.6 graduates. S.4 is left
+        // for the admin to choose (some learners continue to S.5, others leave).
+        const def = cls === 'S.6' ? 'GRADUATE' : (cls === 'S.4' ? 'SKIP' : next);
+        const options = [
+            next ? `<option value="${next}" ${def === next ? 'selected' : ''}>Promote to ${next}</option>` : '',
+            `<option value="GRADUATE" ${def === 'GRADUATE' ? 'selected' : ''}>Mark all as Graduated</option>`,
+            `<option value="SKIP" ${def === 'SKIP' ? 'selected' : ''}>Leave as is</option>`
+        ].join('');
+        return `
+            <div class="flex items-center justify-between gap-3 py-2.5 border-b border-slate-100 last:border-0">
+                <div><span class="text-xs font-extrabold text-slate-800">${cls}</span> <span class="text-[11px] font-bold text-slate-400">${count} learner${count === 1 ? '' : 's'}</span></div>
+                <select data-promote-from="${cls}" class="p-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-700">${options}</select>
+            </div>`;
+    }).join('');
+    root.innerHTML = `
+        <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                <div class="flex items-center justify-between p-5 border-b border-slate-200">
+                    <h3 class="text-sm font-extrabold text-slate-900"><i class="fa-solid fa-turn-up mr-2 text-teal-700"></i>Promote Classes</h3>
+                    <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 text-lg px-2">&#10005;</button>
+                </div>
+                <div class="p-5">
+                    <p class="text-[11px] font-semibold text-slate-500 mb-3">Choose what happens to each class. All classes move together, so nobody is promoted twice. IDs stay the same and old marks stay under their original term and year. Do this at the end of the school year.</p>
+                    <div id="promote-rows">${rows}</div>
+                    <p class="mt-3 text-[10px] font-semibold text-amber-600">S.4 is left as is by default: promote it only if every S.4 learner is continuing to S.5, otherwise use the Graduate button on the learners who are leaving.</p>
+                    <div class="flex justify-end gap-2 mt-5">
+                        <button onclick="closeModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">Cancel</button>
+                        <button id="promote-confirm-btn" onclick="confirmPromoteClasses()" style="background:var(--navy-900);" class="hover:opacity-90 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition">Apply</button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+}
+async function confirmPromoteClasses() {
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
+    const plan = {};
+    const lines = [];
+    document.querySelectorAll('#promote-rows select[data-promote-from]').forEach(sel => {
+        const from = sel.dataset.promoteFrom;
+        plan[from] = sel.value;
+        const count = studentsList.filter(s => s.class === from).length;
+        if (sel.value !== 'SKIP' && count > 0) {
+            lines.push(`${from}: ${count} \u2192 ${sel.value === 'GRADUATE' ? 'Graduated' : sel.value}`);
+        }
+    });
+    if (lines.length === 0) { alert('Nothing to apply: no learners are affected by these choices.'); return; }
+    if (!confirm(`Apply these changes?\n\n${lines.join('\n')}\n\nThis is applied in one go (graduates can be restored one by one).`)) return;
+    const btn = document.getElementById('promote-confirm-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Applying\u2026'; }
+    let result;
+    try {
+        result = await StudentsAPI.promote(plan);
+    } catch (err) {
+        alert(err.message || 'Could not apply the promotion. Nothing was changed.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+        return;
+    }
+    closeModal();
+    await refreshStudentsList();
+    studentTablePage = 1;
+    await loadStudentData();
+    updateDashboardStats();
+    alert(`Done. ${result && result.affected != null ? result.affected : ''} learner(s) updated.`);
 }
 async function deleteStudent(studentId) {
     if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
@@ -2354,7 +2550,7 @@ function openEditStudentModal(studentId) {
     if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard: Administrator only
     const root = document.getElementById('modal-root');
     if (!root) return;
-    const student = studentsList.find(s => s.id === studentId);
+    const student = findAnyStudent(studentId);
     if (!student) return;
     root.innerHTML = `
         <div class="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4" onclick="if(event.target===this) closeModal()">
@@ -2412,7 +2608,7 @@ function openEditStudentModal(studentId) {
 async function submitEditStudent(event, originalId) {
     event.preventDefault();
     if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard: Administrator only
-    const student = studentsList.find(s => s.id === originalId);
+    const student = findAnyStudent(originalId);
     if (!student) return;
     const updates = {
         id: getInputValue('edit-stud-id').trim().toUpperCase(),
@@ -2424,7 +2620,7 @@ async function submitEditStudent(event, originalId) {
         alert('Please provide both a Student ID and a Full Name.');
         return;
     }
-    if (updates.id !== originalId.toUpperCase() && studentsList.some(s => s.id.toUpperCase() === updates.id)) {
+    if (updates.id !== originalId.toUpperCase() && studentsList.concat(graduatedStudentsList).some(s => s.id.toUpperCase() === updates.id)) {
         alert(`Student ID "${updates.id}" is already registered. Please use a unique ID.`);
         return;
     }

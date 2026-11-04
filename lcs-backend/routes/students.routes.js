@@ -7,6 +7,25 @@ const asyncHandler = require('../middleware/asyncHandler');
 const router = express.Router();
 const HASH_ROUNDS = 10;
 
+// Makes sure the status column exists even if `npm run migrate` hasn't been
+// re-run yet. Idempotent; runs once per server process.
+let statusColumnReady = null;
+function ensureStatusColumn() {
+  if (!statusColumnReady) {
+    statusColumnReady = db.query(
+      `ALTER TABLE students ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Active';
+       ALTER TABLE students ADD COLUMN IF NOT EXISTS graduated_year INTEGER;`
+    ).catch(err => { statusColumnReady = null; throw err; });
+  }
+  return statusColumnReady;
+}
+
+// Promotion map: where each class goes at the end of the year.
+const PROMOTION_TARGETS = {
+  'S.1': ['S.2'], 'S.2': ['S.3'], 'S.3': ['S.4'], 'S.4': ['S.5'], 'S.5': ['S.6'], 'S.6': []
+};
+const VALID_CLASSES = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
+
 // GET /api/students?class=&search=&page=&pageSize=
 // Admin/Teacher: full registry, optionally filtered/paginated. Student:
 // only their own record (defense in depth — the frontend already hides
@@ -20,15 +39,21 @@ const HASH_ROUNDS = 10;
 // Records admin table passes `page`, and gets back
 // { data, total, page, pageSize, totalPages } instead.
 router.get('/', authenticate, asyncHandler(async (req, res) => {
+  await ensureStatusColumn();
   if (req.user.role === 'Student') {
-    const { rows } = await db.query('SELECT id, name, class, gender, photo_url AS "photoUrl" FROM students WHERE id = $1', [req.user.studentId]);
+    const { rows } = await db.query('SELECT id, name, class, gender, photo_url AS "photoUrl", status FROM students WHERE id = $1', [req.user.studentId]);
     return res.json(rows);
   }
 
-  const { class: classLevel, search, page: rawPage, pageSize: rawPageSize } = req.query;
+  const { class: classLevel, search, page: rawPage, pageSize: rawPageSize, status } = req.query;
 
   const conditions = [];
   const values = [];
+  // Default: Active learners only, so every class list, attendance sheet and
+  // report-card run ignores graduates. ?status=Graduated shows only alumni,
+  // ?status=ALL shows everyone.
+  if (status === 'Graduated') conditions.push(`status = 'Graduated'`);
+  else if (status !== 'ALL') conditions.push(`status <> 'Graduated'`);
   if (classLevel && classLevel !== 'ALL') {
     values.push(classLevel);
     conditions.push(`class = $${values.length}`);
@@ -41,7 +66,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 
   if (rawPage === undefined) {
     const { rows } = await db.query(
-      `SELECT id, name, class, gender, photo_url AS "photoUrl" FROM students ${where} ORDER BY id`,
+      `SELECT id, name, class, gender, photo_url AS "photoUrl", status, graduated_year AS "graduatedYear" FROM students ${where} ORDER BY id`,
       values
     );
     return res.json(rows);
@@ -59,7 +84,7 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const limitParam = values.length - 1;
   const offsetParam = values.length;
   const { rows } = await db.query(
-    `SELECT id, name, class, gender, photo_url AS "photoUrl", COUNT(*) OVER()::int AS "totalCount"
+    `SELECT id, name, class, gender, photo_url AS "photoUrl", status, graduated_year AS "graduatedYear", COUNT(*) OVER()::int AS "totalCount"
      FROM students ${where}
      ORDER BY id
      LIMIT $${limitParam} OFFSET $${offsetParam}`,
@@ -76,6 +101,70 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
     pageSize,
     totalPages: Math.max(1, Math.ceil(total / pageSize))
   });
+}));
+
+// PUT /api/students/:id/status — Admin only. { status: 'Graduated' | 'Active' }.
+// Nothing is deleted: the learner keeps their ID, marks, attendance and login.
+router.put('/:id/status', authenticate, requireRole('Administrator'), asyncHandler(async (req, res) => {
+  await ensureStatusColumn();
+  const { status } = req.body || {};
+  if (status !== 'Graduated' && status !== 'Active') {
+    return res.status(400).json({ message: "status must be 'Graduated' or 'Active'." });
+  }
+  const year = status === 'Graduated' ? new Date().getFullYear() : null;
+  const { rowCount, rows } = await db.query(
+    `UPDATE students SET status = $1, graduated_year = $2 WHERE id = $3
+     RETURNING id, status, graduated_year AS "graduatedYear"`,
+    [status, year, req.params.id]
+  );
+  if (!rowCount) return res.status(404).json({ message: 'Student not found.' });
+  res.json(rows[0]);
+}));
+
+// POST /api/students/promote — Admin only.
+// Body: { plan: { "S.1": "S.2", "S.4": "GRADUATE", "S.5": "SKIP", ... } }
+// Each class maps to its next class, "GRADUATE" (mark every Active learner in
+// it Graduated) or "SKIP" (leave alone). All classes move in ONE statement
+// against the original class values, so nobody is promoted twice (S.1 -> S.2
+// -> S.3), and it's all-or-nothing. Only Active learners are touched.
+router.post('/promote', authenticate, requireRole('Administrator'), asyncHandler(async (req, res) => {
+  await ensureStatusColumn();
+  const plan = (req.body && req.body.plan) || {};
+  const moves = [];     // [from, to]
+  const graduating = []; // classes
+  for (const from of Object.keys(plan)) {
+    const action = plan[from];
+    if (!VALID_CLASSES.includes(from)) return res.status(400).json({ message: `Unknown class "${from}".` });
+    if (action === 'SKIP' || action === undefined) continue;
+    if (action === 'GRADUATE') { graduating.push(from); continue; }
+    if (!PROMOTION_TARGETS[from].includes(action)) {
+      return res.status(400).json({ message: `${from} cannot be promoted to "${action}".` });
+    }
+    moves.push([from, action]);
+  }
+  if (!moves.length && !graduating.length) return res.status(400).json({ message: 'Nothing to do.' });
+
+  const year = new Date().getFullYear();
+  const values = [year];
+  const classCases = moves.map(([from, to]) => {
+    values.push(from, to);
+    return `WHEN class = $${values.length - 1} THEN $${values.length}`;
+  });
+  const gradPlaceholders = graduating.map(c => { values.push(c); return `$${values.length}`; });
+  const allClasses = moves.map(([from]) => from).concat(graduating);
+  const allPlaceholders = allClasses.map(c => { values.push(c); return `$${values.length}`; });
+
+  const gradCond = gradPlaceholders.length ? `class IN (${gradPlaceholders.join(',')})` : 'FALSE';
+  const { rows } = await db.query(
+    `UPDATE students SET
+       status = CASE WHEN ${gradCond} THEN 'Graduated' ELSE status END,
+       graduated_year = CASE WHEN ${gradCond} THEN $1 ELSE graduated_year END,
+       class = CASE ${classCases.join(' ')} ELSE class END
+     WHERE status <> 'Graduated' AND class IN (${allPlaceholders.join(',')})
+     RETURNING id`,
+    values
+  );
+  res.json({ ok: true, affected: rows.length });
 }));
 
 // POST /api/students — Admin only (matches canManageStudents in api.js).

@@ -66,6 +66,8 @@ const ENDPOINTS = {
     // --- Students ---
     STUDENTS: "/students",
     STUDENT_BY_ID: (id) => `/students/${encodeURIComponent(id)}`,
+    STUDENT_STATUS: (id) => `/students/${encodeURIComponent(id)}/status`,
+    STUDENTS_PROMOTE: "/students/promote",
     STUDENT_PHOTO: (id) => `/students/${encodeURIComponent(id)}/photo`,
     // Generic file upload (Admin/Teacher) — stores the raw file and hands
     // back a public URL, no other side effects. Distinct from
@@ -924,6 +926,7 @@ const StudentsAPI = {
     async list(params = {}) {
         const qs = new URLSearchParams();
         if (params.class && params.class !== 'ALL') qs.set('class', params.class);
+        if (params.status) qs.set('status', params.status); // 'Graduated' | 'ALL' (default: Active only)
         if (params.search) qs.set('search', params.search);
         if (params.page) qs.set('page', params.page);
         if (params.pageSize) qs.set('pageSize', params.pageSize);
@@ -934,7 +937,7 @@ const StudentsAPI = {
                 // Best-effort local fallback so the admin table still works
                 // in offline/local-demo mode: filter + slice studentsList
                 // the same way the server would.
-                if (!params.page) return studentsList;
+                if (!params.page && !params.status) return studentsList;
                 let filtered = studentsList;
                 if (params.class && params.class !== 'ALL') filtered = filtered.filter(s => s.class === params.class);
                 if (params.search) {
@@ -978,6 +981,21 @@ const StudentsAPI = {
             () => apiRequest(ENDPOINTS.STUDENT_BY_ID(studentId), { method: "DELETE" }),
             () => { studentsList = studentsList.filter(s => s.id !== studentId); return true; }
         );
+    },
+    // status: 'Graduated' or 'Active'. Nothing is deleted; the learner keeps their ID and records.
+    async setStatus(studentId, status) {
+        return remoteFirst(
+            () => apiRequest(ENDPOINTS.STUDENT_STATUS(studentId), { method: "PUT", body: { status } }),
+            () => {
+                const s = studentsList.find(s => s.id === studentId);
+                if (s) s.status = status;
+                return { id: studentId, status };
+            }
+        );
+    },
+    // plan: { "S.1": "S.2", "S.4": "GRADUATE", "S.5": "SKIP", ... } -> { ok, affected }
+    async promote(plan) {
+        return apiRequest(ENDPOINTS.STUDENTS_PROMOTE, { method: "POST", body: { plan } });
     },
     // photoUrl is the URL UploadAPI.uploadFile() returns — this call just
     // saves that URL onto the student record. Pass null to clear a photo.

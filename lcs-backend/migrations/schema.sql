@@ -45,6 +45,10 @@ CREATE TABLE IF NOT EXISTS students (
   gender      TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Learner status: 'Active' (default) or 'Graduated'. Graduated learners keep
+-- their ID, marks and history but drop out of class lists. IDs are never reused.
+ALTER TABLE students ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'Active';
+ALTER TABLE students ADD COLUMN IF NOT EXISTS graduated_year INTEGER;
 
 -- -------------------------------------------------------------
 -- teachers — staff registry.
