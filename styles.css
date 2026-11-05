@@ -191,17 +191,23 @@ img {
 /* Selector targets h3 to match the heading element used in index.html. */
 .login-badge-row h3 {
     font-family: 'Playfair Display', var(--font-display), Georgia, serif;
-    font-size: clamp(26px, 5.5vw, 34px);
+    font-size: clamp(28px, 6vw, 34px);
     line-height: 1.1;
+    text-wrap: balance;
     margin: 0;
-    font-weight: 800;
-    letter-spacing: 0.01em;
-    background: linear-gradient(90deg, #ffffff 0%, #a7f3d0 55%, #6ee7b7 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    color: #f1f5f9; /* fallback */
-    text-shadow: 0 2px 14px rgba(110,231,183,0.25);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    color: #ffffff;
+    text-shadow: 0 2px 16px rgba(255,255,255,0.18), 0 2px 4px rgba(0,0,0,0.5);
+}
+.login-badge-row .login-subtitle {
+    margin: 10px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: #ffffff;
+    opacity: 0.92;
 }
 .login-badge-row span {
     display: block;

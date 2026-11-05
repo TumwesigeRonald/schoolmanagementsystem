@@ -2567,10 +2567,15 @@ function openEditStudentModal(studentId) {
                                 : `<i class="fa-solid fa-user text-slate-300 text-xl"></i>`}
                         </div>
                         <div>
-                            <label class="inline-block cursor-pointer text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors">
-                                <i class="fa-solid fa-camera mr-1.5"></i>${student.photoUrl ? 'Change Photo' : 'Add Photo'}
-                                <input type="file" accept="image/*" class="hidden" onchange="handleStudentPhotoFileSelected(event, '${student.id}')">
-                            </label>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <label class="inline-block cursor-pointer text-teal-700 hover:text-teal-800 text-[11px] font-extrabold uppercase tracking-wider bg-teal-50 hover:bg-teal-100 px-3 py-1.5 rounded-lg border border-teal-200 transition-colors">
+                                    <i class="fa-solid fa-camera mr-1.5"></i><span id="edit-stud-photo-label">${student.photoUrl ? 'Change Photo' : 'Add Photo'}</span>
+                                    <input type="file" accept="image/*" class="hidden" onchange="handleStudentPhotoFileSelected(event, '${student.id}')">
+                                </label>
+                                <button type="button" id="edit-stud-photo-remove" onclick="handleStudentPhotoRemove('${student.id}')" class="${student.photoUrl ? '' : 'hidden '}text-rose-700 hover:text-rose-800 text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded-lg border border-rose-200 transition-colors">
+                                    <i class="fa-solid fa-trash-can mr-1.5"></i>Remove Photo
+                                </button>
+                            </div>
                             <p id="edit-stud-photo-status" class="mt-1 text-[10px] font-semibold text-slate-400">JPG or PNG &middot; resized automatically before saving.</p>
                         </div>
                     </div>
@@ -2670,10 +2675,43 @@ async function handleStudentPhotoFileSelected(event, studentId) {
 
         if (preview) preview.innerHTML = `<img src="${escapeHTML(photoUrl)}" class="w-full h-full object-cover" alt="Student photo">`;
         if (status) { status.textContent = 'Photo saved.'; status.className = 'mt-1 text-[10px] font-semibold text-emerald-600'; }
+        syncStudentPhotoControls(true);
     } catch (err) {
         if (status) { status.textContent = err.message || 'Could not upload this photo. Please try again.'; status.className = 'mt-1 text-[10px] font-semibold text-rose-600'; }
     } finally {
         event.target.value = ''; // allow re-selecting the same file if they retry
+    }
+}
+
+// Updates the "Change/Add Photo" label and shows/hides the Remove button
+// to match whether the student currently has a photo.
+function syncStudentPhotoControls(hasPhoto) {
+    const label = document.getElementById('edit-stud-photo-label');
+    const removeBtn = document.getElementById('edit-stud-photo-remove');
+    if (label) label.textContent = hasPhoto ? 'Change Photo' : 'Add Photo';
+    if (removeBtn) removeBtn.classList.toggle('hidden', !hasPhoto);
+}
+
+// Removes (clears) the student's photo without replacing it. Saves
+// immediately, same as the upload flow, via StudentsAPI.setPhoto(id, null).
+async function handleStudentPhotoRemove(studentId) {
+    if (!confirm('Remove this student\'s photo? Report cards and ID cards will show a blank photo box.')) return;
+    const preview = document.getElementById('edit-stud-photo-preview');
+    const status = document.getElementById('edit-stud-photo-status');
+    const removeBtn = document.getElementById('edit-stud-photo-remove');
+    if (removeBtn) removeBtn.disabled = true;
+    if (status) { status.textContent = 'Removing\u2026'; status.className = 'mt-1 text-[10px] font-semibold text-slate-400'; }
+    try {
+        await StudentsAPI.setPhoto(studentId, null);
+        const cached = studentsList.find(s => s.id === studentId);
+        if (cached) cached.photoUrl = null;
+        if (preview) preview.innerHTML = '<i class="fa-solid fa-user text-slate-300 text-xl"></i>';
+        if (status) { status.textContent = 'Photo removed.'; status.className = 'mt-1 text-[10px] font-semibold text-emerald-600'; }
+        syncStudentPhotoControls(false);
+    } catch (err) {
+        if (status) { status.textContent = err.message || 'Could not remove this photo. Please try again.'; status.className = 'mt-1 text-[10px] font-semibold text-rose-600'; }
+    } finally {
+        if (removeBtn) removeBtn.disabled = false;
     }
 }
 /* ---------------------------------------------------------
