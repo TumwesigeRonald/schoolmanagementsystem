@@ -200,6 +200,20 @@ img {
     color: #ffffff;
     text-shadow: 0 2px 16px rgba(255,255,255,0.18), 0 2px 4px rgba(0,0,0,0.5);
 }
+/* Badge shown ABOVE the school name on the login card (stacked layout).
+   White circle + contain so the whole crest (including the ribbon) shows. */
+.login-badge-row.login-badge-stacked {
+    flex-direction: column;
+    gap: 16px;
+}
+.login-badge-row.login-badge-stacked img {
+    width: 104px; height: 104px;
+    padding: 4px;
+    background: #ffffff;
+    object-fit: contain;
+    border: 2px solid rgba(255,255,255,0.25);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+}
 .login-badge-row .login-subtitle {
     margin: 10px 0 0;
     font-size: 13px;
