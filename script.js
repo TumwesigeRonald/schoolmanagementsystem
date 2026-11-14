@@ -393,7 +393,8 @@ async function refreshScoresList() {
                 rehydrated[row.recordKey] = {
                     ao1: row.ao1, ao2: row.ao2, eot: row.eot,
                     p1: row.p1, p2: row.p2,
-                    remarks: row.remarks, touched: row.touched
+                    remarks: row.remarks, touched: row.touched,
+                    status: row.status, reviewNote: row.reviewNote
                 };
             });
             marksStorage = rehydrated;
@@ -792,6 +793,7 @@ function renderSidebarNav() {
         { id: 'dashboard', label: 'Dashboard', icon: 'fa-gauge-high', group: 'main' },
         { id: 'students', label: 'Students', icon: 'fa-user-graduate', group: 'academics' },
         { id: 'scores', label: 'Scores', icon: 'fa-pen-to-square', group: 'academics' },
+        { id: 'marksapproval', label: 'Marks Approval', icon: 'fa-circle-check', group: 'academics' },
         { id: 'reports', label: currentUser.role === 'Student' ? 'My Report Card' : 'Report Cards', icon: 'fa-file-lines', group: 'academics' },
         { id: 'analytics', label: 'Analytics', icon: 'fa-chart-column', group: 'academics' },
         { id: 'performers', label: 'Best & Worst Performers', icon: 'fa-ranking-star', group: 'academics' },
@@ -800,6 +802,7 @@ function renderSidebarNav() {
         { id: 'teachers', label: currentUser.role === 'Teacher' ? 'My Profile' : 'Teachers', icon: 'fa-chalkboard-user', group: 'people-resources' },
         { id: 'subjectmarksstatus', label: 'Subject Marks Status', icon: 'fa-list-check', group: 'people-resources' },
         { id: 'activitylog', label: 'Activity Log', icon: 'fa-clock-rotate-left', group: 'admin-tools' },
+        { id: 'marksaudit', label: 'Marks Audit Trail', icon: 'fa-shield-halved', group: 'admin-tools' },
         // New nav entry only — Class Score Summaries feature (class-summaries.js).
         // Gated by ROLE_PERMISSIONS in api.js exactly like every other item here.
         { id: 'classsummaries', label: 'Class Score Summaries', icon: 'fa-table-list', group: 'admin-tools' },
@@ -840,6 +843,8 @@ function renderSidebarNav() {
     }).join('') + (financeHtml
         ? (previousGroup === 'admin-tools' ? financeHtml : `<div class="sidebar-nav-heading">${escapeHTML(GROUP_LABELS['admin-tools'])}</div>${financeHtml}`)
         : '');
+    // Red count on "Marks Approval" while marks are waiting for the DOS.
+    if (typeof refreshApprovalNavBadge === 'function') refreshApprovalNavBadge();
 }
 // Shared class strings for sidebar nav buttons, so the active state
 // (switchTab), inactive state (renderSidebarNav), and the School Finance
@@ -925,7 +930,7 @@ function showFinancePanel() {
     currentTabName = 'finance';
     const titleElem = document.getElementById('page-title');
     if (titleElem) titleElem.innerText = 'School Finance';
-    const allNavIds = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox', 'staffmanagement', 'finance'];
+    const allNavIds = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'marksapproval', 'marksaudit', 'classsummaries', 'aitoolbox', 'staffmanagement', 'finance'];
     allNavIds.forEach(id => {
         const el = document.getElementById(`nav-${id}`);
         if (el) el.className = id === 'finance' ? SIDEBAR_NAV_ACTIVE_CLASS : SIDEBAR_NAV_INACTIVE_CLASS;
@@ -1133,7 +1138,7 @@ function switchTab(tabName) {
     // leaving them visible across the whole portal.
     const bannerElem = document.getElementById('welcome-banner');
     if (bannerElem) bannerElem.classList.toggle('visible', tabName === 'dashboard');
-    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'classsummaries', 'aitoolbox', 'staffmanagement'];
+    const tabs = ['dashboard', 'students', 'scores', 'reports', 'analytics', 'performers', 'attendance', 'resources', 'teachers', 'subjectmarksstatus', 'activitylog', 'marksapproval', 'marksaudit', 'classsummaries', 'aitoolbox', 'staffmanagement'];
     tabs.forEach(tab => {
         const navItem = document.getElementById(`nav-${tab}`);
         if (!navItem) return;
@@ -1164,6 +1169,8 @@ function switchTab(tabName) {
         case 'teachers': titleText = currentUser.role === 'Teacher' ? "My Teacher Profile" : "Teacher Accounts & Credentials"; break;
         case 'subjectmarksstatus': titleText = "Subject Marks Status"; break;
         case 'activitylog': titleText = "Admin Activity Log"; break;
+        case 'marksapproval': titleText = "Marks Approval (DOS)"; break;
+        case 'marksaudit': titleText = "Marks Audit Trail"; break;
         case 'classsummaries': titleText = "Class Score Summaries"; break;
         case 'aitoolbox': titleText = "Teacher Toolbox"; break;
         case 'staffmanagement': titleText = "Staff Management (Bursar / HR / Director)"; break;
@@ -1235,6 +1242,15 @@ function switchTab(tabName) {
         case 'activitylog':
             contentElem.innerHTML = renderActivityLogModule();
             loadActivityLogData();
+            break;
+        case 'marksapproval':
+            // Defined in marks-approval.js (DOS approval workflow).
+            contentElem.innerHTML = renderMarksApprovalModule();
+            loadMarksApprovalData();
+            break;
+        case 'marksaudit':
+            contentElem.innerHTML = renderMarksAuditModule();
+            loadMarksAuditData();
             break;
         case 'classsummaries':
             // renderClassSummariesModule/initClassSummariesModule live in the
@@ -2757,6 +2773,7 @@ function renderScoresModule() {
             <div id="score-table-empty-state" class="bg-white border border-slate-200 rounded-2xl shadow-xs p-10 text-center text-slate-400 text-xs font-medium">
                 Select a class and subject, then click "Load Subject" to view the marks entry table.
             </div>
+            <div id="score-approval-bar" class="hidden flex flex-wrap items-center gap-3 bg-white border border-slate-200 p-4 rounded-2xl shadow-xs"></div>
             <div id="bulk-initials-bar" class="hidden flex flex-wrap items-end gap-3 bg-white border border-slate-200 p-4 rounded-2xl shadow-xs">
                 <div>
                     <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Teacher's Initial (applies to whole class/subject)</label>
@@ -2788,6 +2805,8 @@ function hideScoreSheetTable() {
     if (wrapper) wrapper.classList.add('hidden');
     if (emptyState) emptyState.classList.remove('hidden');
     if (bulkBar) bulkBar.classList.add('hidden');
+    const approvalBar = document.getElementById('score-approval-bar');
+    if (approvalBar) approvalBar.classList.add('hidden');
 }
 function updateSubjectDropdown() {
     const classSelect = document.getElementById('score-class-select');
@@ -2862,6 +2881,7 @@ function loadScoreSheetData() {
     // search is active). Purely visual — does not touch marksStorage,
     // inputs, or the save flow below.
     filterScoreSheetTable();
+    if (typeof refreshScoreApprovalBar === 'function') refreshScoreApprovalBar();
 }
 // Real-time search: partial, case-insensitive match against Student ID or
 // Full Name. This only toggles row visibility on the table already built by
@@ -2938,14 +2958,14 @@ function buildALevelRow(student, recordKey, isSubsidiary) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}" data-student-name="${escapeHTML(student.name)}">
-            <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p1, '')}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p2, '')}" placeholder="0" onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}${scoreStatusBadge(marks)}</td>
+            <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p1, '')}" placeholder="0" ${scoreLockAttr(marks)} onchange="updateALevelMarks('${student.id}', 'p1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" min="0" max="100" step="1" value="${formatWholeScoreDisplay(marks.p2, '')}" placeholder="0" ${scoreLockAttr(marks)} onchange="updateALevelMarks('${student.id}', 'p2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(avgMark, '')}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeInfo.grade, '')}</td>
             <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeInfo.descriptor, '')}</td>
             <td id="points-${student.id}" class="p-4 text-center text-xs font-extrabold text-slate-500">${displayOrDash(gradeInfo.points, '')}</td>
-            <td class="p-4"><input type="text" value="${marks.remarks || ''}" placeholder="Teacher's remark" onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
+            <td class="p-4"><input type="text" value="${marks.remarks || ''}" placeholder="Teacher's remark" ${scoreLockAttr(marks)} onchange="updateALevelRemarks('${student.id}', this.value)" class="w-40 p-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700"></td>
         </tr>
     `;
 }
@@ -2964,16 +2984,16 @@ function buildOLevelRow(student, recordKey) {
     
     return `
         <tr class="hover:bg-slate-50 transition${unsavedScoreRows.has(recordKey) ? ' score-save-error' : ''}" data-student-id="${student.id}" data-student-name="${escapeHTML(student.name)}">
-            <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}</td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
-            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 font-bold text-slate-900 score-sticky-name-col">${student.name}${scoreStatusBadge(marks)}</td>
+            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao1, '')}" placeholder="0" ${scoreLockAttr(marks)} onchange="updateMarks('${student.id}', 'ao1', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" step="0.1" min="0" max="3" value="${formatAOScoreDisplay(marks.ao2, '')}" placeholder="0" ${scoreLockAttr(marks)} onchange="updateMarks('${student.id}', 'ao2', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="av-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${avScore}</td>
             <td id="fa-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${faScoreDisplay}</td>
-            <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
+            <td class="p-4 text-center"><input type="number" min="0" max="80" value="${formatWholeScoreDisplay(marks.eot, '')}" placeholder="0" ${scoreLockAttr(marks)} onchange="updateMarks('${student.id}', 'eot', this.value, this)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold text-slate-800"></td>
             <td id="total-${student.id}" class="p-4 text-center font-extrabold text-slate-800">${displayOrDash(finalTotal, '')}</td>
             <td id="grade-${student.id}" class="p-4 text-center font-extrabold text-teal-700">${displayOrDash(gradeData.grade, '')}</td>
             <td id="descriptor-${student.id}" class="p-4 text-center text-xs font-bold text-slate-500">${displayOrDash(gradeData.descriptor, '')}</td>
-            <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="" onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
+            <td class="p-4"><input type="text" maxlength="4" value="${marks.remarks || ''}" placeholder="" ${scoreLockAttr(marks)} onchange="updateOLevelRemarks('${student.id}', this.value)" class="w-16 p-1.5 text-center bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase text-slate-800"></td>
         </tr>
     `;
 }
@@ -3105,6 +3125,15 @@ function handleScoreSaveError(err, recordKey) {
         showToast(`Could not save marks for ${studId}: you don't have permission to edit scores.`, 'error');
         return;
     }
+    if (err && err.status === 409 && err.payload && err.payload.code === 'SCORE_LOCKED') {
+        // Marks were submitted/verified (possibly from another tab or by the
+        // DOS) since this sheet was loaded. The server refused the change —
+        // drop the pending save and reload what's really stored.
+        unsavedScoreRows.delete(recordKey);
+        showToast(`${studId}: ${err.message}`, 'error', 10000);
+        refreshScoresList().then(() => { if (typeof loadScoreSheetData === 'function') loadScoreSheetData(); });
+        return;
+    }
     const detail = err && err.message ? ` (${err.message})` : '';
     showToast(`Could not save marks for ${studId} to the server${detail}. It's highlighted in red and will be lost if you refresh before it saves.`, 'error');
 }
@@ -3133,8 +3162,11 @@ async function saveMarksEntry(buttonEl) {
     const remaining = await retryUnsavedScores();
     if (buttonEl) { buttonEl.disabled = false; buttonEl.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry'; }
     if (remaining === 0) {
-        alert('Marks successfully saved to system register!');
-        hideScoreSheetTable(); // fully saved: collapse the table back to its default hidden state
+        // Marks are saved as DRAFT. They stay on screen (instead of the table
+        // collapsing) so the teacher can click "Submit to DOS" straight away —
+        // draft marks are not visible on report cards or to students.
+        showToast('Marks saved as draft. Click "Submit to DOS" below when you are done so they can be approved.', 'success', 9000);
+        if (typeof refreshScoreApprovalBar === 'function') refreshScoreApprovalBar();
     } else {
         alert(`${remaining} row(s) could NOT be saved to the server — they're highlighted in red. Check your connection/session and try again before leaving this page.`);
     }
@@ -3976,7 +4008,7 @@ function getALevelSubjectRecords(student, termYear) {
     return aLevelSubjects
         .filter(subj => {
             const m = marksStorage[buildScoreRecordKey(subj, student.id, term, year)];
-            return m && m.touched;
+            return m && m.touched && m.status === 'verified'; // only DOS-verified marks reach report cards
         })
         .map(subj => {
             const recordKey = buildScoreRecordKey(subj, student.id, term, year);
@@ -3997,7 +4029,7 @@ function getOLevelSubjectRecords(student, termYear) {
     return oLevelSubjects
         .filter(subj => {
             const m = marksStorage[buildScoreRecordKey(subj, student.id, term, year)];
-            return m && m.touched;
+            return m && m.touched && m.status === 'verified'; // only DOS-verified marks reach report cards
         })
         .map(subj => {
             const recordKey = buildScoreRecordKey(subj, student.id, term, year);

@@ -694,3 +694,76 @@ UPDATE users SET finance_password_hash = NULL
 -- uploads a photo for them.
 -- =============================================================
 ALTER TABLE students ADD COLUMN IF NOT EXISTS photo_url TEXT;
+
+-- -------------------------------------------------------------
+-- MARKS AUDIT TRAIL + DOS APPROVAL WORKFLOW
+-- -------------------------------------------------------------
+-- Every score row now carries an approval status:
+--   draft     — being entered by the teacher (editable)
+--   submitted — teacher has submitted it to the DOS (locked for teachers)
+--   verified  — DOS has approved it (locked; the only status students see
+--               and the only status that appears on report cards)
+--   rejected  — DOS sent it back with a reason (teacher can edit again)
+--
+-- Rows that already existed before this migration are marked 'verified'
+-- (by "system (existing marks)") so every report card already issued keeps
+-- working; only marks entered from now on go through approval.
+-- Idempotent / safe to re-run: the backfill only happens the first time
+-- the status column is created.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'scores' AND column_name = 'status'
+  ) THEN
+    ALTER TABLE scores ADD COLUMN status TEXT NOT NULL DEFAULT 'verified';
+    ALTER TABLE scores ALTER COLUMN status SET DEFAULT 'draft';
+    ALTER TABLE scores ADD COLUMN verified_by TEXT;
+    ALTER TABLE scores ADD COLUMN verified_at TIMESTAMPTZ;
+    UPDATE scores SET verified_by = 'system (existing marks)', verified_at = now();
+  END IF;
+END $$;
+
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS submitted_by TEXT;
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS review_note TEXT;     -- DOS's reason when a row is rejected
+ALTER TABLE scores ADD COLUMN IF NOT EXISTS last_edited_by TEXT;  -- username of whoever last changed a mark value
+
+DO $$
+BEGIN
+  ALTER TABLE scores ADD CONSTRAINT scores_status_check
+    CHECK (status IN ('draft', 'submitted', 'verified', 'rejected'));
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- scores_audit — append-only history of every mark entry, change, delete,
+-- submission and DOS decision. Deliberately NOT a foreign key to scores,
+-- users or students: the history must outlive a deleted score row (that is
+-- exactly when it matters most) and stay attributable to the username even
+-- if the account is later renamed or removed. The application never
+-- UPDATEs or DELETEs rows here.
+CREATE TABLE IF NOT EXISTS scores_audit (
+  id             BIGSERIAL PRIMARY KEY,
+  record_key     TEXT NOT NULL,
+  student_id     TEXT NOT NULL,
+  subject        TEXT NOT NULL,
+  class_level    TEXT,
+  term           TEXT NOT NULL,
+  year           INTEGER NOT NULL,
+  action         TEXT NOT NULL,     -- CREATE | UPDATE | DELETE | SUBMIT | VERIFY | REJECT
+  old_values     JSONB,             -- mark fields before the action (only the fields that changed for UPDATE)
+  new_values     JSONB,             -- mark fields after the action
+  old_status     TEXT,
+  new_status     TEXT,
+  note           TEXT,              -- e.g. the DOS's rejection reason
+  actor_username TEXT NOT NULL,
+  actor_name     TEXT,
+  actor_role     TEXT,
+  ip_address     TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_scores_audit_created ON scores_audit (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scores_audit_record  ON scores_audit (record_key);
+CREATE INDEX IF NOT EXISTS idx_scores_audit_actor   ON scores_audit (actor_username);
+CREATE INDEX IF NOT EXISTS idx_scores_status        ON scores (class_level, subject, term, year, status);

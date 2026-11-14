@@ -100,6 +100,14 @@ const ENDPOINTS = {
     // Student-only: this student's term-by-term average score history,
     // used by the "My Performance Trend" chart on the student dashboard.
     SCORES_TREND: "/scores/trend",
+    // DOS approval workflow + marks audit trail (see marks-approval.js and
+    // lcs-backend/routes/score-approval.routes.js).
+    SCORES_SUBMIT: "/scores/submit",
+    SCORES_VERIFY: "/scores/verify",
+    SCORES_REJECT: "/scores/reject",
+    SCORES_REVIEW: "/scores/review",
+    SCORES_REVIEW_DETAIL: "/scores/review/detail",
+    SCORES_AUDIT: "/scores/audit",
 
     // --- Attendance ---
     ATTENDANCE: "/attendance",
@@ -339,7 +347,7 @@ const ROLE_PERMISSIONS = {
         // filter (`allowedTabs.includes(item.id)`) drops the Teacher Toolbox
         // nav item entirely, which is why it never picked up the same
         // active/hover styling as the rest of the menu.
-        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "classsummaries", "aitoolbox", "staffmanagement"],
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "marksapproval", "marksaudit", "classsummaries", "aitoolbox", "staffmanagement"],
         defaultTab: "dashboard",
         canManageStudents: true,
         canManageScores: true,
@@ -1171,7 +1179,16 @@ const ScoresAPI = {
             if (body[field] === '') body[field] = null;
         });
         try {
-            return await apiRequest(ENDPOINTS.SCORES, { method: "POST", body });
+            const saved = await apiRequest(ENDPOINTS.SCORES, { method: "POST", body });
+            // Keep the approval status the server decided on (a teacher's
+            // edit always comes back as 'draft') so the status bar and
+            // row locks stay in step without a full reload.
+            if (saved && marksStorage[recordKey]) {
+                marksStorage[recordKey].status = saved.status;
+                marksStorage[recordKey].reviewNote = saved.reviewNote;
+            }
+            if (typeof refreshScoreApprovalBar === 'function') refreshScoreApprovalBar();
+            return saved;
         } catch (err) {
             marksStorage[recordKey] = marksRecord; // keep it visible in this tab, but the caller must be told it isn't actually persisted
             throw err;
@@ -1194,6 +1211,31 @@ const ScoresAPI = {
             method: "POST",
             body: { classLevel, subject, initials, term: termYear && termYear.term, year: termYear && termYear.year }
         });
+    },
+    // --- DOS approval workflow (no local fallback: server-side only) ---
+    async submit(classLevel, subject, termYear) {
+        return apiRequest(ENDPOINTS.SCORES_SUBMIT, { method: "POST", body: { classLevel, subject, term: termYear && termYear.term, year: termYear && termYear.year } });
+    },
+    async review(termYear) {
+        const qs = new URLSearchParams();
+        if (termYear && termYear.term) qs.set('term', termYear.term);
+        if (termYear && termYear.year) qs.set('year', termYear.year);
+        return apiRequest(`${ENDPOINTS.SCORES_REVIEW}?${qs.toString()}`);
+    },
+    async reviewDetail(classLevel, subject, termYear) {
+        const qs = new URLSearchParams({ class: classLevel, subject });
+        if (termYear && termYear.term) qs.set('term', termYear.term);
+        if (termYear && termYear.year) qs.set('year', termYear.year);
+        return apiRequest(`${ENDPOINTS.SCORES_REVIEW_DETAIL}?${qs.toString()}`);
+    },
+    async verify(classLevel, subject, recordKeys, termYear) {
+        return apiRequest(ENDPOINTS.SCORES_VERIFY, { method: "POST", body: { classLevel, subject, recordKeys, term: termYear && termYear.term, year: termYear && termYear.year } });
+    },
+    async reject(classLevel, subject, recordKeys, reason, termYear) {
+        return apiRequest(ENDPOINTS.SCORES_REJECT, { method: "POST", body: { classLevel, subject, recordKeys, reason, term: termYear && termYear.term, year: termYear && termYear.year } });
+    },
+    async audit(params) {
+        return apiRequest(`${ENDPOINTS.SCORES_AUDIT}?${params.toString()}`);
     },
     // Student-only self-service call — the backend scopes this to
     // req.user.studentId regardless of who's asking, same as list()'s

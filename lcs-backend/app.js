@@ -8,6 +8,7 @@ const authRoutes = require('./routes/auth.routes');
 const studentsRoutes = require('./routes/students.routes');
 const teachersRoutes = require('./routes/teachers.routes');
 const scoresRoutes = require('./routes/scores.routes');
+const scoreApprovalRoutes = require('./routes/score-approval.routes');
 const attendanceRoutes = require('./routes/attendance.routes');
 const termRoutes = require('./routes/term.routes');
 const resourcesRoutes = require('./routes/resources.routes');
@@ -85,6 +86,9 @@ app.get('/api/health', (req, res) => res.json({ ok: true, time: new Date().toISO
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentsRoutes);
 app.use('/api/teachers', teachersRoutes);
+// Approval/audit routes (/submit, /verify, /reject, /review, /audit) — literal
+// paths, so they can't collide with scoresRoutes' DELETE /:recordKey.
+app.use('/api/scores', scoreApprovalRoutes);
 app.use('/api/scores', scoresRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/settings/term', termRoutes);

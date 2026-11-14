@@ -2,26 +2,16 @@ const express = require('express');
 const db = require('../db');
 const { authenticate, requireRole } = require('../middleware/auth');
 const asyncHandler = require('../middleware/asyncHandler');
+const {
+  MARK_FIELDS, FIELD_LIMITS, STATUS,
+  withTransaction, resolveTermYear, normaliseMark, pickMarks, insertAudit
+} = require('../lib/scoreAudit');
 
 const router = express.Router();
 
-// Every scores read/write is scoped to a term+year. If the caller doesn't
-// pass one explicitly (older frontend code, or a screen that just wants
-// "whatever's current"), fall back to term_settings' current row — but an
-// explicit term/year in the request always wins, since that's what lets a
-// user view a *past* term while the school is actively in a later one.
-async function resolveTermYear(query) {
-  const term = query.term;
-  const year = query.year ? Number(query.year) : undefined;
-  if (term && year) return { term, year };
-
-  const { rows } = await db.query(
-    `SELECT term, year FROM term_settings WHERE id = 1`
-  );
-  const current = rows[0] || { term: 'Term 1', year: new Date().getFullYear() };
-  return { term: term || current.term, year: year || current.year };
-}
-
+// resolveTermYear lives in lib/scoreAudit.js now so the approval/audit
+// routes share it: an explicit term/year always wins, otherwise the
+// school's current term_settings row.
 // GET /api/scores?class=S.4&subject=MATHEMATICS&term=Term 1&year=2026
 // - Admin/Teacher: filter by class and/or subject (both optional); term/year
 //   resolve to the current term if omitted (see resolveTermYear above).
@@ -33,7 +23,8 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
   const { class: classLevel, subject, term: rawTerm, year: rawYear } = req.query;
 
   if (req.user.role === 'Student') {
-    const conditions = ['student_id = $1'];
+    // Students only ever see marks the DOS has verified.
+    const conditions = ['student_id = $1', "status = 'verified'"];
     const values = [req.user.studentId];
     let i = 2;
     if (rawTerm) { conditions.push(`term = $${i++}`); values.push(rawTerm); }
@@ -41,7 +32,8 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 
     const { rows } = await db.query(
       `SELECT record_key AS "recordKey", subject, student_id AS "studentId", class_level AS "classLevel",
-              term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt"
+              term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt",
+              status, review_note AS "reviewNote", last_edited_by AS "lastEditedBy", verified_by AS "verifiedBy", verified_at AS "verifiedAt"
        FROM scores WHERE ${conditions.join(' AND ')} ORDER BY year, term, subject`,
       values
     );
@@ -59,7 +51,8 @@ router.get('/', authenticate, asyncHandler(async (req, res) => {
 
   const { rows } = await db.query(
     `SELECT record_key AS "recordKey", subject, student_id AS "studentId", class_level AS "classLevel",
-            term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt"
+            term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt",
+              status, review_note AS "reviewNote", last_edited_by AS "lastEditedBy", verified_by AS "verifiedBy", verified_at AS "verifiedAt"
      FROM scores ${where} ORDER BY student_id`,
     values
   );
@@ -116,7 +109,7 @@ function termSortKey(term) {
 router.get('/trend', authenticate, requireRole('Student'), asyncHandler(async (req, res) => {
   const { rows } = await db.query(
     `SELECT class_level AS "classLevel", term, year, ao1, ao2, eot, p1, p2
-     FROM scores WHERE student_id = $1 AND touched = true`,
+     FROM scores WHERE student_id = $1 AND touched = true AND status = 'verified'`,
     [req.user.studentId]
   );
 
@@ -147,18 +140,44 @@ router.get('/trend', authenticate, requireRole('Student'), asyncHandler(async (r
 // POST /api/scores — Admin or Teacher only.
 // Body: { subject, studentId, classLevel?, term?, year?, ao1?, ao2?, eot?, p1?, p2?, remarks?, touched? }
 // term/year resolve to the current term_settings row if omitted, same as
-// GET above — but the frontend should always send them explicitly once the
-// term-switcher is wired up, so a save made while viewing Term 1 can never
-// accidentally land on whatever term the server currently thinks is active.
-// Upserts by (student_id, subject, term, year) — this is the change that
-// stops a new term's marks from overwriting an old term's marks: the
-// conflict target now includes term/year, so a different term is always a
-// different row, never an UPDATE of the old one.
+// GET above — but the frontend always sends them explicitly, so a save made
+// while viewing Term 1 can never land on whatever term the server thinks is
+// active. Upserts by (student_id, subject, term, year).
+//
+// MARKS AUDIT TRAIL + DOS APPROVAL (this is what stops "cooked" marks):
+//  - Every change to an actual mark value (ao1/ao2/eot/p1/p2) writes a row
+//    to scores_audit — who, when, from which IP, old value -> new value —
+//    in the SAME transaction as the change itself.
+//  - A Teacher can only edit rows that are 'draft' or 'rejected'. Once a
+//    subject is submitted to the DOS ('submitted') or approved ('verified')
+//    it is locked for teachers; only the DOS (Administrator) can change it,
+//    or send it back with a reason so the teacher can correct it.
+//  - A Teacher's edit always leaves the row as 'draft', so a mark can never
+//    stay "verified" after someone changed it.
+//  - Remark/initial-only saves (no mark value changed) are not audited and
+//    don't affect status.
 router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const body = req.body || {};
   const { subject, studentId, classLevel, remarks, touched } = body;
   if (!subject || !studentId) {
     return res.status(400).json({ message: 'subject and studentId are required.' });
+  }
+
+  // A mark field sent as `null`/'' means "cleared" and must be persisted as
+  // null; a field absent from the body keeps its stored value.
+  const has = (name) => Object.prototype.hasOwnProperty.call(body, name);
+  const incoming = {};
+  for (const f of MARK_FIELDS) {
+    if (!has(f)) continue;
+    const n = normaliseMark(body[f]);
+    if (n === undefined) {
+      return res.status(400).json({ message: `${f.toUpperCase()} must be a number.` });
+    }
+    const [min, max] = FIELD_LIMITS[f];
+    if (n !== null && (n < min || n > max)) {
+      return res.status(400).json({ message: `${f.toUpperCase()} must be between ${min} and ${max}.` });
+    }
+    incoming[f] = n;
   }
 
   const student = await db.query('SELECT class FROM students WHERE id = $1', [studentId]);
@@ -169,42 +188,82 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
   const { term, year } = await resolveTermYear(body);
   const recordKey = `${subject}_${studentId}_${term}_${year}`;
   const resolvedClass = classLevel || student.rows[0].class;
+  const isTeacher = req.user.role === 'Teacher';
 
-  // A mark field can legitimately be sent as `null` to mean "this mark was
-  // cleared/deleted" — that must actually be persisted as null. Track
-  // presence per field (script.js always sends every relevant field for a
-  // subject's type, so "present" reliably means "the client has an opinion
-  // about this field"), and only fall back to the existing stored value
-  // when a field is truly absent from the request body.
-  const has = (name) => Object.prototype.hasOwnProperty.call(body, name);
-  const hasAo1 = has('ao1'), hasAo2 = has('ao2'), hasEot = has('eot'), hasP1 = has('p1'), hasP2 = has('p2');
-  const ao1 = has('ao1') ? body.ao1 : null;
-  const ao2 = has('ao2') ? body.ao2 : null;
-  const eot = has('eot') ? body.eot : null;
-  const p1 = has('p1') ? body.p1 : null;
-  const p2 = has('p2') ? body.p2 : null;
+  const outcome = await withTransaction(async (client) => {
+    const existingRes = await client.query(
+      `SELECT * FROM scores WHERE student_id = $1 AND subject = $2 AND term = $3 AND year = $4 FOR UPDATE`,
+      [studentId, subject, term, year]
+    );
+    const existing = existingRes.rows[0] || null;
 
-  const { rows } = await db.query(
-    `INSERT INTO scores (record_key, subject, student_id, class_level, term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
-     ON CONFLICT (student_id, subject, term, year) DO UPDATE SET
-       record_key = EXCLUDED.record_key,
-       class_level = EXCLUDED.class_level,
-       ao1 = CASE WHEN $14 THEN EXCLUDED.ao1 ELSE scores.ao1 END,
-       ao2 = CASE WHEN $15 THEN EXCLUDED.ao2 ELSE scores.ao2 END,
-       eot = CASE WHEN $16 THEN EXCLUDED.eot ELSE scores.eot END,
-       p1 = CASE WHEN $17 THEN EXCLUDED.p1 ELSE scores.p1 END,
-       p2 = CASE WHEN $18 THEN EXCLUDED.p2 ELSE scores.p2 END,
-       remarks = COALESCE(EXCLUDED.remarks, scores.remarks),
-       touched = EXCLUDED.touched OR scores.touched,
-       updated_at = now()
-     RETURNING record_key AS "recordKey", subject, student_id AS "studentId", class_level AS "classLevel",
-               term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt"`,
-    [recordKey, subject, studentId, resolvedClass, term, year, ao1, ao2, eot, p1, p2, remarks ?? null, !!touched,
-     hasAo1, hasAo2, hasEot, hasP1, hasP2]
-  );
+    if (existing && isTeacher && (existing.status === STATUS.SUBMITTED || existing.status === STATUS.VERIFIED)) {
+      return {
+        status: 409,
+        body: {
+          message: existing.status === STATUS.VERIFIED
+            ? 'These marks have been verified by the DOS and are locked. Ask the DOS to send them back if they need correcting.'
+            : 'These marks have been submitted to the DOS and are locked while awaiting approval.',
+          code: 'SCORE_LOCKED',
+          scoreStatus: existing.status
+        }
+      };
+    }
 
-  res.json(rows[0]);
+    // Final mark values = incoming where sent, otherwise what's stored.
+    const before = pickMarks(existing);
+    const after = {};
+    for (const f of MARK_FIELDS) after[f] = has(f) ? incoming[f] : before[f];
+
+    const changedFields = MARK_FIELDS.filter((f) => before[f] !== after[f]);
+    const marksChanged = changedFields.length > 0;
+
+    // Status: new rows start as draft. A teacher changing a mark always
+    // leaves the row 'draft' (never silently stays verified/rejected). An
+    // Administrator's edit keeps whatever status the row had — it is still
+    // fully audited below.
+    let newStatus = existing ? existing.status : STATUS.DRAFT;
+    if (existing && marksChanged && isTeacher) newStatus = STATUS.DRAFT;
+
+    const lastEditedBy = marksChanged ? req.user.username : (existing ? existing.last_edited_by : null);
+
+    const { rows } = await client.query(
+      `INSERT INTO scores (record_key, subject, student_id, class_level, term, year, ao1, ao2, eot, p1, p2, remarks, touched, status, last_edited_by, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15, now())
+       ON CONFLICT (student_id, subject, term, year) DO UPDATE SET
+         record_key = EXCLUDED.record_key,
+         class_level = EXCLUDED.class_level,
+         ao1 = EXCLUDED.ao1, ao2 = EXCLUDED.ao2, eot = EXCLUDED.eot, p1 = EXCLUDED.p1, p2 = EXCLUDED.p2,
+         remarks = COALESCE(EXCLUDED.remarks, scores.remarks),
+         touched = EXCLUDED.touched OR scores.touched,
+         status = EXCLUDED.status,
+         last_edited_by = EXCLUDED.last_edited_by,
+         updated_at = now()
+       RETURNING record_key AS "recordKey", subject, student_id AS "studentId", class_level AS "classLevel",
+                 term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt",
+                 status, review_note AS "reviewNote", last_edited_by AS "lastEditedBy", verified_by AS "verifiedBy", verified_at AS "verifiedAt"`,
+      [recordKey, subject, studentId, resolvedClass, term, year,
+       after.ao1, after.ao2, after.eot, after.p1, after.p2, remarks ?? null, !!touched,
+       newStatus, lastEditedBy]
+    );
+
+    if (marksChanged) {
+      const oldValues = {}, newValues = {};
+      changedFields.forEach((f) => { oldValues[f] = before[f]; newValues[f] = after[f]; });
+      await insertAudit(client, req, {
+        recordKey, studentId, subject, classLevel: resolvedClass, term, year,
+        action: existing ? 'UPDATE' : 'CREATE',
+        oldValues: existing ? oldValues : null,
+        newValues,
+        oldStatus: existing ? existing.status : null,
+        newStatus
+      });
+    }
+
+    return { status: 200, body: rows[0] };
+  });
+
+  res.status(outcome.status).json(outcome.body);
 }));
 
 // POST /api/scores/bulk-initials — Admin or Teacher only.
@@ -243,23 +302,45 @@ router.post('/bulk-initials', authenticate, requireRole('Administrator', 'Teache
 
 // DELETE /api/scores/:recordKey — Admin or Teacher only.
 // Fully removes one subject<->student<->term<->year association. recordKey
-// now carries all four segments ("SUBJECT_studentId_Term X_YYYY"), so this
-// can never accidentally delete the same subject's marks from a different
-// term — only the exact term/year the caller is looking at.
+// carries all four segments ("SUBJECT_studentId_Term X_YYYY"), so this can
+// never delete the same subject's marks from a different term.
+// A Teacher can't delete marks that are submitted/verified (locked); every
+// delete — including the marks that were removed — is written to the audit
+// trail, so deleting marks can no longer be done without a trace.
 router.delete('/:recordKey', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const { recordKey } = req.params;
+  const isTeacher = req.user.role === 'Teacher';
 
-  const { rows } = await db.query(
-    `DELETE FROM scores WHERE record_key = $1
-     RETURNING record_key AS "recordKey", subject, student_id AS "studentId", term, year`,
-    [recordKey]
-  );
+  const outcome = await withTransaction(async (client) => {
+    const existingRes = await client.query('SELECT * FROM scores WHERE record_key = $1 FOR UPDATE', [recordKey]);
+    const existing = existingRes.rows[0];
+    if (!existing) {
+      return { status: 404, body: { message: `No score record found for ${recordKey}.` } };
+    }
+    if (isTeacher && (existing.status === STATUS.SUBMITTED || existing.status === STATUS.VERIFIED)) {
+      return {
+        status: 409,
+        body: { message: 'These marks are submitted/verified and locked. Only the DOS can remove them.', code: 'SCORE_LOCKED', scoreStatus: existing.status }
+      };
+    }
 
-  if (!rows.length) {
-    return res.status(404).json({ message: `No score record found for ${recordKey}.` });
-  }
+    await client.query('DELETE FROM scores WHERE id = $1', [existing.id]);
+    await insertAudit(client, req, {
+      recordKey, studentId: existing.student_id, subject: existing.subject, classLevel: existing.class_level,
+      term: existing.term, year: existing.year, action: 'DELETE',
+      oldValues: pickMarks(existing), oldStatus: existing.status
+    });
 
-  res.json({ message: 'Subject unlinked and marks cleared.', removed: rows[0] });
+    return {
+      status: 200,
+      body: {
+        message: 'Subject unlinked and marks cleared.',
+        removed: { recordKey, subject: existing.subject, studentId: existing.student_id, term: existing.term, year: existing.year }
+      }
+    };
+  });
+
+  res.status(outcome.status).json(outcome.body);
 }));
 
 module.exports = router;

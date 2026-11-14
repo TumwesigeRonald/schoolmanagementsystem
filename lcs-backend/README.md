@@ -187,3 +187,18 @@ A couple of deliberate choices worth flagging:
 - [ ] Confirm `DATABASE_URL` uses `sslmode=require` (Neon's default)
 - [ ] Consider rate-limiting `/auth/login` if this becomes internet-facing
       (e.g. `express-rate-limit`) to slow down credential-guessing attempts
+
+## Marks audit trail + DOS approval
+
+Marks now go through approval before they count:
+
+1. Teacher enters marks -> saved as **draft** (not visible to students or on report cards).
+2. Teacher clicks **Submit to DOS** -> **submitted** (locked for the teacher).
+3. The DOS (the `Administrator` role) opens **Marks Approval**, checks the marks, then **Verify**s them or **Return**s them with a reason (the teacher can then correct and resubmit).
+4. Only **verified** marks appear on report cards and to students.
+
+Every mark entry/change/delete/submit/verify/return is written to `scores_audit` (who, when, IP, old -> new value) in the same transaction as the change, and shown in the Administrator's **Marks Audit Trail** tab.
+
+**Deploying:** run `npm run migrate` once. Marks that already exist are marked verified automatically, so issued report cards are unaffected.
+
+Routes (see `routes/score-approval.routes.js`): `POST /api/scores/submit`, `POST /api/scores/verify`, `POST /api/scores/reject`, `GET /api/scores/review`, `GET /api/scores/review/detail`, `GET /api/scores/audit`.
