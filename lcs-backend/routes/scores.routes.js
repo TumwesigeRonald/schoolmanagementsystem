@@ -148,10 +148,8 @@ router.get('/trend', authenticate, requireRole('Student'), asyncHandler(async (r
 //  - Every change to an actual mark value (ao1/ao2/eot/p1/p2) writes a row
 //    to scores_audit — who, when, from which IP, old value -> new value —
 //    in the SAME transaction as the change itself.
-//  - A Teacher can only edit rows that are 'draft' or 'rejected'. Once a
-//    subject is submitted to the DOS ('submitted') or approved ('verified')
-//    it is locked for teachers; only the DOS (Administrator) can change it,
-//    or send it back with a reason so the teacher can correct it.
+//  - Nothing is locked: a Teacher can edit rows in any status. Editing a
+//    submitted/verified mark sends it back to 'draft' for re-approval.
 //  - A Teacher's edit always leaves the row as 'draft', so a mark can never
 //    stay "verified" after someone changed it.
 //  - Remark/initial-only saves (no mark value changed) are not audited and
@@ -197,18 +195,8 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
     );
     const existing = existingRes.rows[0] || null;
 
-    if (existing && isTeacher && (existing.status === STATUS.SUBMITTED || existing.status === STATUS.VERIFIED)) {
-      return {
-        status: 409,
-        body: {
-          message: existing.status === STATUS.VERIFIED
-            ? 'These marks have been verified by the DOS and are locked. Ask the DOS to send them back if they need correcting.'
-            : 'These marks have been submitted to the DOS and are locked while awaiting approval.',
-          code: 'SCORE_LOCKED',
-          scoreStatus: existing.status
-        }
-      };
-    }
+    // No lock: teachers may edit at any time. A teacher's change to a mark
+    // sends the row back to 'draft' (see newStatus below) and is fully audited.
 
     // Final mark values = incoming where sent, otherwise what's stored.
     const before = pickMarks(existing);
@@ -304,7 +292,7 @@ router.post('/bulk-initials', authenticate, requireRole('Administrator', 'Teache
 // Fully removes one subject<->student<->term<->year association. recordKey
 // carries all four segments ("SUBJECT_studentId_Term X_YYYY"), so this can
 // never delete the same subject's marks from a different term.
-// A Teacher can't delete marks that are submitted/verified (locked); every
+// Deleting is allowed in any status; every
 // delete — including the marks that were removed — is written to the audit
 // trail, so deleting marks can no longer be done without a trace.
 router.delete('/:recordKey', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
@@ -317,13 +305,6 @@ router.delete('/:recordKey', authenticate, requireRole('Administrator', 'Teacher
     if (!existing) {
       return { status: 404, body: { message: `No score record found for ${recordKey}.` } };
     }
-    if (isTeacher && (existing.status === STATUS.SUBMITTED || existing.status === STATUS.VERIFIED)) {
-      return {
-        status: 409,
-        body: { message: 'These marks are submitted/verified and locked. Only the DOS can remove them.', code: 'SCORE_LOCKED', scoreStatus: existing.status }
-      };
-    }
-
     await client.query('DELETE FROM scores WHERE id = $1', [existing.id]);
     await insertAudit(client, req, {
       recordKey, studentId: existing.student_id, subject: existing.subject, classLevel: existing.class_level,

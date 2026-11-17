@@ -35,12 +35,11 @@ function scoreStatusChip(status) {
     return `<span class="inline-block px-2 py-0.5 rounded-full border text-[10px] font-extrabold uppercase tracking-wider ${meta.chip}">${meta.label}</span>`;
 }
 
-// A Teacher can't edit marks once they're submitted or verified (the server
-// enforces this too — this just keeps the UI honest instead of letting them
-// type into a box that will be refused).
+// Marks are no longer locked for Teachers: they can edit at any time, even
+// after Submit/Verify. The server drops an edited row back to 'draft' so it
+// has to be re-submitted and re-verified, and the audit trail records the change.
 function isScoreLockedForCurrentUser(marks) {
-    if (!marks || currentUser.role !== 'Teacher') return false;
-    return marks.status === 'submitted' || marks.status === 'verified';
+    return false;
 }
 function scoreLockAttr(marks) {
     if (!isScoreLockedForCurrentUser(marks)) return '';
@@ -314,7 +313,7 @@ async function verifySelectedMarks() {
     if (!approvalOpenBatch) return;
     const keys = getSelectedApprovalKeys(['submitted']);
     if (!keys.length) { alert('Tick at least one Submitted row to verify.'); return; }
-    if (!confirm(`Verify ${keys.length} mark${keys.length === 1 ? '' : 's'} for ${approvalOpenBatch.subject} (${approvalOpenBatch.classLevel})?\n\nThey will be locked and become visible on report cards and to students.`)) return;
+    if (!confirm(`Verify ${keys.length} mark${keys.length === 1 ? '' : 's'} for ${approvalOpenBatch.subject} (${approvalOpenBatch.classLevel})?\n\nThey will become visible on report cards and to students. If a teacher edits a verified mark later, it returns to Draft and needs verifying again.`)) return;
     try {
         const r = await ScoresAPI.verify(approvalOpenBatch.classLevel, approvalOpenBatch.subject, keys, getViewedTermYear());
         showToast(`${r.verified} mark${r.verified === 1 ? '' : 's'} verified.`, 'success');
