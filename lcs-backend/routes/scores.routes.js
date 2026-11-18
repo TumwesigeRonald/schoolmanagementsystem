@@ -148,10 +148,13 @@ router.get('/trend', authenticate, requireRole('Student'), asyncHandler(async (r
 //  - Every change to an actual mark value (ao1/ao2/eot/p1/p2) writes a row
 //    to scores_audit — who, when, from which IP, old value -> new value —
 //    in the SAME transaction as the change itself.
-//  - Nothing is locked: a Teacher can edit rows in any status. Editing a
-//    submitted/verified mark sends it back to 'draft' for re-approval.
-//  - A Teacher's edit always leaves the row as 'draft', so a mark can never
-//    stay "verified" after someone changed it.
+//  - Nothing is locked: a Teacher can edit rows in any status.
+//  - A mark that was already submitted, verified or returned and is then
+//    edited by a Teacher goes straight back to 'submitted' (and into the
+//    DOS's approval list) — the teacher does not have to submit it again,
+//    and it can never stay "verified" after someone changed it.
+//  - A mark that is still 'draft' stays 'draft' until the teacher clicks
+//    "Submit to DOS" (so half-entered marks never reach the DOS).
 //  - Remark/initial-only saves (no mark value changed) are not audited and
 //    don't affect status.
 router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
@@ -206,12 +209,30 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
     const changedFields = MARK_FIELDS.filter((f) => before[f] !== after[f]);
     const marksChanged = changedFields.length > 0;
 
-    // Status: new rows start as draft. A teacher changing a mark always
-    // leaves the row 'draft' (never silently stays verified/rejected). An
+    // Status: new rows start as draft. When a teacher changes a mark that was
+    // already submitted / verified / returned, the row goes straight back to
+    // 'submitted' so the DOS sees it again without the teacher having to
+    // click Submit a second time (it never silently stays verified). A
+    // teacher's edit to a row that is still 'draft' keeps it 'draft'. An
     // Administrator's edit keeps whatever status the row had — it is still
     // fully audited below.
     let newStatus = existing ? existing.status : STATUS.DRAFT;
-    if (existing && marksChanged && isTeacher) newStatus = STATUS.DRAFT;
+    let resubmitted = false;
+    let resubmitNote;
+    if (existing && marksChanged && isTeacher) {
+      if (existing.status === STATUS.VERIFIED) {
+        newStatus = STATUS.SUBMITTED; resubmitted = true;
+        resubmitNote = 'Edited by the teacher after DOS verification — automatically sent back to the DOS for approval.';
+      } else if (existing.status === STATUS.REJECTED) {
+        newStatus = STATUS.SUBMITTED; resubmitted = true;
+        resubmitNote = 'Corrected by the teacher after being returned — automatically sent back to the DOS for approval.';
+      } else if (existing.status === STATUS.SUBMITTED) {
+        newStatus = STATUS.SUBMITTED; resubmitted = true;
+        resubmitNote = 'Edited by the teacher while awaiting DOS approval — resubmitted automatically.';
+      } else {
+        newStatus = STATUS.DRAFT;
+      }
+    }
 
     const lastEditedBy = marksChanged ? req.user.username : (existing ? existing.last_edited_by : null);
 
@@ -226,13 +247,18 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
          touched = EXCLUDED.touched OR scores.touched,
          status = EXCLUDED.status,
          last_edited_by = EXCLUDED.last_edited_by,
+         submitted_by = CASE WHEN $16::boolean THEN EXCLUDED.last_edited_by ELSE scores.submitted_by END,
+         submitted_at = CASE WHEN $16::boolean THEN now() ELSE scores.submitted_at END,
+         review_note  = CASE WHEN $16::boolean THEN NULL ELSE scores.review_note END,
+         verified_by  = CASE WHEN EXCLUDED.status = 'verified' THEN scores.verified_by ELSE NULL END,
+         verified_at  = CASE WHEN EXCLUDED.status = 'verified' THEN scores.verified_at ELSE NULL END,
          updated_at = now()
        RETURNING record_key AS "recordKey", subject, student_id AS "studentId", class_level AS "classLevel",
                  term, year, ao1, ao2, eot, p1, p2, remarks, touched, updated_at AS "updatedAt",
                  status, review_note AS "reviewNote", last_edited_by AS "lastEditedBy", verified_by AS "verifiedBy", verified_at AS "verifiedAt"`,
       [recordKey, subject, studentId, resolvedClass, term, year,
        after.ao1, after.ao2, after.eot, after.p1, after.p2, remarks ?? null, !!touched,
-       newStatus, lastEditedBy]
+       newStatus, lastEditedBy, resubmitted]
     );
 
     if (marksChanged) {
@@ -244,7 +270,8 @@ router.post('/', authenticate, requireRole('Administrator', 'Teacher'), asyncHan
         oldValues: existing ? oldValues : null,
         newValues,
         oldStatus: existing ? existing.status : null,
-        newStatus
+        newStatus,
+        note: resubmitNote
       });
     }
 

@@ -57,7 +57,8 @@ async function transition(req, { classLevel, subject, term, year, recordKeys, fr
       await insertAudit(client, req, {
         recordKey: row.record_key, studentId: row.student_id, subject: row.subject, classLevel: row.class_level,
         term: row.term, year: row.year, action,
-        newValues: pickMarks(row), oldStatus: row.status, newStatus: toStatus, note
+        newValues: pickMarks(row), oldStatus: row.status, newStatus: toStatus,
+        note: typeof note === 'function' ? note(row) : note
       });
     }
     return locked.rows;
@@ -149,27 +150,35 @@ router.get('/review/detail', authenticate, requireRole('Administrator'), asyncHa
 
 // POST /api/scores/verify — Administrator only.
 // Body: { classLevel, subject, term?, year?, recordKeys? }
-// Approves every 'submitted' row for the class+subject (or only the listed
-// recordKeys). Only submitted marks can be verified — a draft that the
-// teacher is still editing can't be approved by accident.
+// With no recordKeys: approves every 'submitted' row for the class+subject.
+// With recordKeys: approves exactly those rows, which may be 'submitted' OR
+// still 'draft' (the DOS may approve a draft the teacher has not submitted
+// yet). Drafts are NEVER approved unless they are individually listed in
+// recordKeys, so a bulk "verify all" can never sweep up half-entered marks.
+// A row with no mark at all is never approved. Approving a draft is flagged
+// in the audit trail.
 router.post('/verify', authenticate, requireRole('Administrator'), asyncHandler(async (req, res) => {
   const { classLevel, subject, recordKeys } = req.body || {};
   if (!classLevel || !subject) {
     return res.status(400).json({ message: 'classLevel and subject are required.' });
   }
   const { term, year } = await resolveTermYear(req.body || {});
+  const keysGiven = Array.isArray(recordKeys) && recordKeys.length > 0;
   const moved = await transition(req, {
     classLevel, subject, term, year, recordKeys,
-    fromStatuses: [STATUS.SUBMITTED],
+    fromStatuses: keysGiven ? [STATUS.SUBMITTED, STATUS.DRAFT] : [STATUS.SUBMITTED],
     toStatus: STATUS.VERIFIED,
     action: 'VERIFY',
+    note: (row) => (row.status === STATUS.DRAFT ? 'Approved by the DOS while still a draft (the teacher had not submitted it).' : null),
     extraSet: 'verified_by = $3, verified_at = now(), review_note = NULL',
-    extraParams: [req.user.username]
+    extraParams: [req.user.username],
+    requireMarks: true
   });
   if (!moved.length) {
-    return res.status(400).json({ message: 'There are no submitted marks to verify for this class and subject.' });
+    return res.status(400).json({ message: 'There are no submitted or draft marks with a mark entered to verify for this class and subject.' });
   }
-  res.json({ verified: moved.length, classLevel, subject, term, year });
+  const draftsApproved = moved.filter((r) => r.status === STATUS.DRAFT).length;
+  res.json({ verified: moved.length, draftsApproved, classLevel, subject, term, year });
 }));
 
 // POST /api/scores/reject — Administrator only.

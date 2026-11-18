@@ -36,8 +36,9 @@ function scoreStatusChip(status) {
 }
 
 // Marks are no longer locked for Teachers: they can edit at any time, even
-// after Submit/Verify. The server drops an edited row back to 'draft' so it
-// has to be re-submitted and re-verified, and the audit trail records the change.
+// after Submit/Verify. When a teacher edits a mark that was already
+// submitted/verified/returned, the server sends it straight back to the DOS
+// as 'submitted' (no second click needed) and the audit trail records the change.
 function isScoreLockedForCurrentUser(marks) {
     return false;
 }
@@ -99,13 +100,13 @@ function refreshScoreApprovalBar() {
         ? `<button onclick="submitMarksToDOS(this)" class="bg-teal-700 hover:bg-teal-800 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-paper-plane mr-1.5"></i>Submit ${submittable} to DOS for approval</button>`
         : '';
     const notes = rejectedNotes.size
-        ? `<div class="w-full text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>Returned by the DOS: ${Array.from(rejectedNotes).map(escapeHTML).join(' &middot; ')}. Correct the marks, then submit again.</div>`
+        ? `<div class="w-full text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3"><i class="fa-solid fa-triangle-exclamation mr-1.5"></i>Returned by the DOS: ${Array.from(rejectedNotes).map(escapeHTML).join(' &middot; ')}. Correct the marks &mdash; each corrected mark goes back to the DOS automatically.</div>`
         : '';
     const hint = total === 0
         ? 'No marks entered for this subject yet.'
         : (submittable > 0
             ? 'Marks you enter are saved as drafts. Parents/students and report cards only see them after the DOS verifies them.'
-            : (counts.submitted > 0 ? 'Waiting for the DOS to verify.' : 'All marks verified by the DOS.'));
+            : (counts.submitted > 0 ? 'Waiting for the DOS to verify.' : 'All marks verified by the DOS. If you edit a verified mark it goes back to the DOS for approval.'));
 
     bar.innerHTML = `
         <div class="flex flex-wrap items-center gap-2 w-full">
@@ -126,7 +127,7 @@ async function submitMarksToDOS(btn) {
         alert('Some marks have not saved to the server yet (highlighted in red). Click "Save Marks Entry" first, then submit.');
         return;
     }
-    if (!confirm(`Submit ${subject} (${classLevel}) marks to the DOS for approval?\n\nOnce submitted you will not be able to change them unless the DOS returns them.`)) return;
+    if (!confirm(`Submit ${subject} (${classLevel}) marks to the DOS for approval?\n\nIf you edit these marks later, they will automatically go back to the DOS for approval again.`)) return;
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>Submitting...'; }
     try {
         const result = await ScoresAPI.submit(classLevel, subject, getViewedTermYear());
@@ -246,13 +247,13 @@ async function openApprovalBatch(classLevel, subject, silent) {
     const fmt = (v) => (v === null || v === undefined || v === '') ? '-' : Number(v);
 
     const body = approvalDetailRows.map((r, i) => {
-        const actionable = r.status !== 'draft';
+        const isDraft = r.status === 'draft';
         const flag = r.editsAfterSubmit > 0
             ? `<span class="text-rose-600 font-extrabold" title="Changed ${r.editsAfterSubmit} time(s) after it was submitted">&#9888; edited after submit</span>`
             : (r.editCount > 2 ? `<span class="text-amber-600 font-bold" title="Changed several times">edited ${r.editCount}&times;</span>` : (r.editCount > 1 ? `<span class="text-slate-400">edited ${r.editCount}&times;</span>` : ''));
         return `
             <tr class="hover:bg-slate-50 transition-colors">
-                <td class="p-3"><input type="checkbox" class="approval-row-check" data-key="${escapeHTML(r.recordKey)}" ${r.status === 'submitted' ? 'checked' : ''} ${actionable ? '' : 'disabled'}></td>
+                <td class="p-3"><input type="checkbox" class="approval-row-check" data-key="${escapeHTML(r.recordKey)}" data-status="${escapeHTML(r.status)}" ${r.status === 'submitted' ? 'checked' : ''} ${isDraft ? 'title="Draft - the teacher has not submitted this yet. Tick it only if you want to approve it anyway."' : ''}></td>
                 <td class="p-3 font-bold text-slate-900">${escapeHTML(r.studentName || r.studentId)}<div class="text-[10px] text-slate-400 font-semibold">${escapeHTML(r.studentId)}</div></td>
                 ${cols.map(c => `<td class="p-3 text-center font-extrabold text-slate-800">${fmt(r[c])}</td>`).join('')}
                 <td class="p-3">${scoreStatusChip(r.status)}${r.status === 'rejected' && r.reviewNote ? `<div class="text-[10px] text-rose-600 font-semibold mt-1 max-w-[14rem]">${escapeHTML(r.reviewNote)}</div>` : ''}</td>
@@ -288,7 +289,7 @@ async function openApprovalBatch(classLevel, subject, silent) {
                     <tbody class="divide-y divide-slate-100 text-xs text-slate-700">${body || `<tr><td colspan="${cols.length + 5}" class="p-6 text-center text-slate-400 font-medium">No marks entered for this subject.</td></tr>`}</tbody>
                 </table>
             </div>
-            <p class="p-4 text-[11px] text-slate-400 font-medium border-t border-slate-100">Tip: you can only verify rows that are <b>Submitted</b>. A <b>Verified</b> row can be returned if a mistake is found later. Every decision is recorded in the Marks Audit Trail.</p>
+            <p class="p-4 text-[11px] text-slate-400 font-medium border-t border-slate-100">Tip: <b>Submitted</b> rows are ticked for you. You can also tick a <b>Draft</b> row to approve it before the teacher submits it (&quot;Select all&quot; never ticks drafts, and this is flagged in the Audit Trail). A <b>Verified</b> row can be returned if a mistake is found later. Every decision is recorded in the Marks Audit Trail.</p>
         </div>`;
 }
 
@@ -298,7 +299,11 @@ function closeApprovalBatch() {
     if (panel) { panel.classList.add('hidden'); panel.innerHTML = ''; }
 }
 function toggleApprovalSelectAll(checked) {
-    document.querySelectorAll('.approval-row-check:not(:disabled)').forEach(cb => { cb.checked = checked; });
+    // Drafts are never bulk-ticked: the DOS has to tick each draft deliberately.
+    document.querySelectorAll('.approval-row-check:not(:disabled)').forEach(cb => {
+        if (cb.dataset.status === 'draft') { if (!checked) cb.checked = false; return; }
+        cb.checked = checked;
+    });
 }
 function getSelectedApprovalKeys(statuses) {
     return Array.from(document.querySelectorAll('.approval-row-check:checked'))
@@ -311,9 +316,16 @@ function getSelectedApprovalKeys(statuses) {
 
 async function verifySelectedMarks() {
     if (!approvalOpenBatch) return;
-    const keys = getSelectedApprovalKeys(['submitted']);
-    if (!keys.length) { alert('Tick at least one Submitted row to verify.'); return; }
-    if (!confirm(`Verify ${keys.length} mark${keys.length === 1 ? '' : 's'} for ${approvalOpenBatch.subject} (${approvalOpenBatch.classLevel})?\n\nThey will become visible on report cards and to students. If a teacher edits a verified mark later, it returns to Draft and needs verifying again.`)) return;
+    const keys = getSelectedApprovalKeys(['submitted', 'draft']);
+    if (!keys.length) { alert('Tick at least one Submitted or Draft row to verify.'); return; }
+    const draftCount = keys.filter(key => {
+        const row = approvalDetailRows.find(r => r.recordKey === key);
+        return row && row.status === 'draft';
+    }).length;
+    const draftWarning = draftCount
+        ? `\n\nWARNING: ${draftCount} of these ${draftCount === 1 ? 'is' : 'are'} still DRAFT \u2014 the teacher has not submitted ${draftCount === 1 ? 'it' : 'them'} yet, so the marks may be incomplete (for example, no EOT). This will be recorded in the Audit Trail.`
+        : '';
+    if (!confirm(`Verify ${keys.length} mark${keys.length === 1 ? '' : 's'} for ${approvalOpenBatch.subject} (${approvalOpenBatch.classLevel})?\n\nThey will become visible on report cards and to students. If a teacher edits a verified mark later, it comes back to you for approval again.${draftWarning}`)) return;
     try {
         const r = await ScoresAPI.verify(approvalOpenBatch.classLevel, approvalOpenBatch.subject, keys, getViewedTermYear());
         showToast(`${r.verified} mark${r.verified === 1 ? '' : 's'} verified.`, 'success');

@@ -3162,10 +3162,11 @@ async function saveMarksEntry(buttonEl) {
     const remaining = await retryUnsavedScores();
     if (buttonEl) { buttonEl.disabled = false; buttonEl.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1.5"></i>Save Marks Entry'; }
     if (remaining === 0) {
-        // Marks are saved as DRAFT. They stay on screen (instead of the table
+        // New marks are saved as DRAFT. They stay on screen (instead of the table
         // collapsing) so the teacher can click "Submit to DOS" straight away —
-        // draft marks are not visible on report cards or to students.
-        showToast('Marks saved as draft. Click "Submit to DOS" below when you are done so they can be approved.', 'success', 9000);
+        // draft marks are not visible on report cards or to students. Edits to
+        // marks that were already submitted/verified go straight back to the DOS.
+        showToast('Marks saved. New marks stay as drafts until you click "Submit to DOS" below; changes to marks already submitted go back to the DOS for approval automatically.', 'success', 9000);
         if (typeof refreshScoreApprovalBar === 'function') refreshScoreApprovalBar();
     } else {
         alert(`${remaining} row(s) could NOT be saved to the server — they're highlighted in red. Check your connection/session and try again before leaving this page.`);
