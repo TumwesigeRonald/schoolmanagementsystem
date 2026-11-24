@@ -861,6 +861,7 @@ button.btn-neu-light-danger:active {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative; /* anchors the micro-text security line (.rc-secline) */
 }
 .report-page + .report-page {
     page-break-before: always;
@@ -959,7 +960,7 @@ button.btn-neu-light-danger:active {
 .rc-remark-box h4 { margin: 0 0 4px; font-size: 8.3px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gold-600); }
 .rc-remark-box p { margin: 0; font-size: 9.3px; line-height: 1.45; color: #222; }
 /* ---- Footer: sign-off, comments, term dates ---- */
-.rc-footer { margin-top: auto; padding-top: 7px; page-break-inside: avoid; flex-shrink: 0; }
+.rc-footer { margin-top: auto; padding-top: 7px; page-break-inside: avoid; flex-shrink: 0; position: relative; }
 .rc-comment-row { display: flex; align-items: baseline; gap: 8px; font-size: 9.5px; font-weight: 700; border-bottom: 1px solid #333; padding: 5px 0 4px; flex-wrap: wrap; }
 .rc-comment-label { color: #111; white-space: nowrap; }
 .rc-comment-line { flex: 1; min-width: 110px; font-weight: 500; border-bottom: 1px dotted #999; padding-bottom: 2px; }
@@ -972,6 +973,21 @@ button.btn-neu-light-danger:active {
 .rc-legal-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 10px; margin-top: 8px; font-size: 8px; color: #333; }
 .rc-print-meta { color: #888; font-style: italic; font-size: 7.5px; text-align: center; flex: 1; min-width: 180px; }
 .rc-stamp-note { border: 1px solid #333; padding: 2px 9px; font-weight: 800; border-radius: 4px; }
+/* ---- Report card extras: verification QR, trend arrows, security line ----
+   None of these add page height:
+   - the QR is absolutely positioned in a strip the four comment/signature
+     rows leave free on their right (only reserved when a QR is present);
+   - trend arrows are tiny inline text inside the score cell;
+   - the security line lives in the page's bottom padding. */
+.rc-verify { position: absolute; top: 4px; right: 0; width: 15mm; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.rc-verify svg { display: block; width: 15mm; height: 15mm; }
+.rc-verify span { font-size: 5px; font-weight: 800; letter-spacing: 0.05em; color: #444; line-height: 1; white-space: nowrap; }
+.rc-footer-verified > .rc-comment-row:nth-child(-n+4) { margin-right: 18mm; }
+.rc-trend { display: inline-block; margin-left: 3px; font-size: 6.5px; font-weight: 800; line-height: 1; letter-spacing: 0; white-space: nowrap; vertical-align: 1px; }
+.rc-trend-up { color: #15803d; }
+.rc-trend-down { color: #b91c1c; }
+.rc-trend-flat { color: #6b7280; }
+.rc-secline { position: absolute; left: 0; right: 0; bottom: 5mm; text-align: center; font-size: 5.6px; letter-spacing: 0.08em; font-weight: 600; color: #8a8a8a; white-space: nowrap; overflow: hidden; pointer-events: none; }
 /* ---------------------------------------------------------
    O-LEVEL REPORT — layout-only tightening.
    The O-Level table has more columns (10 vs A-Level's 7) plus an

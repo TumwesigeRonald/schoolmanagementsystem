@@ -108,6 +108,10 @@ const ENDPOINTS = {
     SCORES_REVIEW: "/scores/review",
     SCORES_REVIEW_DETAIL: "/scores/review/detail",
     SCORES_AUDIT: "/scores/audit",
+    // Report card QR verification codes + previous-term scores for the trend
+    // arrows (see lcs-backend/routes/verify.routes.js). The PUBLIC half of that
+    // route (GET /verify?c=...) is called by verify.html, not by this file.
+    REPORT_EXTRAS: "/verify/report-extras",
 
     // --- Attendance ---
     ATTENDANCE: "/attendance",
@@ -1247,6 +1251,20 @@ const ScoresAPI = {
             () => apiRequest(ENDPOINTS.SCORES_TREND),
             () => null
         );
+    }
+};
+
+// Report-card extras: one call returns a signed verification code per learner
+// (printed as the QR) and each subject's most recent earlier score (for the
+// up/down trend arrows). No local fallback on purpose — a report card must
+// never print a made-up code or trend; if this fails the card simply prints
+// without the QR/arrows, exactly like before this feature existed.
+const ReportExtrasAPI = {
+    async get(studentIds, term, year, levelType) {
+        return apiRequest(ENDPOINTS.REPORT_EXTRAS, {
+            method: "POST",
+            body: { studentIds, term, year: Number(year), levelType }
+        });
     }
 };
 

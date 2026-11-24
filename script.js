@@ -3489,6 +3489,7 @@ async function generateSingleReportCard(studentId) {
     previewArea.innerHTML = `<div class="bg-white border border-slate-200 rounded-2xl p-10 text-center text-slate-400 text-sm font-semibold">Loading report card for ${escapeHTML(student.name)}&hellip;</div>`;
     await refreshAttendanceForStudent(student.id);
     await refreshReportRemarksForStudent(student.id);
+    await prepareReportExtras([student], term, year, student.class === 'S.5' || student.class === 'S.6');
 
     // Fees balance: same Administrator-only / Finance-unlocked rule as the class generator.
     let feeBalance = null;
@@ -3955,6 +3956,10 @@ async function generateReportCards() {
     // shows up instead of appearing blank.
     await Promise.all(classStudents.map(s => refreshReportRemarksForStudent(s.id)));
 
+    // QR verification codes + previous-term scores (trend arrows). Never
+    // blocks generation: on any failure the cards just print without them.
+    await prepareReportExtras(classStudents, term, year, isALevel);
+
     // Fees Balance on the report card is Administrator-only, and only when
     // they've already unlocked Finance in this browser session (this is a
     // read of finance data, so it must go through the same Finance-scope
@@ -4170,8 +4175,113 @@ function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex 
         </div>
     `;
 }
+/* ---------------------------------------------------------
+   6e. REPORT CARD EXTRAS — verification QR, trend arrows, security line
+   Three small additions to the report card that deliberately take no
+   extra page height:
+     1. A QR code (sits in the free strip beside the comment/signature
+        rows). Scanning opens verify.html, which re-reads the learner's
+        marks from the database, so an edited printout can be spotted.
+     2. A tiny arrow beside each subject's score showing the change since
+        the learner's last recorded term (▲ up, ▼ down, = steady).
+     3. A micro-text line in the bottom margin: learner, term, issue time
+        and a reference that matches the QR code.
+   Everything here degrades silently: if the backend can't be reached (or
+   the QR library didn't load), the card prints exactly as it always did.
+   --------------------------------------------------------- */
+// Leave empty to use the address this portal is opened from. Set it (for
+// example 'https://lcs-portal.vercel.app') if report cards are ever printed
+// from a different address (localhost, a preview link): the QR must always
+// point at the real site that hosts verify.html.
+const REPORT_VERIFY_BASE_URL = '';
+// A change of this many marks or fewer is shown as "=" (steady).
+const REPORT_TREND_STEADY_BAND = 1;
+const reportExtrasStore = { codes: new Map(), previous: new Map() };
+function reportExtrasKey(studentId, term, year) {
+    return `${studentId}|${term}|${year}`;
+}
+// Fetches codes + previous-term scores for these learners and caches them so
+// the (synchronous) report builders below can read them. Call this right
+// before building cards; it never throws.
+async function prepareReportExtras(students, term, year, isALevel) {
+    try {
+        const data = await ReportExtrasAPI.get(students.map(s => s.id), term, year, isALevel ? 'A' : 'O');
+        students.forEach(s => {
+            const key = reportExtrasKey(s.id, term, year);
+            const code = data && data.codes && data.codes[s.id];
+            if (code) reportExtrasStore.codes.set(key, code); else reportExtrasStore.codes.delete(key);
+            reportExtrasStore.previous.set(key, (data && data.previous && data.previous[s.id]) || {});
+        });
+    } catch (err) {
+        console.warn('Report card QR/trend data unavailable; printing without it:', err.message || err);
+        students.forEach(s => {
+            const key = reportExtrasKey(s.id, term, year);
+            reportExtrasStore.codes.delete(key);
+            reportExtrasStore.previous.delete(key);
+        });
+    }
+}
+function getReportExtras(student, term, year) {
+    const key = reportExtrasKey(student.id, term, year);
+    return {
+        code: reportExtrasStore.codes.get(key) || null,
+        previous: reportExtrasStore.previous.get(key) || {}
+    };
+}
+function buildReportVerifyUrl(code) {
+    let base = REPORT_VERIFY_BASE_URL.replace(/\/+$/, '');
+    if (!base) {
+        if (!/^https?:$/.test(window.location.protocol)) return null; // opened as a file: no real address to point at
+        base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '').replace(/\/+$/, '');
+    }
+    // Student IDs contain "/" (e.g. LCS/111), which is legal inside a query
+    // string — keeping it unescaped makes the link shorter and the QR less dense.
+    return `${base}/verify.html?c=${encodeURIComponent(code).replace(/%2F/gi, '/')}`;
+}
+function buildReportQrSvg(url) {
+    if (typeof qrcode !== 'function') return '';
+    try {
+        const qr = qrcode(0, 'M');
+        qr.addData(url);
+        qr.make();
+        return qr.createSvgTag({ cellSize: 1, margin: 2, scalable: true });
+    } catch (err) {
+        console.warn('Could not draw report card QR code:', err);
+        return '';
+    }
+}
+function buildReportVerifyBlock(code) {
+    if (!code) return '';
+    const url = buildReportVerifyUrl(code);
+    const svg = url ? buildReportQrSvg(url) : '';
+    return svg ? `<div class="rc-verify">${svg}<span>SCAN TO VERIFY</span></div>` : '';
+}
+function buildTrendBadge(current, prev) {
+    if (current === null || current === undefined || !prev) return '';
+    const diff = current - prev.score;
+    const from = `${prev.term} ${prev.year}`;
+    if (Math.abs(diff) <= REPORT_TREND_STEADY_BAND) {
+        return `<span class="rc-trend rc-trend-flat" title="Same as ${escapeHTML(from)} (${prev.score})">=</span>`;
+    }
+    const up = diff > 0;
+    return `<span class="rc-trend ${up ? 'rc-trend-up' : 'rc-trend-down'}" title="${up ? 'Up' : 'Down'} ${Math.abs(diff)} since ${escapeHTML(from)} (${prev.score})">${up ? '&#9650;' : '&#9660;'}${Math.abs(diff)}</span>`;
+}
+function buildReportSecurityLine(student, term, year, code, hasTrend) {
+    const ref = code ? code.split('~').pop().slice(0, 8) : null;
+    const parts = [
+        escapeHTML(student.id),
+        `${escapeHTML(String(term)).toUpperCase()} ${escapeHTML(String(year))}`,
+        ref ? `REF ${escapeHTML(ref)}` : null,
+        `ISSUED ${formatGeneratedTimestamp().replace(' at ', ' ').toUpperCase()}`,
+        hasTrend ? '&#9650;&#9660; = CHANGE SINCE LAST TERM' : null
+    ].filter(Boolean);
+    return `<div class="rc-secline">${parts.join(' &middot; ')}</div>`;
+}
 function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null, feeBalance = null) {
     const subjectRecords = getALevelSubjectRecords(student);
+    const extras = getReportExtras(student, term, year);
+    const verifyBlock = buildReportVerifyBlock(extras.code);
+    const hasTrend = subjectRecords.some(r => extras.previous[r.subj]);
     // A subject still awaiting a valid mark contributes no points — it must
     // never be silently counted as an 'E' (1 point) in the term's total.
     const totalPoints = subjectRecords.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0);
@@ -4181,7 +4291,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-subj">${formatALevelSubjectDisplayName(r.subj)}${r.isSubsidiary ? ' <span class="rc-sub-tag">SUB</span>' : ''}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.p1, '-')}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.p2, '-')}</td>
-            <td class="rc-num">${displayOrDash(r.avgMark)}</td>
+            <td class="rc-num">${displayOrDash(r.avgMark)}${buildTrendBadge(r.avgMark, extras.previous[r.subj])}</td>
             <td class="rc-grade">${displayOrDash(r.gradeInfo.grade)}</td>
             <td class="rc-grade">${r.gradeInfo.grade === null ? '-' : `${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})`}</td>
             <td class="rc-descriptor">${r.marks.remarks ? escapeHTML(r.marks.remarks) : displayOrDash(r.gradeInfo.descriptor, 'Not yet graded')}</td>
@@ -4237,7 +4347,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 </table>
             </div>
             ${buildSummarySection(student, subjectRecords, true, attendanceIndex)}
-            <div class="rc-footer">
+            <div class="rc-footer${verifyBlock ? ' rc-footer-verified' : ''}">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
@@ -4257,7 +4367,9 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <span class="rc-print-meta">Printed on ${formatGeneratedTimestamp()} &middot; via Luweero Community SS Management System</span>
                     <span class="rc-stamp-note">NOT VALID WITHOUT STAMP</span>
                 </div>
+                ${verifyBlock}
             </div>
+            ${buildReportSecurityLine(student, term, year, extras.code, hasTrend)}
         </div>
     `;
 }
@@ -4305,6 +4417,9 @@ function calculateOLevelOverallAchievement(classLevel, subjectRecords) {
 }
 function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editableComments = true, attendanceIndex = null, feeBalance = null) {
     const subjectRecords = getOLevelSubjectRecords(student);
+    const extras = getReportExtras(student, term, year);
+    const verifyBlock = buildReportVerifyBlock(extras.code);
+    const hasTrend = subjectRecords.some(r => extras.previous[r.subj]);
 
     // overallAvg/overallIdentifier (and buildSummarySection below) intentionally
     // keep using the untouched `subjectRecords` — i.e. only subjects that
@@ -4357,7 +4472,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-num">${r.avScore !== null && r.avScore !== undefined && r.avScore !== 0 ? r.avScore.toFixed(1) : ''}</td>
             <td class="rc-num">${r.faScore !== null && r.faScore !== undefined && r.faScore !== 0 ? Math.round(r.faScore) : ''}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '')}</td>
-            <td class="rc-final">${r.finalTotal !== null && r.finalTotal !== undefined && r.finalTotal !== 0 ? r.finalTotal : ''}</td>
+            <td class="rc-final">${r.finalTotal !== null && r.finalTotal !== undefined && r.finalTotal !== 0 ? r.finalTotal : ''}${buildTrendBadge(r.finalTotal, extras.previous[r.subj])}</td>
             <td class="rc-grade">${r.gradeData.grade || ''}</td>
             <td class="rc-descriptor">${r.gradeData.grade ? getCompetencyDescriptor(r.gradeData.grade) : ''}</td>
             <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
@@ -4429,7 +4544,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 </table>
             </div>
             ${buildSummarySection(student, subjectRecords, false, attendanceIndex)}
-            <div class="rc-footer">
+            <div class="rc-footer${verifyBlock ? ' rc-footer-verified' : ''}">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
@@ -4448,7 +4563,9 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <span>AOI &ndash; Activity of Integration &nbsp;|&nbsp; AS &ndash; Average Score &nbsp;|&nbsp; FA &ndash; Formative Assessment</span>
                     <span class="rc-stamp-note">ONLY VALID WITH A STAMP</span>
                 </div>
+                ${verifyBlock}
             </div>
+            ${buildReportSecurityLine(student, term, year, extras.code, hasTrend)}
         </div>
     `;
 }

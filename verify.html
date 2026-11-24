@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Verify Report Card | Luweero Community SS</title>
+<link rel="icon" href="icon-192.png">
+<style>
+    :root {
+        --ink: #18181b;
+        --muted: #6b7280;
+        --line: #e4e4e7;
+        --bg: #f4f4f5;
+        --card: #ffffff;
+        --ok: #15803d;
+        --ok-bg: #dcfce7;
+        --bad: #b91c1c;
+        --bad-bg: #fee2e2;
+        --wait: #1d4ed8;
+        --wait-bg: #dbeafe;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.45; }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 16px; }
+    header { display: flex; align-items: center; gap: 12px; padding: 8px 0 16px; }
+    header img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid var(--ink); background: #fff; }
+    header h1 { font-size: 15px; margin: 0; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1.2; }
+    header p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .banner { padding: 18px 16px; display: flex; align-items: center; gap: 12px; }
+    .banner .icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+    .banner strong { display: block; font-size: 18px; }
+    .banner span { font-size: 13px; }
+    .banner.ok { background: var(--ok-bg); color: var(--ok); }
+    .banner.bad { background: var(--bad-bg); color: var(--bad); }
+    .banner.wait { background: var(--wait-bg); color: var(--wait); }
+    .who { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+    .who h2 { margin: 0 0 6px; font-size: 17px; }
+    .who dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; font-size: 13px; }
+    .who dt { color: var(--muted); }
+    .who dd { margin: 0; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 9px 16px; text-align: left; border-bottom: 1px solid var(--line); }
+    th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); background: #fafafa; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.grade { font-weight: 800; width: 56px; text-align: center; }
+    tfoot td { font-weight: 800; background: #fafafa; border-bottom: 0; }
+    .note { padding: 14px 16px; font-size: 12.5px; color: var(--muted); }
+    .note b { color: var(--ink); }
+    .empty { padding: 16px; font-size: 14px; }
+    footer { text-align: center; font-size: 11px; color: var(--muted); padding: 16px 0 8px; }
+    [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+        <img src="school_badge.jpg" alt="School badge" onerror="this.style.display='none'">
+        <div>
+            <h1>Luweero Community Secondary School</h1>
+            <p>Report card verification</p>
+        </div>
+    </header>
+
+    <div class="card" id="result">
+        <div class="banner wait"><div class="icon">&#8987;</div><div><strong>Checking&hellip;</strong><span>Contacting the school system.</span></div></div>
+    </div>
+
+    <footer>Marks are read live from the school's records each time this page is opened.</footer>
+</div>
+
+<script>
+// Keep in sync with API_CONFIG.BASE_URL in api.js (this page is deliberately
+// standalone: no login, no app scripts, so a parent's phone loads it fast).
+var API_BASE = "https://lcs-backend.vercel.app/api";
+
+(function () {
+    var box = document.getElementById("result");
+
+    function esc(s) {
+        return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+    }
+    function banner(kind, icon, title, text) {
+        return '<div class="banner ' + kind + '"><div class="icon">' + icon + '</div><div><strong>' + esc(title) + '</strong><span>' + esc(text) + '</span></div></div>';
+    }
+    function fail(title, text) {
+        box.innerHTML = banner("bad", "&#10060;", title, text) +
+            '<div class="note">If you scanned this from a printed report card, treat that card as <b>not verified</b> and contact the school office.</div>';
+    }
+
+    var code = new URLSearchParams(window.location.search).get("c");
+    if (!code) { fail("No code found", "Please scan the QR code printed on the report card."); return; }
+
+    fetch(API_BASE + "/verify?c=" + encodeURIComponent(code), { headers: { "Accept": "application/json" } })
+        .then(function (res) {
+            return res.json().catch(function () { return null; }).then(function (data) { return { status: res.status, data: data }; });
+        })
+        .then(function (r) {
+            var d = r.data;
+            if (r.status === 404 || (d && d.valid === false)) {
+                fail("Not genuine", "This code was not issued by the school system.");
+                return;
+            }
+            if (r.status !== 200 || !d || !d.valid) {
+                fail("Could not check", "The school system did not respond properly. Please try again in a moment.");
+                return;
+            }
+
+            var html = banner("ok", "&#9989;", "Genuine report card", "This code was issued by the school system.");
+            html += '<div class="who"><h2>' + esc(d.student.name) + '</h2><dl>' +
+                '<dt>Student ID</dt><dd>' + esc(d.student.id) + '</dd>' +
+                '<dt>Class</dt><dd>' + esc(d.student.class) + '</dd>' +
+                '<dt>Term</dt><dd>' + esc(d.term) + ', ' + esc(d.year) + '</dd></dl></div>';
+
+            if (!d.subjects.length) {
+                html += '<div class="empty">The code is genuine, but there are <b>no approved marks on record</b> for this term yet. A card showing marks for this term should not be trusted.</div>';
+            } else {
+                var scoreHead = d.levelType === "A" ? "A.S" : "Final /100";
+                html += '<table><thead><tr><th>Subject</th><th class="num">' + scoreHead + '</th><th>Grade</th></tr></thead><tbody>';
+                d.subjects.forEach(function (s) {
+                    html += '<tr><td>' + esc(s.subject) + '</td><td class="num">' + esc(s.score) + '</td><td class="grade">' + esc(s.grade) + '</td></tr>';
+                });
+                html += '</tbody><tfoot><tr><td>Average</td><td class="num">' + esc(d.average) + '</td><td></td></tr></tfoot></table>';
+                html += '<div class="note"><b>Compare these marks with the printed card.</b> If any mark or grade is different, the card has been altered and is not valid.</div>';
+            }
+            box.innerHTML = html;
+        })
+        .catch(function () {
+            box.innerHTML = banner("bad", "&#9888;", "No connection", "Could not reach the school system. Check your internet and scan again.");
+        });
+})();
+</script>
+</body>
+</html>

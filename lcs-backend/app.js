@@ -23,6 +23,7 @@ const studentFinanceRoutes = require('./routes/student-finance.routes');
 const payrollRoutes = require('./routes/payroll.routes');
 const partTimePayrollRoutes = require('./routes/part-time-payroll.routes');
 const adminStaffRoutes = require('./routes/admin-staff.routes');
+const verifyRoutes = require('./routes/verify.routes');
 
 const app = express();
 
@@ -118,6 +119,9 @@ app.use('/api/finance/part-time-payroll', partTimePayrollRoutes);
 // Administrator-only Bursar/HR/Director account management — a separate
 // gate from the Finance password above (see routes/admin-staff.routes.js).
 app.use('/api/admin', adminStaffRoutes);
+// Report-card QR verification: one PUBLIC route (GET /api/verify?c=...) plus
+// the authenticated POST /api/verify/report-extras used when generating cards.
+app.use('/api/verify', verifyRoutes);
 
 // --- 404 for unmatched /api routes ---
 app.use('/api', (req, res) => res.status(404).json({ message: 'Not found.' }));
