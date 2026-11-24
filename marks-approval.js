@@ -177,6 +177,7 @@ function renderMarksApprovalModule() {
                     <p class="text-sm font-extrabold text-slate-800">Marks waiting for your approval &mdash; ${escapeHTML(term)} ${escapeHTML(year)}</p>
                     <p class="text-xs font-semibold text-slate-500 mt-1">Teachers submit a class and subject when they finish entering marks. Check them, then verify or return them with a reason. Only verified marks appear on report cards and to students.</p>
                 </div>
+                <label class="flex items-center gap-2 text-xs font-extrabold text-slate-600 uppercase tracking-wider cursor-pointer select-none"><input type="checkbox" id="approval-show-verified" onchange="loadMarksApprovalData()" class="w-4 h-4"> Show fully verified</label>
                 <button onclick="loadMarksApprovalData()" class="bg-slate-100 hover:bg-slate-200 text-teal-700 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl border border-slate-300 transition"><i class="fa-solid fa-rotate-right mr-1.5"></i>Refresh</button>
             </div>
             <div class="overflow-x-auto bg-white border border-slate-200 rounded-2xl shadow-xs">
@@ -208,9 +209,17 @@ async function loadMarksApprovalData() {
         tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-rose-500 font-semibold">${escapeHTML(err.message || 'Could not load marks for approval.')}</td></tr>`;
         return;
     }
-    const batches = data.batches || [];
+    const allBatches = data.batches || [];
+    // A class+subject drops off the list once every mark in it is verified
+    // (nothing draft, submitted or returned left). Tick "Show fully verified"
+    // to bring them back. A later edit/return makes it reappear on its own.
+    const showVerified = !!(document.getElementById('approval-show-verified') || {}).checked;
+    const batches = showVerified ? allBatches
+        : allBatches.filter(b => (b.draft || 0) + (b.submitted || 0) + (b.rejected || 0) > 0);
     if (!batches.length) {
-        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400 font-medium">No marks have been entered for this term yet.</td></tr>`;
+        tbody.innerHTML = allBatches.length
+            ? `<tr><td colspan="8" class="p-6 text-center text-emerald-700 font-semibold">All marks for this term have been verified. Nothing is waiting for your approval.</td></tr>`
+            : `<tr><td colspan="8" class="p-6 text-center text-slate-400 font-medium">No marks have been entered for this term yet.</td></tr>`;
     } else {
         tbody.innerHTML = batches.map(b => `
             <tr class="hover:bg-slate-50 transition-colors${b.submitted > 0 ? ' bg-amber-50/40' : ''}">
