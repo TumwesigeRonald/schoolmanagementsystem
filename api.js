@@ -68,6 +68,7 @@ const ENDPOINTS = {
     STUDENT_BY_ID: (id) => `/students/${encodeURIComponent(id)}`,
     STUDENT_STATUS: (id) => `/students/${encodeURIComponent(id)}/status`,
     STUDENTS_PROMOTE: "/students/promote",
+    STUDENTS_RESTORE_ALL: "/students/restore-all",
     STUDENT_PHOTO: (id) => `/students/${encodeURIComponent(id)}/photo`,
     // Generic file upload (Admin/Teacher) — stores the raw file and hands
     // back a public URL, no other side effects. Distinct from
@@ -1005,6 +1006,10 @@ const StudentsAPI = {
                 return { id: studentId, status };
             }
         );
+    },
+    // Restore every graduated learner (optionally only one class) -> { ok, affected }
+    async restoreAll(className) {
+        return apiRequest(ENDPOINTS.STUDENTS_RESTORE_ALL, { method: "POST", body: { class: className || "ALL" } });
     },
     // plan: { "S.1": "S.2", "S.4": "GRADUATE", "S.5": "SKIP", ... } -> { ok, affected }
     async promote(plan) {

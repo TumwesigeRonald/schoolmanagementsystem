@@ -121,6 +121,24 @@ router.put('/:id/status', authenticate, requireRole('Administrator'), asyncHandl
   res.json(rows[0]);
 }));
 
+// POST /api/students/restore-all — Admin/Director. Body (optional): { class: "S.4" }.
+// Sets every Graduated learner (optionally only those in one class) back to
+// Active in a single statement. IDs, marks and logins are untouched.
+router.post('/restore-all', authenticate, requireRole('Administrator'), asyncHandler(async (req, res) => {
+  await ensureStatusColumn();
+  const cls = req.body && req.body.class && req.body.class !== 'ALL' ? req.body.class : null;
+  if (cls && !VALID_CLASSES.includes(cls)) {
+    return res.status(400).json({ message: `Unknown class "${cls}".` });
+  }
+  const { rows } = await db.query(
+    `UPDATE students SET status = 'Active', graduated_year = NULL
+     WHERE status = 'Graduated' ${cls ? 'AND class = $1' : ''}
+     RETURNING id`,
+    cls ? [cls] : []
+  );
+  res.json({ ok: true, affected: rows.length });
+}));
+
 // POST /api/students/promote — Admin only.
 // Body: { plan: { "S.1": "S.2", "S.4": "GRADUATE", "S.5": "SKIP", ... } }
 // Each class maps to its next class, "GRADUATE" (mark every Active learner in

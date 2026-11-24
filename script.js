@@ -1653,6 +1653,7 @@ function renderStudentsModule() {
                             <option value="Active">Current learners</option>
                             <option value="Graduated">Graduated (Alumni)</option>
                         </select>
+                        ${canManage ? `<button id="restore-all-btn" onclick="restoreAllStudents()" style="display:none" class="mt-2 w-full md:w-64 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition"><i class="fa-solid fa-rotate-left mr-2"></i>Restore All</button>` : ''}
                     </div>
                     <div class="mt-3">
                         <label class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider mb-1">Search Students</label>
@@ -1753,6 +1754,8 @@ async function loadStudentData() {
     const searchTerm = searchInput ? searchInput.value.trim() : '';
     const statusFilter = document.getElementById('student-status-filter');
     const showGraduated = !!statusFilter && statusFilter.value === 'Graduated';
+    const restoreAllBtn = document.getElementById('restore-all-btn');
+    if (restoreAllBtn) restoreAllBtn.style.display = showGraduated ? '' : 'none';
 
     tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-slate-400 text-xs font-medium"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Loading students&hellip;</td></tr>`;
 
@@ -2466,6 +2469,30 @@ async function setStudentStatus(studentId, status) {
     await refreshStudentsList();
     await loadStudentData();
     updateDashboardStats();
+}
+// ---- Restore ALL graduated learners (respects the class filter) ----
+async function restoreAllStudents() {
+    if (!getPermissions(currentUser.role).canManageStudents) return; // RBAC guard
+    const filterSelect = document.getElementById('class-filter');
+    const cls = filterSelect ? filterSelect.value : 'ALL';
+    const scope = cls === 'ALL' ? 'ALL graduated learners' : `all graduated learners in ${cls}`;
+    if (!confirm(`Restore ${scope} as current learners?\n\nTheir IDs, marks and records are kept and they return to their class lists.`)) return;
+    const btn = document.getElementById('restore-all-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Restoring\u2026'; }
+    let result;
+    try {
+        result = await StudentsAPI.restoreAll(cls);
+    } catch (err) {
+        alert(err.message || 'Could not restore learners. Nothing was changed.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate-left mr-2"></i>Restore All'; }
+        return;
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-rotate-left mr-2"></i>Restore All'; }
+    await refreshStudentsList();
+    studentTablePage = 1;
+    await loadStudentData();
+    updateDashboardStats();
+    alert(`Done. ${result && result.affected != null ? result.affected : ''} learner(s) restored.`);
 }
 // ---- Promote classes (whole school, one go) ----
 const PROMOTE_CLASS_ORDER = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
