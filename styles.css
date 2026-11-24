@@ -1000,6 +1000,9 @@ button.btn-neu-light-danger:active {
 .rc-verify svg { display: block; width: 15mm; height: 15mm; }
 .rc-verify span { font-size: 5px; font-weight: 800; letter-spacing: 0.05em; color: #444; line-height: 1; white-space: nowrap; }
 .rc-footer-verified > .rc-comment-row:nth-child(-n+4) { margin-right: 18mm; }
+/* Dedicated "+/-" column (change since last term): narrow, centred, one line. */
+.rc-table th.rc-chg, .rc-table td.rc-chg { width: 1%; white-space: nowrap; text-align: center; padding-left: 2px; padding-right: 2px; }
+.rc-chg .rc-trend { margin-left: 0; font-size: 7px; }
 .rc-trend { display: inline-block; margin-left: 3px; font-size: 6.5px; font-weight: 800; line-height: 1; letter-spacing: 0; white-space: nowrap; vertical-align: 1px; }
 .rc-trend-up { color: #15803d; }
 .rc-trend-down { color: #b91c1c; }
@@ -1017,7 +1020,9 @@ button.btn-neu-light-danger:active {
 .report-page-olevel { padding: 7mm 10mm; }
 .report-page-olevel .rc-table { font-size: 8.6px; }
 .report-page-olevel .rc-table th, .report-page-olevel .rc-table td { padding: 3px 4px; }
-.report-page-olevel .rc-descriptor { text-align: left; font-size: 7.8px; }
+.report-page-olevel .rc-descriptor { text-align: left; font-size: 7.4px; white-space: nowrap; }
+.report-page-olevel .rc-subj { white-space: nowrap; }
+.report-page-olevel .rc-table th:not(.rc-descriptor), .report-page-olevel .rc-table td.rc-num, .report-page-olevel .rc-table td.rc-final, .report-page-olevel .rc-table td.rc-grade { padding-left: 3px; padding-right: 3px; }
 .report-page-olevel .rc-report-title { margin: 5px 0; padding: 4px 0; }
 .report-page-olevel .rc-learner-row { margin-bottom: 5px; padding: 5px 10px; }
 .report-page-olevel .rc-overall-row { margin-top: 5px; }

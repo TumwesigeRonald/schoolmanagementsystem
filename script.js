@@ -3515,12 +3515,13 @@ async function generateSingleReportCard(studentId) {
         </div>
         <div id="single-report-page">${page}</div>`;
 }
-function printSingleReportCard(studentId) {
+async function printSingleReportCard(studentId) {
     if (!getPermissions(currentUser.role).canViewAllReports) return; // RBAC guard
     const page = document.getElementById('single-report-page');
     const printArea = document.getElementById('print-area');
     if (!page || !printArea) return;
     printArea.innerHTML = page.innerHTML;
+    await waitForPrintImages(printArea);
     const student = studentsList.find(s => s.id === studentId);
     const originalTitle = document.title;
     if (student) document.title = `${student.name}_ReportCard_${termSettings.term.replace(/\s+/g, '')}_${termSettings.year}`.replace(/[^\w-]/g, '');
@@ -3904,11 +3905,12 @@ function renderOwnReportModule() {
         </div>
     `;
 }
-function printOwnReportCard() {
+async function printOwnReportCard() {
     const previewArea = document.getElementById('own-report-preview');
     const printArea = document.getElementById('print-area');
     if (!previewArea || !printArea) return;
     printArea.innerHTML = previewArea.innerHTML;
+    await waitForPrintImages(printArea);
     window.print();
 }
 async function generateReportCards() {
@@ -4135,7 +4137,7 @@ function buildSubjectBars(records, isALevel) {
         </div>`;
     }).join('')}</div>`;
 }
-function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex = null) {
+function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex = null, previousScores = null) {
     const attendance = getAttendanceSummary(student, attendanceIndex);
     const remarkText = buildPerformanceRemark(subjectRecords, isALevel);
     // Subjects awaiting a valid mark are excluded from the average and from
@@ -4154,6 +4156,22 @@ function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex 
             return score > bestScore ? r : best;
         })
         : null;
+    // Average change since the learner's last recorded term, over only the
+    // subjects that have a mark in BOTH terms (like for like). Omitted when
+    // there is nothing to compare, so a first-term card is unchanged.
+    let changeRow = '';
+    if (previousScores) {
+        const diffs = gradedRecords
+            .map(r => ({ now: isALevel ? r.avgMark : r.finalTotal, prev: previousScores[r.subj] }))
+            .filter(x => x.prev)
+            .map(x => x.now - x.prev.score);
+        if (diffs.length > 0) {
+            const avgDiff = Math.round((diffs.reduce((a, b) => a + b, 0) / diffs.length) * 10) / 10;
+            const cls = avgDiff > 0 ? 'rc-trend-up' : avgDiff < 0 ? 'rc-trend-down' : 'rc-trend-flat';
+            const text = avgDiff > 0 ? `&#9650; ${avgDiff.toFixed(1)}%` : avgDiff < 0 ? `&#9660; ${Math.abs(avgDiff).toFixed(1)}%` : 'No change';
+            changeRow = `<div class="rc-summary-row"><span>Change vs last term</span><span class="${cls}">${text}</span></div>`;
+        }
+    }
     return `
         <div class="rc-summary-section">
             <div class="rc-summary-grid">
@@ -4161,6 +4179,7 @@ function buildSummarySection(student, subjectRecords, isALevel, attendanceIndex 
                     <h4>Term Snapshot</h4>
                     <div class="rc-summary-row"><span>Average Score</span><span>${avgScore !== null ? (isALevel ? Math.round(avgScore) : avgScore.toFixed(1)) + '%' : 'N/A'}</span></div>
                     <div class="rc-summary-row"><span>Attendance</span><span>${attendance.total > 0 ? `${attendance.present}/${attendance.total} days (${attendance.pct}%)` : 'Not yet recorded'}</span></div>
+                    ${changeRow}
                     <div class="rc-summary-row"><span>Best Subject</span><span>${bestSubject ? (isALevel ? formatALevelSubjectDisplayName(bestSubject.subj) : bestSubject.subj) : 'N/A'}</span></div>
                 </div>
                 <div class="rc-summary-card">
@@ -4291,12 +4310,13 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-subj">${formatALevelSubjectDisplayName(r.subj)}${r.isSubsidiary ? ' <span class="rc-sub-tag">SUB</span>' : ''}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.p1, '-')}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.p2, '-')}</td>
-            <td class="rc-num">${displayOrDash(r.avgMark)}${buildTrendBadge(r.avgMark, extras.previous[r.subj])}</td>
+            <td class="rc-num">${displayOrDash(r.avgMark)}</td>
             <td class="rc-grade">${displayOrDash(r.gradeInfo.grade)}</td>
             <td class="rc-grade">${r.gradeInfo.grade === null ? '-' : `${r.gradeInfo.grade} (${r.gradeInfo.points} pt${r.gradeInfo.points === 1 ? '' : 's'})`}</td>
+            <td class="rc-num rc-chg">${buildTrendBadge(r.avgMark, extras.previous[r.subj])}</td>
             <td class="rc-descriptor">${r.marks.remarks ? escapeHTML(r.marks.remarks) : displayOrDash(r.gradeInfo.descriptor, 'Not yet graded')}</td>
         </tr>
-    `).join('') : `<tr><td colspan="7" class="rc-empty">No scores recorded for this learner yet. Enter marks in the Scores tab and they will appear here automatically.</td></tr>`;
+    `).join('') : `<tr><td colspan="8" class="rc-empty">No scores recorded for this learner yet. Enter marks in the Scores tab and they will appear here automatically.</td></tr>`;
 
     return `
         <div class="report-page report-page-alevel">
@@ -4328,6 +4348,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                         <th>A.S</th>
                         <th>Paper Grade</th>
                         <th>Subject Grade</th>
+                        <th class="rc-chg" title="Change in A.S since the last term">+/&minus;</th>
                         <th>Teacher's Remarks</th>
                     </tr>
                 </thead>
@@ -4346,7 +4367,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <tr><td>Points (Subsidiary)</td><td>1</td><td>1</td><td>1</td><td>1</td><td>0</td></tr>
                 </table>
             </div>
-            ${buildSummarySection(student, subjectRecords, true, attendanceIndex)}
+            ${buildSummarySection(student, subjectRecords, true, attendanceIndex, extras.previous)}
             <div class="rc-footer${verifyBlock ? ' rc-footer-verified' : ''}">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
@@ -4472,12 +4493,13 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
             <td class="rc-num">${r.avScore !== null && r.avScore !== undefined && r.avScore !== 0 ? r.avScore.toFixed(1) : ''}</td>
             <td class="rc-num">${r.faScore !== null && r.faScore !== undefined && r.faScore !== 0 ? Math.round(r.faScore) : ''}</td>
             <td class="rc-num">${formatWholeScoreDisplay(r.marks.eot, '')}</td>
-            <td class="rc-final">${r.finalTotal !== null && r.finalTotal !== undefined && r.finalTotal !== 0 ? r.finalTotal : ''}${buildTrendBadge(r.finalTotal, extras.previous[r.subj])}</td>
+            <td class="rc-final">${r.finalTotal !== null && r.finalTotal !== undefined && r.finalTotal !== 0 ? r.finalTotal : ''}</td>
             <td class="rc-grade">${r.gradeData.grade || ''}</td>
+            <td class="rc-num rc-chg">${buildTrendBadge(r.finalTotal, extras.previous[r.subj])}</td>
             <td class="rc-descriptor">${r.gradeData.grade ? getCompetencyDescriptor(r.gradeData.grade) : ''}</td>
             <td class="rc-num">${escapeHTML(r.marks.remarks || '')}</td>
         </tr>
-    `).join('') : `<tr><td colspan="10" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
+    `).join('') : `<tr><td colspan="11" class="rc-empty">No scores recorded for this learner yet.</td></tr>`;
 
     return `
         <div class="report-page report-page-olevel">
@@ -4511,6 +4533,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                         <th>E.O.T (80)</th>
                         <th>Final (100)</th>
                         <th>Grade</th>
+                        <th class="rc-chg" title="Change in Final mark since the last term">+/&minus;</th>
                         <th>Grade Descriptor</th>
                         <th>TR's Initial</th>
                     </tr>
@@ -4543,7 +4566,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <tr><td>E</td><td>Elementary</td></tr>
                 </table>
             </div>
-            ${buildSummarySection(student, subjectRecords, false, attendanceIndex)}
+            ${buildSummarySection(student, subjectRecords, false, attendanceIndex, extras.previous)}
             <div class="rc-footer${verifyBlock ? ' rc-footer-verified' : ''}">
                 ${buildCommentRow("CLASS TEACHER'S COMMENT", student.id, term, year, 'classTeacherComment', editableComments)}
                 <div class="rc-comment-row">
@@ -4580,6 +4603,27 @@ function formatReportDate(dateStr) {
     if (isNaN(d)) return dateStr;
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
+// Resolves once every <img> inside `container` has finished loading (or failed,
+// or `timeoutMs` passes — a slow photo must never block printing forever).
+// Needed because report cards are copied into the hidden #print-area as new
+// HTML, so their photos/badge begin loading only at that moment; calling
+// window.print() straight away snapshots the page before they arrive.
+async function waitForPrintImages(container, timeoutMs = 15000) {
+    const imgs = Array.from(container.querySelectorAll('img'));
+    if (!imgs.length) return;
+    const loaded = Promise.all(imgs.map(img => (img.complete
+        ? Promise.resolve()
+        : new Promise(resolve => {
+            img.addEventListener('load', resolve, { once: true });
+            img.addEventListener('error', resolve, { once: true });
+        }))));
+    await Promise.race([loaded, new Promise(resolve => setTimeout(resolve, timeoutMs))]);
+    // decode() makes sure the bitmap is ready to paint, not just downloaded.
+    await Promise.race([
+        Promise.all(imgs.map(img => (img.decode ? img.decode().catch(() => {}) : null))),
+        new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
+}
 async function printReportCards() {
     // RBAC guard: bulk "Print / Save PDF (Whole Class)" is Administrator-only.
     // The button itself is already hidden for non-admins (see renderReportsTab),
@@ -4603,6 +4647,9 @@ async function printReportCards() {
         return;
     }
     printArea.innerHTML = previewArea.innerHTML;
+    // The photos in this fresh copy start loading only now; printing before
+    // they finish is what produced blank photo boxes in the print preview.
+    await waitForPrintImages(printArea);
     // Batch export: this preview already compiles every student in the
     // selected class into one continuous print job (one PDF when the
     // browser's print dialog is used to "Save as PDF"). Temporarily swap
