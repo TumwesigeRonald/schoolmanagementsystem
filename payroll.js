@@ -223,7 +223,7 @@ function renderPayrollStaffTable() {
                                 <div class="flex items-center justify-center gap-1">
                                     <button onclick="openStaffDetailModal(${s.id})" title="View" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-teal-600 flex items-center justify-center transition"><i class="fa-solid fa-eye text-[11px]"></i></button>
                                     <button onclick="openStaffFormModal(${s.id})" title="Edit" class="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-blue-600 flex items-center justify-center transition"><i class="fa-solid fa-pen text-[11px]"></i></button>
-                                    ${currentUser.role === ROLES.ADMIN ? `<button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
+                                    ${[ROLES.ADMIN, ROLES.DIRECTOR].includes(currentUser.role) ? `<button onclick="deletePayrollStaff(${s.id}, '${escapeHTML(s.name).replace(/'/g, "\\'")}')" title="Delete" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-rose-500 flex items-center justify-center transition"><i class="fa-solid fa-trash-can text-[11px]"></i></button>` : ''}
                                 </div>
                             </td>
                         </tr>`;

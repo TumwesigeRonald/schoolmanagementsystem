@@ -148,7 +148,7 @@ async function generate(req, res) {
 // inspect a specific teacher's toolbox (e.g. for review/support).
 async function listItems(req, res) {
   const { toolType, class: className, subject, term, year, status } = req.query;
-  const teacherId = req.user.role === 'Administrator' && req.query.teacherId
+  const teacherId = ['Administrator', 'Director'].includes(req.user.role) && req.query.teacherId
     ? req.query.teacherId
     : req.user.teacherId;
 
@@ -188,7 +188,7 @@ async function getItem(req, res) {
   if (!item) return res.status(404).json({ message: 'Not found.' });
 
   const isOwner = item.teacherId === req.user.teacherId;
-  if (!isOwner && req.user.role !== 'Administrator') {
+  if (!isOwner && !['Administrator', 'Director'].includes(req.user.role)) {
     return res.status(403).json({ message: 'You do not have permission to view this item.' });
   }
   res.json(item);
@@ -202,7 +202,7 @@ async function updateItem(req, res) {
   if (!existing.rows.length) return res.status(404).json({ message: 'Not found.' });
 
   const isOwner = existing.rows[0].teacher_id === req.user.teacherId;
-  if (!isOwner && req.user.role !== 'Administrator') {
+  if (!isOwner && !['Administrator', 'Director'].includes(req.user.role)) {
     return res.status(403).json({ message: 'You do not have permission to edit this item.' });
   }
 
@@ -235,7 +235,7 @@ async function deleteItem(req, res) {
   if (!existing.rows.length) return res.status(404).json({ message: 'Not found.' });
 
   const isOwner = existing.rows[0].teacher_id === req.user.teacherId;
-  if (!isOwner && req.user.role !== 'Administrator') {
+  if (!isOwner && !['Administrator', 'Director'].includes(req.user.role)) {
     return res.status(403).json({ message: 'You do not have permission to delete this item.' });
   }
 

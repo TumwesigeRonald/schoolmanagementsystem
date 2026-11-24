@@ -441,24 +441,25 @@ const ROLE_PERMISSIONS = {
         canAccessPartTimePayroll: true
     },
     [ROLES.DIRECTOR]: {
-        // Same shape as Human Resource: General Finance + Payroll +
-        // Expenses/Revenues + Salary Advances behind the Finance gate,
-        // no academic tabs, no staff-account management (that stays
-        // Administrator-only).
-        tabs: ["dashboard"],
+        // Director = full administrative access: every Administrator tab
+        // and permission (kept in step with the backend, where requireRole
+        // lets 'Director' through anywhere 'Administrator' is allowed),
+        // plus the Finance-gated Payroll / Expenses / Salary Advances
+        // features it already had.
+        tabs: ["dashboard", "students", "scores", "reports", "analytics", "performers", "attendance", "resources", "teachers", "subjectmarksstatus", "activitylog", "marksapproval", "marksaudit", "classsummaries", "aitoolbox", "staffmanagement"],
         defaultTab: "dashboard",
-        canManageStudents: false,
-        canManageScores: false,
-        canManageAttendance: false,
-        canManageResources: false,
-        canDeleteAnyResource: false,
-        canManageTeachers: false,
-        canManageTerm: false,
-        canViewAllReports: false,
-        canSwitchTerm: false,
-        canManageNotices: false,
-        canPrintWholeClass: false,
-        canManageStaff: false,
+        canManageStudents: true,
+        canManageScores: true,
+        canManageAttendance: true,
+        canManageResources: true,
+        canDeleteAnyResource: true,
+        canManageTeachers: true,
+        canManageTerm: true,
+        canViewAllReports: true,
+        canSwitchTerm: true,
+        canManageNotices: true,
+        canPrintWholeClass: true,
+        canManageStaff: true,
         canAccessPayroll: true,
         canAccessExpensesRevenues: true,
         canAccessSalaryAdvances: true,

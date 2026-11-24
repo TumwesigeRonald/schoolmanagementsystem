@@ -95,7 +95,7 @@ function refreshScoreApprovalBar() {
         .map(k => `${scoreStatusChip(k)} <span class="text-xs font-extrabold text-slate-700 mr-3">${counts[k]}</span>`)
         .join('');
 
-    const canSubmit = currentUser.role === 'Teacher' || currentUser.role === 'Administrator';
+    const canSubmit = currentUser.role === 'Teacher' || [ROLES.ADMIN, ROLES.DIRECTOR].includes(currentUser.role);
     const submitBtn = (canSubmit && submittable > 0)
         ? `<button onclick="submitMarksToDOS(this)" class="bg-teal-700 hover:bg-teal-800 text-white text-xs font-extrabold uppercase tracking-wider py-2.5 px-4 rounded-xl transition shadow-xs"><i class="fa-solid fa-paper-plane mr-1.5"></i>Submit ${submittable} to DOS for approval</button>`
         : '';
@@ -143,7 +143,7 @@ async function submitMarksToDOS(btn) {
    DOS side: nav badge
    --------------------------------------------------------- */
 async function refreshApprovalNavBadge() {
-    if (currentUser.role !== 'Administrator') return;
+    if (![ROLES.ADMIN, ROLES.DIRECTOR].includes(currentUser.role)) return;
     const btn = document.getElementById('nav-marksapproval');
     if (!btn) return;
     let waiting = 0;

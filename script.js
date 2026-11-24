@@ -738,7 +738,7 @@ async function applySessionUser(user) {
             [ROLES.STUDENT]: `This view is limited to your own dashboard summary, report card, and shared learning resources.`,
             [ROLES.BURSAR]: `Your access is limited to School Finance &mdash; student fees, expenses, and revenues.`,
             [ROLES.HR]: `Your access covers School Finance and Staff Payroll.`,
-            [ROLES.DIRECTOR]: `Your access covers School Finance and Staff Payroll.`
+            [ROLES.DIRECTOR]: `Full administrative access &mdash; classes, students, staff, marks approval, term dates, School Finance, and system-wide records.`
         };
         banner.innerHTML = `Welcome back, <span class="text-yellow-400">${currentUser.name || currentUser.username}</span><span class="banner-subtext">${greetings[currentUser.role] || ''}</span>`;
         banner.classList.add('visible');
@@ -3493,7 +3493,7 @@ async function generateSingleReportCard(studentId) {
 
     // Fees balance: same Administrator-only / Finance-unlocked rule as the class generator.
     let feeBalance = null;
-    if (currentUser.role === ROLES.ADMIN && FinanceAuthAPI.isUnlocked()) {
+    if ([ROLES.ADMIN, ROLES.DIRECTOR].includes(currentUser.role) && FinanceAuthAPI.isUnlocked()) {
         try {
             const balances = await FinanceAPI.getPayments({ term, year, class: student.class });
             const row = (balances || []).find(b => b.id === student.id);
@@ -3976,7 +3976,7 @@ async function generateReportCards() {
     // need to omit the "FEES BALANCE" item entirely (their feeBalance
     // param defaults to null when nothing is passed in).
     const feeBalanceByStudentId = new Map();
-    if (currentUser.role === ROLES.ADMIN && FinanceAuthAPI.isUnlocked()) {
+    if ([ROLES.ADMIN, ROLES.DIRECTOR].includes(currentUser.role) && FinanceAuthAPI.isUnlocked()) {
         try {
             const balances = await FinanceAPI.getPayments({ term, year, class: selectedClass });
             (balances || []).forEach(b => feeBalanceByStudentId.set(b.id, b.balance));
@@ -5392,7 +5392,7 @@ function buildResourceCard(r) {
    9. TEACHER PROFILES & CREDENTIALS MODULE
    --------------------------------------------------------- */
 function renderTeachersModule() {
-    if (currentUser.role === 'Administrator') {
+    if ([ROLES.ADMIN, ROLES.DIRECTOR].includes(currentUser.role)) {
         return `
             <div class="space-y-6">
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">

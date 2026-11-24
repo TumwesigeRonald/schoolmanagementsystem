@@ -119,7 +119,7 @@ router.post('/upload', authenticate, requireRole('Administrator', 'Teacher'), ha
 router.delete('/:id', authenticate, requireRole('Administrator', 'Teacher'), asyncHandler(async (req, res) => {
   const { rows } = await db.query('SELECT uploaded_by AS "uploadedBy" FROM resources WHERE id = $1', [req.params.id]);
   if (!rows.length) return res.status(404).json({ message: 'Resource not found.' });
-  if (req.user.role !== 'Administrator' && rows[0].uploadedBy !== req.user.name) {
+  if (!['Administrator', 'Director'].includes(req.user.role) && rows[0].uploadedBy !== req.user.name) {
     return res.status(403).json({ message: 'You can only delete resources you uploaded.' });
   }
   await db.query('DELETE FROM resources WHERE id = $1', [req.params.id]);

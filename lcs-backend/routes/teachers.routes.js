@@ -62,7 +62,7 @@ router.post('/', authenticate, requireRole('Administrator'), asyncHandler(async 
 router.put('/:id', authenticate, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const isSelf = req.user.role === 'Teacher' && req.user.teacherId === id;
-  if (req.user.role !== 'Administrator' && !isSelf) {
+  if (!['Administrator', 'Director'].includes(req.user.role) && !isSelf) {
     return res.status(403).json({ message: 'You can only edit your own profile.' });
   }
 
