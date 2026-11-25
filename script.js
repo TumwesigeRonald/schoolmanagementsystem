@@ -317,6 +317,25 @@ function saveReportRemark(el) {
    - Wording varies per learner (stable pick from student/term/year)
      so a whole class does not read identically.
    --------------------------------------------------------- */
+const HEADTEACHER_COMMENT_SCALE_O = [
+    { min: 75, label: 'Exceptional',
+      text: '{n} has achieved exceptional results this term ({f}). Excellent work; keep it up.',
+      withSubject: '{n} has achieved exceptional results this term ({f}), with strength in {s}. Excellent work; keep it up.' },
+    { min: 65, label: 'Outstanding',
+      text: '{n} has had an outstanding term ({f}). Keep aiming higher.',
+      withSubject: '{n} has had an outstanding term ({f}), with a pleasing result in {s}. Keep aiming higher.' },
+    { min: 55, label: 'Satisfactory',
+      text: '{n} has had a satisfactory term ({f}). With steady revision, more is possible.',
+      withSubject: '{n} has had a satisfactory term ({f}), with good effort in {s}. With steady revision, more is possible.' },
+    { min: 45, label: 'Basic',
+      text: '{n} has made a fair effort this term ({f}). Keep working hard and revising to improve.' },
+    { min: 30, label: 'Below expected',
+      text: '{n}\'s result this term ({f}) is below the expected level. With more effort and regular revision, improvement will come.' },
+    { min: 0, label: 'Well below expected',
+      text: '{n} is encouraged to work harder and revise regularly ({f}). With determination, better results are within reach.' }
+];
+// A-Level uses the same wording with its own (higher) cut-offs.
+const HEADTEACHER_COMMENT_SCALE_A = HEADTEACHER_COMMENT_SCALE_O.map((b, i) => ({ ...b, min: [80, 70, 60, 50, 35, 0][i] }));
 function hashStringToInt(str) {
     let h = 0;
     for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
@@ -340,67 +359,18 @@ function buildAutoHeadteacherComment(student, subjectRecords, isALevel, term, ye
     const n = getAutoCommentFirstName(student);
     const points = isALevel ? graded.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0) : null;
 
-    // Band thresholds mirror each level's own grading scale.
-    const t = isALevel ? [80, 70, 60, 50] : [75, 65, 55, 45];
-    const band = avg >= t[0] ? 0 : avg >= t[1] ? 1 : avg >= t[2] ? 2 : avg >= t[3] ? 3 : 4;
-
-    const s = String(bestName).toLowerCase().replace(/(^|[\s/(-])([a-z])/g, (m, pre, ch) => pre + ch.toUpperCase());
-    const O = [
-        [ // exceptional
-            `${n} has had an exceptional term, averaging ${avgText}%, with notable strength in ${s}. Keep up this excellent standard.`,
-            `An excellent result from ${n} this term, with an average of ${avgText}% and a standout performance in ${s}. Well done.`,
-            `${n} has achieved exceptional results this term (${avgText}%), especially in ${s}. A proud achievement; keep it up.`
-        ],
-        [ // outstanding
-            `${n} has had an outstanding term with an average of ${avgText}%. Steady effort is paying off; keep aiming higher.`,
-            `A very good term for ${n}, averaging ${avgText}%, with a pleasing performance in ${s}. Keep up the good work.`,
-            `${n} has done outstandingly well this term (${avgText}%). With continued focus, even higher grades are within reach.`
-        ],
-        [ // satisfactory
-            `${n} has performed satisfactorily this term, averaging ${avgText}%, with good effort in ${s}. Keep working hard.`,
-            `A good effort from ${n} this term with an average of ${avgText}%. Keep building on the strong work shown in ${s}.`,
-            `${n} has had a satisfactory term (${avgText}%). With steady revision, there is real potential to achieve even more.`
-        ],
-        [ // basic
-            `${n} has made a good start with an average of ${avgText}%. With continued effort in all subjects, even better results are ahead.`,
-            `${n} is making progress, averaging ${avgText}% this term, with encouraging work in ${s}. Keep trying; you can do it.`,
-            `Well done to ${n} on the effort this term (${avgText}%). Stay focused and keep working hard to reach higher goals.`
-        ],
-        [ // developing
-            `${n} has shown promise this term, with encouraging work in ${s}. With determination and hard work, better results will come.`,
-            `${n} has made a start this term, and ${s} is a pleasing area. Keep working hard and believe in your ability to improve.`,
-            `Thank you ${n} for the effort this term. Keep going; steady practice and determination will bring greater success.`
-        ]
-    ];
-    const A = [
-        [
-            `${n} has done exceptionally well this term, earning ${points} points with strong grades in ${s}. Keep up the excellent work.`,
-            `An excellent term for ${n} with ${points} points, and a standout result in ${s}. Keep up this outstanding standard.`,
-            `${n} has achieved excellent results this term (${points} points), especially in ${s}. Well done; keep it up.`
-        ],
-        [
-            `${n} has done very well this term, earning ${points} points with strong results in ${s}. Keep up the good work.`,
-            `A very good term for ${n}: ${points} points and a pleasing performance in ${s}. Continued focus will bring higher grades.`,
-            `${n} has had an outstanding term with ${points} points. Steady effort is paying off; keep aiming higher.`
-        ],
-        [
-            `${n} has had a satisfactory term with ${points} points, and good effort in ${s}. Keep working hard.`,
-            `A good effort from ${n} this term, earning ${points} points. Keep building on the strong work shown in ${s}.`,
-            `${n} has performed satisfactorily this term (${points} points). With steady revision, even more is possible.`
-        ],
-        [
-            `${n} has made a good start this term with ${points} points. With continued effort in all subjects, higher grades will follow.`,
-            `${n} is making progress with ${points} points and encouraging work in ${s}. Keep trying; you can do it.`,
-            `Well done to ${n} on the effort this term (${points} points). Stay focused and keep working hard.`
-        ],
-        [
-            `${n} has shown promise this term, with encouraging work in ${s}. With determination and hard work, better results will come.`,
-            `${n} has made a start this term, and ${s} is a pleasing area. Keep working hard and believe in your ability to improve.`,
-            `Thank you ${n} for the effort this term. Keep going; steady practice and determination will bring greater success.`
-        ]
-    ];
-    const options = (isALevel ? A : O)[band];
-    return options[hashStringToInt(`${student.id}_${term}_${year}`) % options.length];
+    // COMMENT SCALE — one fixed, school-approved comment per performance
+    // level. Edit the wording or the `min` cut-offs here; nothing else needs
+    // to change. `min` = lowest average (%) in that band, checked top-down.
+    // Praise of a best subject (`withSubject`) is only used in the top three
+    // bands, so a low mark is never praised. ${n} = learner's first name,
+    // ${f} = "86%" (O-Level average) or "14 points" (A-Level total).
+    const scale = isALevel ? HEADTEACHER_COMMENT_SCALE_A : HEADTEACHER_COMMENT_SCALE_O;
+    const band = scale.find(b => avg >= b.min) || scale[scale.length - 1];
+    const figure = isALevel ? `${points} points` : `${avgText}%`;
+    const subjectName = String(bestName).toLowerCase().replace(/(^|[\s/(-])([a-z])/g, (m, pre, ch) => pre + ch.toUpperCase());
+    const text = band.withSubject && subjectName ? band.withSubject : band.text;
+    return text.replace(/\{n\}/g, n).replace(/\{f\}/g, figure).replace(/\{s\}/g, subjectName);
 }
 // Builds one "LABEL: ______" footer row. When editable, the line is a
 // contenteditable div the admin/teacher can type straight into before
