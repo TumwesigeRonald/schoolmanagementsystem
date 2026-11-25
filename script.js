@@ -288,7 +288,10 @@ function saveReportRemark(el) {
     const field = el.dataset.remarkField;
     if (!key || !field) return;
     if (!reportRemarksStorage[key]) reportRemarksStorage[key] = {};
-    reportRemarksStorage[key][field] = el.innerText.trim();
+    const typed = el.innerText.trim();
+    // Text identical to the automatic comment is not stored, so it keeps
+    // following the learner's marks; only a hand-written comment is saved.
+    reportRemarksStorage[key][field] = (el.dataset.auto && typed === el.dataset.auto) ? '' : typed;
     persistReportRemarks(); // best-effort offline cache only — see note above
 
     clearTimeout(reportRemarkSaveTimers[key]);
@@ -300,18 +303,118 @@ function saveReportRemark(el) {
             .catch(() => { /* offline/unreachable — localStorage copy above still holds the latest text; will be rescued at next login */ });
     }, 800);
 }
+/* ---------------------------------------------------------
+   AUTOMATIC HEADTEACHER'S COMMENT
+   Generates a short, always-encouraging comment from a learner's
+   verified term results, so the headteacher only has to sign.
+   - Pure function of the learner's marks: nothing is stored, so
+     the comment updates by itself if marks are corrected.
+   - A comment typed (or edited) by hand always wins; clearing the
+     box brings the automatic one back.
+   - Kept to ~1-2 sentences (about 110-140 characters) so it fits
+     the report card's comment line without pushing the footer off
+     the A4 page.
+   - Wording varies per learner (stable pick from student/term/year)
+     so a whole class does not read identically.
+   --------------------------------------------------------- */
+function hashStringToInt(str) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+    return h;
+}
+function getAutoCommentFirstName(student) {
+    const first = String((student && student.name) || '').trim().split(/\s+/)[0] || '';
+    if (!first) return 'This learner';
+    return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+function buildAutoHeadteacherComment(student, subjectRecords, isALevel, term, year) {
+    if (!student || !subjectRecords || subjectRecords.length === 0) return '';
+    const scoreOf = r => (isALevel ? r.avgMark : r.finalTotal);
+    const graded = subjectRecords.filter(r => scoreOf(r) !== null && scoreOf(r) !== undefined);
+    if (graded.length === 0) return '';
+
+    const avg = graded.reduce((sum, r) => sum + scoreOf(r), 0) / graded.length;
+    const avgText = Math.round(avg);
+    const best = graded.reduce((b, r) => (scoreOf(r) > scoreOf(b) ? r : b));
+    const bestName = isALevel ? formatALevelSubjectDisplayName(best.subj) : best.subj;
+    const n = getAutoCommentFirstName(student);
+    const points = isALevel ? graded.reduce((sum, r) => sum + (r.gradeInfo.points ?? 0), 0) : null;
+
+    // Band thresholds mirror each level's own grading scale.
+    const t = isALevel ? [80, 70, 60, 50] : [75, 65, 55, 45];
+    const band = avg >= t[0] ? 0 : avg >= t[1] ? 1 : avg >= t[2] ? 2 : avg >= t[3] ? 3 : 4;
+
+    const s = String(bestName).toLowerCase().replace(/(^|[\s/(-])([a-z])/g, (m, pre, ch) => pre + ch.toUpperCase());
+    const O = [
+        [ // exceptional
+            `${n} has had an exceptional term, averaging ${avgText}%, with notable strength in ${s}. Keep up this excellent standard.`,
+            `An excellent result from ${n} this term, with an average of ${avgText}% and a standout performance in ${s}. Well done.`,
+            `${n} has achieved exceptional results this term (${avgText}%), especially in ${s}. A proud achievement; keep it up.`
+        ],
+        [ // outstanding
+            `${n} has had an outstanding term with an average of ${avgText}%. Steady effort is paying off; keep aiming higher.`,
+            `A very good term for ${n}, averaging ${avgText}%, with a pleasing performance in ${s}. Keep up the good work.`,
+            `${n} has done outstandingly well this term (${avgText}%). With continued focus, even higher grades are within reach.`
+        ],
+        [ // satisfactory
+            `${n} has performed satisfactorily this term, averaging ${avgText}%, with good effort in ${s}. Keep working hard.`,
+            `A good effort from ${n} this term with an average of ${avgText}%. Keep building on the strong work shown in ${s}.`,
+            `${n} has had a satisfactory term (${avgText}%). With steady revision, there is real potential to achieve even more.`
+        ],
+        [ // basic
+            `${n} has made a good start with an average of ${avgText}%. With continued effort in all subjects, even better results are ahead.`,
+            `${n} is making progress, averaging ${avgText}% this term, with encouraging work in ${s}. Keep trying; you can do it.`,
+            `Well done to ${n} on the effort this term (${avgText}%). Stay focused and keep working hard to reach higher goals.`
+        ],
+        [ // developing
+            `${n} has shown promise this term, with encouraging work in ${s}. With determination and hard work, better results will come.`,
+            `${n} has made a start this term, and ${s} is a pleasing area. Keep working hard and believe in your ability to improve.`,
+            `Thank you ${n} for the effort this term. Keep going; steady practice and determination will bring greater success.`
+        ]
+    ];
+    const A = [
+        [
+            `${n} has done exceptionally well this term, earning ${points} points with strong grades in ${s}. Keep up the excellent work.`,
+            `An excellent term for ${n} with ${points} points, and a standout result in ${s}. Keep up this outstanding standard.`,
+            `${n} has achieved excellent results this term (${points} points), especially in ${s}. Well done; keep it up.`
+        ],
+        [
+            `${n} has done very well this term, earning ${points} points with strong results in ${s}. Keep up the good work.`,
+            `A very good term for ${n}: ${points} points and a pleasing performance in ${s}. Continued focus will bring higher grades.`,
+            `${n} has had an outstanding term with ${points} points. Steady effort is paying off; keep aiming higher.`
+        ],
+        [
+            `${n} has had a satisfactory term with ${points} points, and good effort in ${s}. Keep working hard.`,
+            `A good effort from ${n} this term, earning ${points} points. Keep building on the strong work shown in ${s}.`,
+            `${n} has performed satisfactorily this term (${points} points). With steady revision, even more is possible.`
+        ],
+        [
+            `${n} has made a good start this term with ${points} points. With continued effort in all subjects, higher grades will follow.`,
+            `${n} is making progress with ${points} points and encouraging work in ${s}. Keep trying; you can do it.`,
+            `Well done to ${n} on the effort this term (${points} points). Stay focused and keep working hard.`
+        ],
+        [
+            `${n} has shown promise this term, with encouraging work in ${s}. With determination and hard work, better results will come.`,
+            `${n} has made a start this term, and ${s} is a pleasing area. Keep working hard and believe in your ability to improve.`,
+            `Thank you ${n} for the effort this term. Keep going; steady practice and determination will bring greater success.`
+        ]
+    ];
+    const options = (isALevel ? A : O)[band];
+    return options[hashStringToInt(`${student.id}_${term}_${year}`) % options.length];
+}
 // Builds one "LABEL: ______" footer row. When editable, the line is a
 // contenteditable div the admin/teacher can type straight into before
 // printing; when read-only (the Student's own report view) it's a plain
-// span, exactly as before.
-function buildCommentRow(label, studentId, term, year, field, editable) {
+// span, exactly as before. autoText (optional) is the automatically
+// generated comment shown whenever nothing has been saved by hand.
+function buildCommentRow(label, studentId, term, year, field, editable, autoText = '') {
     const key = getReportRemarkKey(studentId, term, year);
-    const value = getReportRemark(studentId, term, year, field);
+    const value = getReportRemark(studentId, term, year, field) || autoText;
     if (editable) {
         return `
                 <div class="rc-comment-row">
                     <span class="rc-comment-label">${label}:</span>
-                    <div class="rc-comment-line rc-comment-editable" contenteditable="true" data-remark-key="${key}" data-remark-field="${field}" oninput="saveReportRemark(this)" data-placeholder="Click to type a comment&hellip;">${value ? escapeHTML(value) : ''}</div>
+                    <div class="rc-comment-line rc-comment-editable" contenteditable="true" data-remark-key="${key}" data-remark-field="${field}" data-auto="${escapeHTML(autoText)}" oninput="saveReportRemark(this)" data-placeholder="Click to type a comment&hellip;">${value ? escapeHTML(value) : ''}</div>
                 </div>`;
     }
     return `
@@ -2031,12 +2134,17 @@ function buildModalCommentsSection(student) {
     const { term, year } = getViewedTermYear();
     const key = getReportRemarkKey(student.id, term, year);
     const classTeacherValue = getReportRemark(student.id, term, year, 'classTeacherComment');
-    const headteacherValue = getReportRemark(student.id, term, year, 'headteacherComment');
+    const isALevelStudent = (student.class === 'S.5' || student.class === 'S.6');
+    const autoHeadteacher = buildAutoHeadteacherComment(
+        student,
+        isALevelStudent ? getALevelSubjectRecords(student) : getOLevelSubjectRecords(student),
+        isALevelStudent, term, year);
+    const headteacherValue = getReportRemark(student.id, term, year, 'headteacherComment') || autoHeadteacher;
 
-    const fieldHtml = (label, field, value) => editable
+    const fieldHtml = (label, field, value, auto = '') => editable
         ? `<div>
                 <label class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">${label}</label>
-                <textarea rows="2" data-remark-key="${key}" data-remark-field="${field}" oninput="saveModalRemark(this)" placeholder="No comment yet &mdash; type to add one&hellip;" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 resize-none">${value ? escapeHTML(value) : ''}</textarea>
+                <textarea rows="2" data-remark-key="${key}" data-remark-field="${field}" data-auto="${escapeHTML(auto)}" oninput="saveModalRemark(this)" placeholder="No comment yet &mdash; type to add one&hellip;" class="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 resize-none">${value ? escapeHTML(value) : ''}</textarea>
            </div>`
         : `<div>
                 <p class="block text-[11px] font-extrabold text-slate-500 uppercase mb-1">${label}</p>
@@ -2051,7 +2159,7 @@ function buildModalCommentsSection(student) {
             </div>
             <div class="space-y-3">
                 ${fieldHtml("Class Teacher's Comment", 'classTeacherComment', classTeacherValue)}
-                ${fieldHtml("Headteacher's Comment", 'headteacherComment', headteacherValue)}
+                ${fieldHtml("Headteacher's Comment", 'headteacherComment', headteacherValue, autoHeadteacher)}
             </div>
         </div>`;
 }
@@ -2071,7 +2179,8 @@ function saveModalRemark(el) {
     const field = el.dataset.remarkField;
     if (!key || !field) return;
     if (!reportRemarksStorage[key]) reportRemarksStorage[key] = {};
-    reportRemarksStorage[key][field] = el.value.trim();
+    const typedValue = el.value.trim();
+    reportRemarksStorage[key][field] = (el.dataset.auto && typedValue === el.dataset.auto) ? '' : typedValue; // unedited automatic text is not stored
     persistReportRemarks(); // best-effort offline cache only — same as saveReportRemark
 
     clearTimeout(modalRemarkSaveTimers[key]);
@@ -2121,7 +2230,9 @@ async function saveModalRemarksNow(studentId, buttonEl) {
     const classTeacherEl = container ? container.querySelector(`textarea[data-remark-key="${key}"][data-remark-field="classTeacherComment"]`) : null;
     const headteacherEl = container ? container.querySelector(`textarea[data-remark-key="${key}"][data-remark-field="headteacherComment"]`) : null;
     const classTeacherComment = classTeacherEl ? classTeacherEl.value.trim() : (getReportRemark(studentId, term, year, 'classTeacherComment') || '');
-    const headteacherComment = headteacherEl ? headteacherEl.value.trim() : (getReportRemark(studentId, term, year, 'headteacherComment') || '');
+    let headteacherComment = headteacherEl ? headteacherEl.value.trim() : (getReportRemark(studentId, term, year, 'headteacherComment') || '');
+    // Unedited automatic comment is not stored — it keeps following the marks.
+    if (headteacherEl && headteacherEl.dataset.auto && headteacherComment === headteacherEl.dataset.auto) headteacherComment = '';
 
     // Cancel any pending autosave debounce for this row — this explicit
     // save supersedes it so the same text isn't sent to the server twice.
@@ -4418,7 +4529,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
-                ${buildCommentRow("HEADTEACHER'S COMMENT", student.id, term, year, 'headteacherComment', editableComments)}
+                ${buildCommentRow("HEADTEACHER'S COMMENT", student.id, term, year, 'headteacherComment', editableComments, buildAutoHeadteacherComment(student, subjectRecords, true, term, year))}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
@@ -4619,7 +4730,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
-                ${buildCommentRow("HEADTEACHER'S COMMENT", student.id, term, year, 'headteacherComment', editableComments)}
+                ${buildCommentRow("HEADTEACHER'S COMMENT", student.id, term, year, 'headteacherComment', editableComments, buildAutoHeadteacherComment(student, subjectRecords, false, term, year))}
                 <div class="rc-comment-row">
                     <span class="rc-sign">SIGNATURE:</span><span class="rc-sign-line"></span>
                 </div>
