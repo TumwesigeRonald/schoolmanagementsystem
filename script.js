@@ -4312,14 +4312,17 @@ function buildTrendBadge(current, prev) {
     const up = diff > 0;
     return `<span class="rc-trend ${up ? 'rc-trend-up' : 'rc-trend-down'}" title="${up ? 'Up' : 'Down'} ${Math.abs(diff)} since ${escapeHTML(from)} (${prev.score})">${up ? '&#9650;' : '&#9660;'}${Math.abs(diff)}</span>`;
 }
+function buildTrendKey(hasTrend) {
+    if (!hasTrend) return '';
+    return `<div class="rc-trend-key"><b>CHANGE vs LAST TERM:</b> <span class="rc-trend-up">&#9650; Improved</span> (number = marks gained) &middot; <span class="rc-trend-down">&#9660; Dropped</span> (number = marks lost) &middot; <span class="rc-trend-flat">= Same</span> (within ${REPORT_TREND_STEADY_BAND} mark) &middot; No symbol = no mark last term</div>`;
+}
 function buildReportSecurityLine(student, term, year, code, hasTrend) {
     const ref = code ? code.split('~').pop().slice(0, 8) : null;
     const parts = [
         escapeHTML(student.id),
         `${escapeHTML(String(term)).toUpperCase()} ${escapeHTML(String(year))}`,
         ref ? `REF ${escapeHTML(ref)}` : null,
-        `ISSUED ${formatGeneratedTimestamp().replace(' at ', ' ').toUpperCase()}`,
-        hasTrend ? '&#9650;&#9660; = CHANGE SINCE LAST TERM' : null
+        `ISSUED ${formatGeneratedTimestamp().replace(' at ', ' ').toUpperCase()}`
     ].filter(Boolean);
     return `<div class="rc-secline">${parts.join(' &middot; ')}</div>`;
 }
@@ -4381,6 +4384,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
+            ${buildTrendKey(hasTrend)}
             <div class="rc-overall-row">
                 <div class="rc-overall-box">
                     <span class="rc-overall-label">Total Points</span>
@@ -4567,6 +4571,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                 </thead>
                 <tbody>${rows}</tbody>
             </table>
+            ${buildTrendKey(hasTrend)}
             <div class="rc-overall-row">
                 <div class="rc-overall-box">
                     <span class="rc-overall-label">Overall Achievement</span>
