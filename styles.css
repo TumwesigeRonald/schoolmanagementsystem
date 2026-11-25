@@ -1622,3 +1622,7 @@ tr.score-save-error input {
 .rc-trend-key { font-size: 7.5px; line-height: 1.3; color: #374151; margin-top: 3px; flex-shrink: 0; }
 .rc-trend-key .rc-trend-up, .rc-trend-key .rc-trend-down, .rc-trend-key .rc-trend-flat { font-weight: 800; }
 .report-page-alevel .rc-trend-key { font-size: 9px; margin-top: 5px; }
+
+/* Promoted to / Repeat class line with tick boxes (Term 3 report card footer) */
+.rc-sign-line.rc-promo-line { flex: 1; min-width: 90px; margin-right: 14px; }
+.rc-check-box { display: inline-flex; align-items: center; justify-content: center; width: 10px; height: 10px; border: 1px solid #333; align-self: center; flex-shrink: 0; font-size: 9px; font-weight: 900; line-height: 1; }

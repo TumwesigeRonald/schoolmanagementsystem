@@ -4312,6 +4312,20 @@ function buildTrendBadge(current, prev) {
     const up = diff > 0;
     return `<span class="rc-trend ${up ? 'rc-trend-up' : 'rc-trend-down'}" title="${up ? 'Up' : 'Down'} ${Math.abs(diff)} since ${escapeHTML(from)} (${prev.score})">${up ? '&#9650;' : '&#9660;'}${Math.abs(diff)}</span>`;
 }
+// "Promoted to / Repeat class" line, with tick boxes, on the Term 3
+// (end-of-year) card only. The next class is filled in automatically and
+// "Promoted" is ticked (S.1->S.2 ... S.5->S.6). S.6 has no next class, so
+// it is left blank. "Repeat class" is ticked by hand after printing.
+function buildSignOffBlock(term, className) {
+    if (String(term).trim().toLowerCase() !== 'term 3') return '';
+    const order = ['S.1', 'S.2', 'S.3', 'S.4', 'S.5', 'S.6'];
+    const i = order.indexOf(className);
+    const next = i >= 0 && i < order.length - 1 ? order[i + 1] : '';
+    return `<div class="rc-comment-row rc-promo-row">
+        <span class="rc-check-box">${next ? '&#10003;' : ''}</span><span class="rc-comment-label">PROMOTED TO:</span><span class="rc-sign-line rc-promo-line">${next ? `<b>${next}</b>` : ''}</span>
+        <span class="rc-check-box"></span><span class="rc-comment-label">REPEAT CLASS</span>
+    </div>`;
+}
 function buildTrendKey(hasTrend) {
     if (!hasTrend) return '';
     return `<div class="rc-trend-key"><b>CHANGE vs LAST TERM:</b> <span class="rc-trend-up">&#9650; Improved</span> (number = marks gained) &middot; <span class="rc-trend-down">&#9660; Dropped</span> (number = marks lost) &middot; <span class="rc-trend-flat">= Same</span> (within ${REPORT_TREND_STEADY_BAND} mark) &middot; No symbol = no mark last term</div>`;
@@ -4414,6 +4428,7 @@ function buildALevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <span class="rc-comment-label">ENDS ON:</span>
                     <span class="rc-comment-line">${nextEnds ? formatReportDate(nextEnds) : ''}</span>
                 </div>
+                ${buildSignOffBlock(term, student.class)}
                 <div class="rc-legal-row">
                     <span class="rc-motto">&ldquo;BE KNOWN BY DEEDS&rdquo;</span>
                     <span class="rc-print-meta">Printed on ${formatGeneratedTimestamp()} &middot; via Luweero Community SS Management System</span>
@@ -4614,6 +4629,7 @@ function buildOLevelReportPage(student, term, year, nextBegins, nextEnds, editab
                     <span class="rc-comment-label">ENDS ON:</span>
                     <span class="rc-comment-line">${nextEnds ? formatReportDate(nextEnds) : ''}</span>
                 </div>
+                ${buildSignOffBlock(term, student.class)}
                 <div class="rc-legal-row">
                     <span>AOI &ndash; Activity of Integration &nbsp;|&nbsp; AS &ndash; Average Score &nbsp;|&nbsp; FA &ndash; Formative Assessment</span>
                     <span class="rc-stamp-note">ONLY VALID WITH A STAMP</span>
